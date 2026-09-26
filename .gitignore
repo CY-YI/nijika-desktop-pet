@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+build/
+dist/
+.pyinstaller-cache/
+*.spec
+*.log
+*.pem
+*.p12
+*.pfx
+*.key
+.env
+.env.*
+!.env.example
