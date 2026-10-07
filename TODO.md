@@ -48,4 +48,6 @@
 - [x] 配置 Codex 本机 MCP；独立 Codex CLI 会话已实际发现并调用，返回的 `request_id` 和桌面点击均已核实；桌面应用的新任务自动使用待观察。
 - [x] 重建桌宠与 MCP 双程序；打包版桌面显示、点击回传和退出通过隔离测试。
 - [x] 编写并安装 `nijika-desktop-dialog` skill，强制整理选择题的名称和一句说明。
+- [x] 经用户明确授权，为本机四个桌宠 MCP 工具设置逐工具免审批；无临时放行参数的 Codex CLI 调用已通过。
+- [x] 独立 Codex CLI 会话把含糊 A/B 改写成有名称和简介的选项；`request_decision` 与 `get_reply` 实测通过。
 - [x] 更新安装与使用说明、扫描本机数据与构建产物，完成本地 Git 提交。

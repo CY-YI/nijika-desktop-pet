@@ -30,7 +30,7 @@ codex mcp get nijika-pet
 
 把 `skills/nijika-desktop-dialog/SKILL.md` 安装到 Codex 用户技能目录，并在 Codex 的全局 `AGENTS.md` 中引用它，可让新任务把选择题整理成“名称＋一句说明”。当前电脑已完成这一步。安装或配置变化通常由新开的 Codex 任务读取；已经打开的任务不保证即时刷新工具列表。桌宠程序仍需打开以便立即看见提醒。
 
-Codex 的审批策略可能要求先确认 MCP 工具调用。当前电脑保留默认审批设置；交互式 Codex 任务遇到提示时，需要按实际要发送的内容批准。无交互且禁止审批的 CLI 会话会拒绝该调用。通知工具获准运行之后，桌宠上的选择仍由用户亲自点击，`pending` 或关闭不算同意。
+Codex 的审批策略可能要求先确认 MCP 工具调用。经用户明确授权，当前电脑只对 `nijika-pet` 的 `show_completion`、`request_decision`、`get_reply`、`wait_for_reply` 设置了逐工具 `approval_mode = "approve"`；服务器默认规则和其他工具未改。独立 Codex CLI 会话在未附加临时放行参数时已成功发送提醒。其他电脑沿用自身审批策略，遇到提示时应核对要发送的内容。桌宠上的选择仍由用户亲自点击，`pending` 或关闭不算同意。
 
 单文件版首次启动需要解包资源，可能比源码运行略慢。`dist/`、`.venv/` 与构建缓存不入 Git；源码包必须保留 `assets/sprites/`。通知数据库默认在 `%LOCALAPPDATA%\NijikaDesktopPet\notifications.sqlite3`；可用 `env.example` 中的可选变量在隔离测试时改路径。消息含任务摘要，请只在受信任的本机用户会话中使用。本项目不要求真实 API 密钥或联网。
 
