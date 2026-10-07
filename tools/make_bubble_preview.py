@@ -13,21 +13,21 @@ daily = render_bubble(BubbleNotice("虹夏 · 日常", "今天也要记得喝水
 agent = render_bubble(
     BubbleNotice(
         "演示提醒 · Codex", "任务已完成，等待你查看结果。",
-        actions=("已查看", "稍后"), kind="agent", duration=None,
+        actions=("知道了",), kind="agent", duration=None, request_id="preview-completion",
     )
 )[0]
 choice = render_bubble(
     BubbleNotice(
-        "Codex · 下一步", "接下来怎样展示任务提醒？",
-        actions=("简洁气泡", "详细卡片"),
+        "Codex · 文案审阅", "双击“虹夏桌宠.exe”即可看到坐姿角色。Codex 完成任务后，桌宠可显示提醒与选择。接受这段说明吗？",
+        actions=("接受文案", "需要修改"),
         action_descriptions=(
-            "只显示关键结论，减少打断。",
-            "补充背景和可选步骤，便于判断。",
+            "采用这段文案，无需回到聊天确认。",
+            "暂不定稿，后续再说明修改要求。",
         ),
         kind="agent", duration=None, request_id="preview",
     )
 )[0]
-preview = Image.new("RGBA", (1350, 450), (242, 238, 232, 255))
+preview = Image.new("RGBA", (1350, max(450, choice.height + 20)), (242, 238, 232, 255))
 preview.alpha_composite(daily, (10, 10))
 preview.alpha_composite(agent, (460, 10))
 preview.alpha_composite(choice, (910, 10))

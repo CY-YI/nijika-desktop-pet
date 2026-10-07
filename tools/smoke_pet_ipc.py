@@ -89,11 +89,12 @@ async def main(source: bool) -> None:
             params = StdioServerParameters(command=mcp_command, args=mcp_args,
                                            env=environment)
             async with Client(params) as client:
+                question = "发布说明：双击虹夏桌宠即可看到坐姿角色。Codex 的选择题可在气泡中直接回答。接受这段说明吗？"
                 created = await client.call_tool(
                     "request_decision",
-                    {"task": "选项验证", "question": "请选择方案", "options": [
-                        {"label": "保留现状", "description": "暂不调整桌宠，继续验证现有流程。"},
-                        {"label": "优化提醒", "description": "补充选项说明，方便直接在桌面决定。"},
+                    {"task": "文案审阅", "question": question, "options": [
+                        {"label": "接受文案", "description": "采用这段文案，无需回到聊天确认。"},
+                        {"label": "需要修改", "description": "暂不定稿，后续再说明修改要求。"},
                     ]},
                 )
                 assert not created.is_error and created.structured_content
@@ -101,24 +102,24 @@ async def main(source: bool) -> None:
                 assert NotificationStore(path).get(request_id).status == "pending"
                 image, actions, _ = render_bubble(
                     BubbleNotice(
-                        "Codex · 选项验证", "请选择方案",
-                        actions=("保留现状", "优化提醒"),
+                        "Codex · 文案审阅", question,
+                        actions=("接受文案", "需要修改"),
                         action_descriptions=(
-                            "暂不调整桌宠，继续验证现有流程。",
-                            "补充选项说明，方便直接在桌面决定。",
+                            "采用这段文案，无需回到聊天确认。",
+                            "暂不定稿，后续再说明修改要求。",
                         ),
                         kind="agent", duration=None, request_id=request_id,
                     )
                 )
                 bubble = await until_window("NijikaDesktopPetBubbleWindow", image.size)
-                left, top, right, bottom = actions[1]
+                left, top, right, bottom = actions[0]
                 x, y = (left + right) // 2, (top + bottom) // 2
                 user32.SendMessageW(bubble, 0x0202, 0, x | (y << 16))
                 result = await client.call_tool(
                     "wait_for_reply", {"request_id": request_id, "timeout_seconds": 5}
                 )
                 assert result.structured_content["status"] == "answered", result
-                assert result.structured_content["choice"] == "优化提醒", result
+                assert result.structured_content["choice"] == "接受文案", result
                 assert NotificationStore(path).next_pending() is None
         finally:
             window = visible_window(WINDOW_CLASS)

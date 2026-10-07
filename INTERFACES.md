@@ -24,9 +24,9 @@
 
 | 工具 | 输入 | 结果 |
 | --- | --- | --- |
-| `show_completion` | 任务标题、简短结果 | 生成待处理完成提醒，返回 `request_id` |
-| `request_decision` | 任务标题、问题、2–3 个 `label` + `description` 选项 | 生成带逐项简介的待选择提醒，返回 `request_id`；输入无效时返回 `status=invalid` 与修正提示，不显示通知 |
+| `show_completion` | 任务标题、简短结果 | 生成单按钮“知道了”的完成提醒；仅表示收到，不表示批准，返回 `request_id` |
+| `request_decision` | 任务标题、最多 80 字且最多三段的问题、2–3 个 `label` + `description` 选项 | 生成可在桌宠直接完成的选择，短成果可连正文一同呈现；返回 `request_id`，输入无效时返回 `status=invalid` 与修正提示 |
 | `get_reply` | `request_id` | 返回 `pending` / `answered` / `dismissed` / `expired` / `not_found` 与所选名称、简介 |
 | `wait_for_reply` | `request_id`、最长 60 秒 | 等待桌面点击；超时仍返回 `pending`，可再次调用 |
 
-本阶段在同一用户机器上通过 stdio 和 SQLite 交换，不提供 HTTP/WebSocket、账户或第三方传输。Agent 来源名称由 MCP 服务启动环境决定，输入内容限制长度并作为纯文本绘制。`request_decision` 不接受只有 A/B 名称的字符串列表；每个选项名称最多占 20 个显示列，且必须有 6–48 字的一句话简介。`show_completion` 与 `request_decision` 的输入无效时返回 `status=invalid`、空 `request_id` 和可修正的错误说明。示例按钮仍只影响本地演示；带 `request_id` 的真实提醒才写回队列。MCP 客户端是否继续等待取决于该客户端的调用流程；桌宠不会独立唤醒已经结束的 Agent 会话。
+本阶段在同一用户机器上通过 stdio 和 SQLite 交换，不提供 HTTP/WebSocket、账户或第三方传输。Agent 来源名称由 MCP 服务启动环境决定，输入内容限制长度并作为纯文本绘制。`request_decision` 不接受只有 A/B 名称的字符串列表；每个选项名称最多占 20 个显示列，且必须有 6–48 字的一句话简介。短结果能放入问题正文时，Agent 应调用 `request_decision`、等候选择并在同一任务中继续，不重复要求聊天确认；复杂审阅才调用 `show_completion`。`show_completion` 与 `request_decision` 的输入无效时返回 `status=invalid`、空 `request_id` 和可修正的错误说明。示例按钮仍只影响本地演示；带 `request_id` 的真实提醒才写回队列。MCP 客户端是否继续等待取决于该客户端的调用流程；桌宠不会独立唤醒已经结束的 Agent 会话。

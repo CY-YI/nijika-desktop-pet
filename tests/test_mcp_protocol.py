@@ -29,6 +29,15 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIsNone(invalid.structured_content["request_id"])
                     self.assertIn("20 display columns", invalid.structured_content["instruction"])
                     self.assertIsNone(mcp_server.store.next_pending())
+                    too_long = await client.call_tool(
+                        "request_decision",
+                        {"task": "文案审阅", "question": "文" * 81, "options": [
+                            {"label": "接受文案", "description": "采用当前短文案，无需回聊天确认。"},
+                            {"label": "需要修改", "description": "暂不定稿，稍后说明修改要求。"},
+                        ]},
+                    )
+                    self.assertEqual(too_long.structured_content["status"], "invalid")
+                    self.assertIsNone(mcp_server.store.next_pending())
                     corrected = await client.call_tool(
                         "request_decision",
                         {"task": "显示方式", "question": "请选择", "options": [
@@ -75,7 +84,7 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                     )
                     finished_id = completed.structured_content["request_id"]
                     self.assertEqual(mcp_server.store.get(finished_id).choices,
-                                     ("已查看", "稍后"))
+                                     ("知道了",))
             finally:
                 mcp_server.store = previous
 

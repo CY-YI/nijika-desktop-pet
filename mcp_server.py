@@ -46,9 +46,9 @@ def invalid_notice(error: ValueError) -> CreatedResult:
 
 @mcp.tool()
 def show_completion(task: str, summary: str) -> CreatedResult:
-    """Tell the user on the desktop that this Agent finished a task; return an ID to check their response."""
+    """Send a notice-only completion alert when the result needs fuller review elsewhere; not an approval request."""
     try:
-        notice = store.create(AGENT_NAME, task, summary, ("已查看", "稍后"))
+        notice = store.create(AGENT_NAME, task, summary, ("知道了",))
     except ValueError as error:
         return invalid_notice(error)
     return CreatedResult(
@@ -59,9 +59,11 @@ def show_completion(task: str, summary: str) -> CreatedResult:
 
 @mcp.tool()
 def request_decision(task: str, question: str, options: list[DecisionOption]) -> CreatedResult:
-    """Ask one concrete desktop question with 2–3 distinct choices, each with a short explanation of its effect."""
+    """Ask and resolve a simple choice entirely on the desktop; include enough context to decide without opening chat."""
     if not 2 <= len(options) <= 3:
         return invalid_notice(ValueError("request_decision requires 2–3 explained choices"))
+    if isinstance(question, str) and (len(question) > 80 or question.count("\n") > 2):
+        return invalid_notice(ValueError("decision questions must fit within 80 characters and 3 paragraphs"))
     try:
         notice = store.create(AGENT_NAME, task, question,
                               [option.model_dump() for option in options])
@@ -69,7 +71,7 @@ def request_decision(task: str, question: str, options: list[DecisionOption]) ->
         return invalid_notice(error)
     return CreatedResult(
         request_id=notice.id, status=notice.status,
-        instruction="Call wait_for_reply with this request_id; a pending result means try again later.",
+        instruction="Call wait_for_reply with this request_id, then continue this task from the selected choice. Pending is not a decision; wait again or use get_reply later.",
     )
 
 

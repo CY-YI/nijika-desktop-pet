@@ -358,7 +358,8 @@ def bubble_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default(size=size)
 
 
-def wrap_bubble_text(text: str, font: ImageFont.FreeTypeFont, width: int, limit: int = 3) -> list[str]:
+def wrap_bubble_text(text: str, font: ImageFont.FreeTypeFont, width: int,
+                     limit: int | None = 3) -> list[str]:
     probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     lines: list[str] = []
     for paragraph in text.replace("\r", "").split("\n"):
@@ -370,7 +371,7 @@ def wrap_bubble_text(text: str, font: ImageFont.FreeTypeFont, width: int, limit:
             else:
                 current += char
         lines.append(current)
-    if len(lines) > limit:
+    if limit is not None and len(lines) > limit:
         lines = lines[:limit]
         while lines[-1] and probe.textlength(lines[-1] + "…", font=font) > width:
             lines[-1] = lines[-1][:-1]
@@ -393,8 +394,11 @@ def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, 
     small_font = bubble_font(17)
     button_font = bubble_font(21, bold=True)
     description_font = bubble_font(16)
+    described = (len(notice.action_descriptions) == len(notice.actions)
+                 and any(notice.action_descriptions))
     lines = wrap_bubble_text(notice.text, body_font, width - 58,
-                             limit=6 if notice.request_id else 3)
+                             limit=None if notice.request_id and described else
+                             6 if notice.request_id else 3)
     text_y = 62
     content_bottom = text_y + len(lines) * 33
     footer_y = None
@@ -402,8 +406,6 @@ def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, 
         footer_y = content_bottom + 7
         content_bottom = footer_y + 25
     button_y = content_bottom + 9 if notice.actions else None
-    described = (len(notice.action_descriptions) == len(notice.actions)
-                 and any(notice.action_descriptions))
     option_lines = (
         [wrap_bubble_text(description, description_font, width - 90, limit=3)
          for description in notice.action_descriptions[:3]]
@@ -436,7 +438,8 @@ def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, 
     for index, line in enumerate(lines):
         draw.text((27, text_y + index * 33), line, font=body_font, fill=(65, 56, 55, 255))
     if footer_y is not None:
-        footer = ("本地 MCP · 选择将供 Agent 读取" if notice.request_id
+        footer = ("点击选项后，Agent 会按你的决定继续" if notice.request_id and described
+                  else "完成提醒 · 点击仅确认收到" if notice.request_id
                   else "本地演示 · 未连接 Agent")
         draw.text((27, footer_y), footer, font=small_font, fill=(123, 108, 98, 255))
     action_rects: list[tuple[int, int, int, int]] = []
@@ -801,7 +804,9 @@ class PetWindow:
             self.active_notice_id = None
             self.defer_next_notice_until = time.monotonic() + 2.5
             self.bubble.show(
-                BubbleNotice("虹夏 · 已回复", f"已选择「{selected}」，Agent 可以读取结果。",
+                BubbleNotice("虹夏 · 已回复",
+                             f"已选择「{selected}」，Agent 会按此继续。" if any(notice.action_descriptions)
+                             else "已收到完成提醒。",
                              duration=2.5),
                 self._bubble_anchor(),
             )
