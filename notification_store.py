@@ -118,18 +118,18 @@ class NotificationStore:
         normalized: list[dict[str, str]] = []
         for item in choices:
             if isinstance(item, str):
-                label, description = _required_text(item, "choice", 12), ""
+                label, description = _required_text(item, "choice", 20), ""
             elif isinstance(item, dict):
-                label = _required_text(item.get("label"), "choice label", 12)
+                label = _required_text(item.get("label"), "choice label", 20)
                 description = _required_text(item.get("description"), "choice description", 48)
                 if len(description) < 6 or description == label or "\n" in description:
                     raise ValueError("each choice needs a distinct one-line description of at least 6 characters")
             else:
                 raise ValueError("each choice must be a label or label/description object")
             normalized.append({"label": label, "description": description})
-        if any("\n" in item["label"] or _choice_width(item["label"]) > 10
+        if any("\n" in item["label"] or _choice_width(item["label"]) > 20
                for item in normalized):
-            raise ValueError("choice labels must fit within 10 display columns")
+            raise ValueError("choice labels must fit within 20 display columns")
         if len({item["label"] for item in normalized}) != len(normalized):
             raise ValueError("choice labels must be distinct")
         now = int(time.time())

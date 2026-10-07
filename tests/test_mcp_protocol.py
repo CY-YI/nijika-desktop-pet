@@ -11,6 +11,36 @@ from notification_store import NotificationStore
 
 
 class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_choice_width_returns_actionable_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            previous = mcp_server.store
+            mcp_server.store = NotificationStore(Path(directory) / "notifications.sqlite3")
+            try:
+                async with Client(mcp_server.mcp) as client:
+                    invalid = await client.call_tool(
+                        "request_decision",
+                        {"task": "显示方式", "question": "请选择", "options": [
+                            {"label": "自动隐藏后重新打开查看", "description": "提醒自动收起，可稍后重新打开查看。"},
+                            {"label": "保留到手动关闭", "description": "提醒一直显示，直到你手动关闭。"},
+                        ]},
+                    )
+                    self.assertFalse(invalid.is_error)
+                    self.assertEqual(invalid.structured_content["status"], "invalid")
+                    self.assertIsNone(invalid.structured_content["request_id"])
+                    self.assertIn("20 display columns", invalid.structured_content["instruction"])
+                    self.assertIsNone(mcp_server.store.next_pending())
+                    corrected = await client.call_tool(
+                        "request_decision",
+                        {"task": "显示方式", "question": "请选择", "options": [
+                            {"label": "30秒后自动收起", "description": "减少桌面占用，但提醒可能被错过。"},
+                            {"label": "保留到手动关闭", "description": "提醒一直显示，直到你手动关闭。"},
+                        ]},
+                    )
+                    self.assertEqual(corrected.structured_content["status"], "pending")
+                    self.assertIsNotNone(corrected.structured_content["request_id"])
+            finally:
+                mcp_server.store = previous
+
     async def test_codex_tool_to_desktop_reply(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             previous = mcp_server.store

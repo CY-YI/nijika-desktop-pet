@@ -18,7 +18,7 @@ store = NotificationStore()
 
 
 class CreatedResult(BaseModel):
-    request_id: str
+    request_id: str | None
     status: str
     instruction: str
 
@@ -32,14 +32,25 @@ class ReplyResult(BaseModel):
 
 
 class DecisionOption(BaseModel):
-    label: str = Field(description="Short visible choice name, such as 保留现状 or 重做界面; avoid bare A/B labels")
-    description: str = Field(description="One concise sentence explaining what this choice changes or trades off")
+    label: str = Field(max_length=20, description="Meaningful visible choice name, at most 20 display columns (about 10 Chinese characters); avoid bare A/B labels")
+    description: str = Field(min_length=6, max_length=48, description="One concise sentence explaining what this choice changes or trades off")
+
+
+def invalid_notice(error: ValueError) -> CreatedResult:
+    return CreatedResult(
+        request_id=None,
+        status="invalid",
+        instruction=f"Nothing was shown on the desktop: {error}. Shorten or correct the input and retry once.",
+    )
 
 
 @mcp.tool()
 def show_completion(task: str, summary: str) -> CreatedResult:
     """Tell the user on the desktop that this Agent finished a task; return an ID to check their response."""
-    notice = store.create(AGENT_NAME, task, summary, ("已查看", "稍后"))
+    try:
+        notice = store.create(AGENT_NAME, task, summary, ("已查看", "稍后"))
+    except ValueError as error:
+        return invalid_notice(error)
     return CreatedResult(
         request_id=notice.id, status=notice.status,
         instruction="Call get_reply or wait_for_reply to read the user's desktop response.",
@@ -50,9 +61,12 @@ def show_completion(task: str, summary: str) -> CreatedResult:
 def request_decision(task: str, question: str, options: list[DecisionOption]) -> CreatedResult:
     """Ask one concrete desktop question with 2–3 distinct choices, each with a short explanation of its effect."""
     if not 2 <= len(options) <= 3:
-        raise ValueError("request_decision requires 2–3 explained choices")
-    notice = store.create(AGENT_NAME, task, question,
-                          [option.model_dump() for option in options])
+        return invalid_notice(ValueError("request_decision requires 2–3 explained choices"))
+    try:
+        notice = store.create(AGENT_NAME, task, question,
+                              [option.model_dump() for option in options])
+    except ValueError as error:
+        return invalid_notice(error)
     return CreatedResult(
         request_id=notice.id, status=notice.status,
         instruction="Call wait_for_reply with this request_id; a pending result means try again later.",

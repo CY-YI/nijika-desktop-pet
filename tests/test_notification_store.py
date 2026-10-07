@@ -51,6 +51,11 @@ class NotificationStoreTests(unittest.TestCase):
                 {"label": "方案A", "description": "方案A"},
                 {"label": "方案B", "description": ""},
             ])
+        with self.assertRaisesRegex(ValueError, "20 display columns"):
+            self.sender.create("Codex", "选择", "请选择", [
+                {"label": "自动隐藏后重新打开查看", "description": "提醒自动收起，可稍后重新打开查看。"},
+                {"label": "保留到手动关闭", "description": "提醒一直显示，直到你手动关闭。"},
+            ])
         self.assertIsNone(self.pet.next_pending())
 
     def test_retention_expires_pending_and_removes_old_answers(self) -> None:
