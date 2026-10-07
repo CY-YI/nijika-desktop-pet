@@ -124,6 +124,10 @@ user32.KillTimer.argtypes = [wintypes.HWND, ctypes.c_size_t]
 user32.KillTimer.restype = wintypes.BOOL
 user32.SetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPCWSTR]
 user32.SetWindowTextW.restype = wintypes.BOOL
+user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+user32.ShowWindow.restype = wintypes.BOOL
+user32.DestroyWindow.argtypes = [wintypes.HWND]
+user32.DestroyWindow.restype = wintypes.BOOL
 user32.SystemParametersInfoW.argtypes = [
     wintypes.UINT, wintypes.UINT, ctypes.c_void_p, wintypes.UINT
 ]
@@ -163,6 +167,8 @@ WS_POPUP = 0x80000000
 WS_EX_LAYERED = 0x00080000
 WS_EX_TOPMOST = 0x00000008
 WS_EX_APPWINDOW = 0x00040000
+WS_EX_TOOLWINDOW = 0x00000080
+WS_EX_NOACTIVATE = 0x08000000
 CS_DBLCLKS = 0x0008
 SW_SHOWNOACTIVATE = 4
 SWP_NOSIZE = 0x0001
@@ -320,11 +326,298 @@ class SpriteSet:
         ctypes.memmove(self.bits, raw, len(raw))
 
 
+from dataclasses import dataclass
+from PIL import ImageFont
+
+
+@dataclass(frozen=True)
+class BubbleNotice:
+    title: str
+    text: str
+    actions: tuple[str, ...] = ()
+    kind: str = "chat"
+    duration: float | None = 6.0
+
+
+def bubble_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
+    candidates = (
+        "C:/Windows/Fonts/msyhbd.ttc" if bold else "C:/Windows/Fonts/msyh.ttc",
+        "C:/Windows/Fonts/simhei.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+    )
+    for candidate in candidates:
+        try:
+            return ImageFont.truetype(candidate, size)
+        except OSError:
+            continue
+    return ImageFont.load_default(size=size)
+
+
+def wrap_bubble_text(text: str, font: ImageFont.FreeTypeFont, width: int, limit: int = 3) -> list[str]:
+    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    lines: list[str] = []
+    for paragraph in text.replace("\r", "").split("\n"):
+        current = ""
+        for char in paragraph:
+            if current and probe.textlength(current + char, font=font) > width:
+                lines.append(current)
+                current = char
+            else:
+                current += char
+        lines.append(current)
+    if len(lines) > limit:
+        lines = lines[:limit]
+        while lines[-1] and probe.textlength(lines[-1] + "…", font=font) > width:
+            lines[-1] = lines[-1][:-1]
+        lines[-1] += "…"
+    return lines or [""]
+
+
+def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, list[tuple[int, int, int, int]], tuple[int, int, int, int]]:
+    title_font = bubble_font(21, bold=True)
+    body_font = bubble_font(24)
+    small_font = bubble_font(17)
+    button_font = bubble_font(21, bold=True)
+    lines = wrap_bubble_text(notice.text, body_font, width - 58)
+    text_y = 62
+    content_bottom = text_y + len(lines) * 33
+    footer_y = None
+    if notice.kind == "agent":
+        footer_y = content_bottom + 7
+        content_bottom = footer_y + 25
+    button_y = content_bottom + 9 if notice.actions else None
+    card_bottom = (button_y + 45 + 18) if button_y is not None else (content_bottom + 17)
+    height = card_bottom + 20
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    outline = (111, 81, 66, 255) if notice.kind == "agent" else (119, 89, 76, 255)
+    fill = (255, 249, 232, 250) if notice.kind == "agent" else (255, 253, 247, 250)
+    draw.rounded_rectangle((9, 9, width - 4, card_bottom + 3), radius=24, fill=(67, 49, 39, 55))
+    draw.rounded_rectangle((5, 5, width - 9, card_bottom), radius=24, fill=fill, outline=outline, width=3)
+    pointer_x = width // 2
+    draw.polygon(
+        ((pointer_x - 16, card_bottom - 2), (pointer_x + 17, card_bottom - 2), (pointer_x + 1, height - 5)),
+        fill=fill, outline=outline,
+    )
+    draw.line((pointer_x - 13, card_bottom - 2, pointer_x + 14, card_bottom - 2), fill=fill, width=5)
+    draw.text((27, 22), notice.title, font=title_font, fill=(149, 80, 65, 255))
+    draw.text((width - 40, 17), "×", font=title_font, fill=(130, 117, 110, 255))
+    for index, line in enumerate(lines):
+        draw.text((27, text_y + index * 33), line, font=body_font, fill=(65, 56, 55, 255))
+    if footer_y is not None:
+        draw.text((27, footer_y), "本地演示 · 未连接 Agent", font=small_font, fill=(123, 108, 98, 255))
+    action_rects: list[tuple[int, int, int, int]] = []
+    if button_y is not None:
+        actions = notice.actions[:3]
+        gap = 11
+        button_width = (width - 54 - gap * (len(actions) - 1)) // len(actions)
+        for index, label in enumerate(actions):
+            left = 27 + index * (button_width + gap)
+            rect = (left, button_y, left + button_width, button_y + 44)
+            draw.rounded_rectangle(rect, radius=13, fill=(255, 222, 153, 255), outline=(143, 97, 76, 255), width=2)
+            bbox = draw.textbbox((0, 0), label, font=button_font)
+            text_width = bbox[2] - bbox[0]
+            draw.text((left + (button_width - text_width) / 2, button_y + 7), label, font=button_font, fill=(88, 62, 54, 255))
+            action_rects.append(rect)
+    return canvas, action_rects, (width - 52, 10, width - 13, 50)
+
+
+class BubbleOverlay:
+    CLASS_NAME = "NijikaDesktopPetBubbleWindow"
+
+    def __init__(self, on_action):
+        self.on_action = on_action
+        self.hwnd: int | None = None
+        self.notice: BubbleNotice | None = None
+        self.expires_at: float | None = None
+        self.width = self.height = 0
+        self.action_rects: list[tuple[int, int, int, int]] = []
+        self.close_rect = (0, 0, 0, 0)
+        self.anchor = (0, 0, 0, 0)
+        self.memory_dc = self.bitmap = self.old_bitmap = None
+        self.bits = ctypes.c_void_p()
+        self._callback = WNDPROC(self._wnd_proc)
+
+    def _ensure_window(self) -> None:
+        if self.hwnd:
+            return
+        module = kernel32.GetModuleHandleW(None)
+        window_class = WNDCLASSW()
+        window_class.style = CS_DBLCLKS
+        window_class.lpfnWndProc = self._callback
+        window_class.hInstance = module
+        window_class.hCursor = user32.LoadCursorW(None, ctypes.c_void_p(32512))
+        window_class.lpszClassName = self.CLASS_NAME
+        if not user32.RegisterClassW(ctypes.byref(window_class)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        self.hwnd = user32.CreateWindowExW(
+            WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+            self.CLASS_NAME, "虹夏消息气泡", WS_POPUP,
+            0, 0, 1, 1, None, None, module, None,
+        )
+        if not self.hwnd:
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    def _release_surface(self) -> None:
+        if self.memory_dc:
+            if self.old_bitmap:
+                gdi32.SelectObject(self.memory_dc, self.old_bitmap)
+            gdi32.DeleteDC(self.memory_dc)
+            self.memory_dc = None
+        if self.bitmap:
+            gdi32.DeleteObject(self.bitmap)
+            self.bitmap = None
+        self.old_bitmap = None
+
+    def _load_surface(self, image: Image.Image) -> None:
+        self._release_surface()
+        self.width, self.height = image.size
+        screen_dc = user32.GetDC(None)
+        if not screen_dc:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            header = BITMAPINFOHEADER()
+            header.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+            header.biWidth = self.width
+            header.biHeight = -self.height
+            header.biPlanes = 1
+            header.biBitCount = 32
+            self.bits = ctypes.c_void_p()
+            self.bitmap = gdi32.CreateDIBSection(
+                screen_dc, ctypes.byref(header), 0, ctypes.byref(self.bits), None, 0
+            )
+            if not self.bitmap or not self.bits.value:
+                raise ctypes.WinError(ctypes.get_last_error())
+            self.memory_dc = gdi32.CreateCompatibleDC(screen_dc)
+            if not self.memory_dc:
+                raise ctypes.WinError(ctypes.get_last_error())
+            self.old_bitmap = gdi32.SelectObject(self.memory_dc, self.bitmap)
+            if not self.old_bitmap:
+                raise ctypes.WinError(ctypes.get_last_error())
+            raw = premultiplied_bgra(image)
+            ctypes.memmove(self.bits, raw, len(raw))
+        except BaseException:
+            self._release_surface()
+            raise
+        finally:
+            user32.ReleaseDC(None, screen_dc)
+
+    def _position(self) -> tuple[int, int]:
+        pet_x, pet_y, pet_width, _ = self.anchor
+        x = pet_x + (pet_width - self.width) // 2
+        y = pet_y - self.height + 31
+        work = wintypes.RECT()
+        if user32.SystemParametersInfoW(SPI_GETWORKAREA, 0, ctypes.byref(work), 0):
+            x = max(work.left + 8, min(x, work.right - self.width - 8))
+            y = max(work.top + 8, min(y, work.bottom - self.height - 8))
+        return x, y
+
+    def show(self, notice: BubbleNotice, anchor: tuple[int, int, int, int]) -> None:
+        self._ensure_window()
+        image, self.action_rects, self.close_rect = render_bubble(notice)
+        self._load_surface(image)
+        self.notice = notice
+        self.expires_at = time.monotonic() + notice.duration if notice.duration is not None else None
+        self.anchor = anchor
+        x, y = self._position()
+        screen_dc = user32.GetDC(None)
+        destination = wintypes.POINT(x, y)
+        source = wintypes.POINT(0, 0)
+        size = SIZE(self.width, self.height)
+        blend = BLENDFUNCTION(0, 0, 255, 1)
+        try:
+            if not user32.UpdateLayeredWindow(
+                self.hwnd, screen_dc, ctypes.byref(destination), ctypes.byref(size),
+                self.memory_dc, ctypes.byref(source), 0, ctypes.byref(blend), ULW_ALPHA
+            ):
+                raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            user32.ReleaseDC(None, screen_dc)
+        user32.ShowWindow(self.hwnd, SW_SHOWNOACTIVATE)
+        user32.SetWindowPos(
+            self.hwnd, ctypes.c_void_p(-1), x, y, self.width, self.height,
+            SWP_NOACTIVATE,
+        )
+
+    def reposition(self, anchor: tuple[int, int, int, int]) -> None:
+        self.anchor = anchor
+        if self.hwnd and self.notice:
+            x, y = self._position()
+            user32.SetWindowPos(
+                self.hwnd, ctypes.c_void_p(-1), x, y, 0, 0,
+                SWP_NOSIZE | SWP_NOACTIVATE,
+            )
+
+    def hide(self) -> None:
+        self.notice = None
+        self.expires_at = None
+        if self.hwnd:
+            user32.ShowWindow(self.hwnd, 0)
+
+    def tick(self, now: float) -> None:
+        if self.expires_at is not None and now >= self.expires_at:
+            self.hide()
+
+    def close(self) -> None:
+        if self.hwnd:
+            user32.DestroyWindow(self.hwnd)
+            self.hwnd = None
+        self._release_surface()
+
+    def _wnd_proc(self, hwnd: int, message: int, wparam: int, lparam: int) -> int:
+        if message == WM_LBUTTONUP:
+            x = ctypes.c_short(lparam & 0xFFFF).value
+            y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
+            left, top, right, bottom = self.close_rect
+            if left <= x <= right and top <= y <= bottom:
+                self.hide()
+                return 0
+            for index, (left, top, right, bottom) in enumerate(self.action_rects):
+                if left <= x <= right and top <= y <= bottom:
+                    notice = self.notice
+                    if notice:
+                        self.on_action(notice, index)
+                    return 0
+            if self.notice and self.notice.kind == "chat":
+                self.hide()
+            return 0
+        if message == WM_RBUTTONUP:
+            self.hide()
+            return 0
+        if message == WM_DESTROY:
+            self.notice = None
+            self.hwnd = None
+            self._release_surface()
+            return 0
+        return user32.DefWindowProcW(hwnd, message, wparam, lparam)
+
+DAILY_LINES = (
+    "今天也要记得喝水呀。",
+    "忙了一阵的话，伸个懒腰吧！",
+    "我在这里陪着你，加油～",
+    "一步一步来，也很了不起。",
+    "要不要点点我，换个心情？",
+    "辛苦啦，休息一下也没关系。",
+)
+STATE_LINES = {
+    "curious": "今天想一起做点什么？",
+    "happy": "看到你啦，嘿嘿！",
+    "worried": "别着急，我们慢慢想办法。",
+    "sleepy": "唔……要一起休息一会儿吗？",
+    "wink": "嘿，给你一个小小的惊喜！",
+    "thinking": "让我想想，好主意会来的。",
+    "pout": "哼，也要记得照顾自己哦。",
+    "excited": "加油！这次也一定能做到！",
+}
+
 class PetWindow:
     def __init__(self, width: int = 320, demo_seconds: int = 0):
         self.width = width
         self.height = width * 3 // 2
         self.sprites = SpriteSet(self.width, self.height)
+        self.bubble = BubbleOverlay(self._bubble_action)
+        self.chat_enabled = True
+        self.next_chat = time.monotonic() + random.uniform(7.0, 11.0)
         self.state = "curious"
         self.motion_mode = "lively"
         self.motion_started = time.monotonic()
@@ -357,6 +650,50 @@ class PetWindow:
         point = wintypes.POINT()
         user32.GetCursorPos(ctypes.byref(point))
         return point.x, point.y
+
+    def _bubble_anchor(self) -> tuple[int, int, int, int]:
+        return self.x, self.y, self.width, self.height
+
+    def say(self, phrase: str | None = None) -> None:
+        if not self.hwnd:
+            return
+        if self.bubble.notice and self.bubble.notice.kind == "agent":
+            return
+        self.bubble.show(
+            BubbleNotice("虹夏 · 日常", phrase or random.choice(DAILY_LINES)),
+            self._bubble_anchor(),
+        )
+
+    def show_demo_notice(self, request_choice: bool = False) -> None:
+        if request_choice:
+            notice = BubbleNotice(
+                "演示选择 · DeepSeek",
+                "下一步的外观方案需要你选择。",
+                actions=("方案 A", "方案 B"),
+                kind="agent", duration=None,
+            )
+        else:
+            notice = BubbleNotice(
+                "演示提醒 · Codex",
+                "任务已完成，等待你查看结果。",
+                actions=("已查看", "稍后"),
+                kind="agent", duration=None,
+            )
+        self.bubble.show(notice, self._bubble_anchor())
+
+    def _bubble_action(self, notice: BubbleNotice, index: int) -> None:
+        if notice.kind != "agent" or index >= len(notice.actions):
+            return
+        selected = notice.actions[index]
+        self.bubble.show(
+            BubbleNotice(
+                "虹夏 · 演示结果",
+                f"你选择了「{selected}」。这只是本地演示，尚未发送给 Agent。",
+                duration=7.0,
+            ),
+            self._bubble_anchor(),
+        )
+        self.set_state("happy")
 
     def show_pose(self, name: str, **pose: float) -> None:
         if not self.hwnd:
@@ -416,6 +753,11 @@ class PetWindow:
         now = time.monotonic()
         dt = min(0.10, max(0.0, now - self.last_tick))
         self.last_tick = now
+        self.bubble.tick(now)
+        if self.chat_enabled and now >= self.next_chat:
+            self.next_chat = now + random.uniform(110.0, 180.0)
+            if not self.drag_start and self.bubble.notice is None:
+                self.say()
         if self.motion_mode == "off":
             self.show_pose(self.state)
             return
@@ -488,6 +830,7 @@ class PetWindow:
             self.hwnd, None, self.x, self.y, width, height,
             SWP_NOZORDER | SWP_NOACTIVATE
         )
+        self.bubble.reposition(self._bubble_anchor())
         self.tick()
         previous.close()
 
@@ -498,15 +841,19 @@ class PetWindow:
             options += [
                 (201, "小号"), (202, "中号"), (203, "大号"),
                 (401, "动态：活泼明显"), (402, "动态：轻柔自然"), (403, "动态：关闭"),
+                (501, "让虹夏说句话"), (502, "演示：完成提醒"),
+                (503, "演示：请求选择"),
+                (504, "日常闲聊：开启" if self.chat_enabled else "日常闲聊：关闭"),
                 (301, "退出桌宠"),
             ]
             for command, title in options:
-                if command in (201, 401, 301):
+                if command in (201, 401, 501, 301):
                     user32.AppendMenuW(menu, MF_SEPARATOR, 0, None)
                 checked = (
                     (command == 401 and self.motion_mode == "lively")
                     or (command == 402 and self.motion_mode == "gentle")
                     or (command == 403 and self.motion_mode == "off")
+                    or (command == 504 and self.chat_enabled)
                 )
                 user32.AppendMenuW(menu, MF_STRING | (MF_CHECKED if checked else 0), command, title)
             x, y = self._cursor()
@@ -522,6 +869,17 @@ class PetWindow:
             self.resize(WIDTHS[command - 201])
         elif 401 <= command <= 403:
             self.set_motion(("lively", "gentle", "off")[command - 401])
+        elif command == 501:
+            self.say()
+        elif command == 502:
+            self.show_demo_notice()
+        elif command == 503:
+            self.show_demo_notice(request_choice=True)
+        elif command == 504:
+            self.chat_enabled = not self.chat_enabled
+            self.next_chat = time.monotonic() + random.uniform(110.0, 180.0)
+            if not self.chat_enabled and self.bubble.notice and self.bubble.notice.kind == "chat":
+                self.bubble.hide()
         elif command == 301:
             user32.DestroyWindow(self.hwnd)
 
@@ -533,9 +891,11 @@ class PetWindow:
             user32.SetCapture(hwnd)
             return 0
         if message == WM_LBUTTONDBLCLK:
+            user32.ReleaseCapture()
             self.drag_start = None
             self.dragged = False
             self.set_state("excited", bounce_count=2)
+            self.say(STATE_LINES["excited"])
             return 0
         if message == WM_MOUSEMOVE and self.drag_start and wparam & MK_LBUTTON:
             x, y = self._cursor()
@@ -550,6 +910,7 @@ class PetWindow:
                     hwnd, None, self.x, self.y, 0, 0,
                     SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE
                 )
+                self.bubble.reposition(self._bubble_anchor())
             return 0
         if message == WM_LBUTTONUP:
             if self.drag_start:
@@ -559,6 +920,7 @@ class PetWindow:
                 else:
                     index = (EXPRESSIONS.index(self.state) + 1) % len(EXPRESSIONS)
                     self.set_state(EXPRESSIONS[index])
+                    self.say(STATE_LINES[self.state])
             self.drag_start = None
             self.dragged = False
             self.tick()
@@ -581,6 +943,7 @@ class PetWindow:
             if self.high_res_timer:
                 winmm.timeEndPeriod(1)
                 self.high_res_timer = False
+            self.bubble.close()
             self.sprites.close()
             user32.PostQuitMessage(0)
             return 0
