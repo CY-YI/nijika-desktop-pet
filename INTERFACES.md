@@ -18,4 +18,15 @@
 | 演示 Agent 提醒 | 菜单中的完成提醒或选择请求 | 显示 Agent 名称、待办和两项操作；一直保留到关闭或选择 |
 | 演示按钮回调 | 所选按钮 | 仅显示本地结果，不向任何 Agent 发送或保存 |
 
-外部接口：本轮无 MCP、HTTP、WebSocket、命令控制或第三方账号。未来可将 Agent 名称、消息、操作标签与回应目标映射到 `BubbleNotice`；实际传输、身份与权限、超时及回应路由均待下一阶段确定，目前的按钮不能视为对真实 Agent 的确认。
+原本只有本地演示按钮；2026-10-07 新增以下真实 MCP 接口。仍无 HTTP、WebSocket 或第三方账号。
+
+## Codex MCP 接口（2026-10-07 已接入）
+
+| 工具 | 输入 | 结果 |
+| --- | --- | --- |
+| `show_completion` | 任务标题、简短结果 | 生成待处理完成提醒，返回 `request_id` |
+| `request_decision` | 任务标题、问题、2–3 个 `label` + `description` 选项 | 生成带逐项简介的待选择提醒，返回 `request_id` |
+| `get_reply` | `request_id` | 返回 `pending` / `answered` / `dismissed` / `expired` / `not_found` 与所选名称、简介 |
+| `wait_for_reply` | `request_id`、最长 60 秒 | 等待桌面点击；超时仍返回 `pending`，可再次调用 |
+
+本阶段在同一用户机器上通过 stdio 和 SQLite 交换，不提供 HTTP/WebSocket、账户或第三方传输。Agent 来源名称由 MCP 服务启动环境决定，输入内容限制长度并作为纯文本绘制。`request_decision` 不接受只有 A/B 名称的字符串列表；每个选项必须提供不同的名称和 6–48 字的一句话简介。示例按钮仍只影响本地演示；带 `request_id` 的真实提醒才写回队列。MCP 客户端是否继续等待取决于该客户端的调用流程；桌宠不会独立唤醒已经结束的 Agent 会话。

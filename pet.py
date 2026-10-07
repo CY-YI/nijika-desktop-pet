@@ -6,12 +6,15 @@ import argparse
 import ctypes
 import math
 import random
+import sqlite3
 import sys
 import time
 from ctypes import wintypes
 from pathlib import Path
 
 from PIL import Image, ImageDraw
+
+from notification_store import Notification, NotificationStore
 
 
 EXPRESSIONS = (
@@ -335,8 +338,10 @@ class BubbleNotice:
     title: str
     text: str
     actions: tuple[str, ...] = ()
+    action_descriptions: tuple[str, ...] = ()
     kind: str = "chat"
     duration: float | None = 6.0
+    request_id: str | None = None
 
 
 def bubble_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
@@ -373,12 +378,23 @@ def wrap_bubble_text(text: str, font: ImageFont.FreeTypeFont, width: int, limit:
     return lines or [""]
 
 
+def fit_bubble_text(text: str, font: ImageFont.FreeTypeFont, width: int) -> str:
+    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    if probe.textlength(text, font=font) <= width:
+        return text
+    while text and probe.textlength(text + "…", font=font) > width:
+        text = text[:-1]
+    return text + "…"
+
+
 def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, list[tuple[int, int, int, int]], tuple[int, int, int, int]]:
     title_font = bubble_font(21, bold=True)
     body_font = bubble_font(24)
     small_font = bubble_font(17)
     button_font = bubble_font(21, bold=True)
-    lines = wrap_bubble_text(notice.text, body_font, width - 58)
+    description_font = bubble_font(16)
+    lines = wrap_bubble_text(notice.text, body_font, width - 58,
+                             limit=6 if notice.request_id else 3)
     text_y = 62
     content_bottom = text_y + len(lines) * 33
     footer_y = None
@@ -386,7 +402,21 @@ def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, 
         footer_y = content_bottom + 7
         content_bottom = footer_y + 25
     button_y = content_bottom + 9 if notice.actions else None
-    card_bottom = (button_y + 45 + 18) if button_y is not None else (content_bottom + 17)
+    described = (len(notice.action_descriptions) == len(notice.actions)
+                 and any(notice.action_descriptions))
+    option_lines = (
+        [wrap_bubble_text(description, description_font, width - 90, limit=3)
+         for description in notice.action_descriptions[:3]]
+        if described else []
+    )
+    option_heights = [max(76, 57 + 19 * (len(lines) - 1))
+                      for lines in option_lines]
+    if button_y is not None and described:
+        card_bottom = button_y + sum(option_heights) + (len(option_heights) - 1) * 8 + 17
+    elif button_y is not None:
+        card_bottom = button_y + 45 + 18
+    else:
+        card_bottom = content_bottom + 17
     height = card_bottom + 20
     canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas, "RGBA")
@@ -400,33 +430,51 @@ def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, 
         fill=fill, outline=outline,
     )
     draw.line((pointer_x - 13, card_bottom - 2, pointer_x + 14, card_bottom - 2), fill=fill, width=5)
-    draw.text((27, 22), notice.title, font=title_font, fill=(149, 80, 65, 255))
+    draw.text((27, 22), fit_bubble_text(notice.title, title_font, width - 95),
+              font=title_font, fill=(149, 80, 65, 255))
     draw.text((width - 40, 17), "×", font=title_font, fill=(130, 117, 110, 255))
     for index, line in enumerate(lines):
         draw.text((27, text_y + index * 33), line, font=body_font, fill=(65, 56, 55, 255))
     if footer_y is not None:
-        draw.text((27, footer_y), "本地演示 · 未连接 Agent", font=small_font, fill=(123, 108, 98, 255))
+        footer = ("本地 MCP · 选择将供 Agent 读取" if notice.request_id
+                  else "本地演示 · 未连接 Agent")
+        draw.text((27, footer_y), footer, font=small_font, fill=(123, 108, 98, 255))
     action_rects: list[tuple[int, int, int, int]] = []
     if button_y is not None:
         actions = notice.actions[:3]
-        gap = 11
-        button_width = (width - 54 - gap * (len(actions) - 1)) // len(actions)
-        for index, label in enumerate(actions):
-            left = 27 + index * (button_width + gap)
-            rect = (left, button_y, left + button_width, button_y + 44)
-            draw.rounded_rectangle(rect, radius=13, fill=(255, 222, 153, 255), outline=(143, 97, 76, 255), width=2)
-            bbox = draw.textbbox((0, 0), label, font=button_font)
-            text_width = bbox[2] - bbox[0]
-            draw.text((left + (button_width - text_width) / 2, button_y + 7), label, font=button_font, fill=(88, 62, 54, 255))
-            action_rects.append(rect)
+        if described:
+            top = button_y
+            for index, label in enumerate(actions):
+                rect = (27, top, width - 27, top + option_heights[index])
+                draw.rounded_rectangle(rect, radius=13, fill=(255, 232, 185, 255),
+                                       outline=(143, 97, 76, 255), width=2)
+                draw.text((42, top + 8), fit_bubble_text(label, button_font, width - 95),
+                          font=button_font, fill=(88, 62, 54, 255))
+                for line_index, line in enumerate(option_lines[index]):
+                    draw.text((43, top + 36 + line_index * 19), line,
+                              font=description_font, fill=(105, 82, 72, 255))
+                action_rects.append(rect)
+                top += option_heights[index] + 8
+        else:
+            gap = 11
+            button_width = (width - 54 - gap * (len(actions) - 1)) // len(actions)
+            for index, label in enumerate(actions):
+                left = 27 + index * (button_width + gap)
+                rect = (left, button_y, left + button_width, button_y + 44)
+                draw.rounded_rectangle(rect, radius=13, fill=(255, 222, 153, 255), outline=(143, 97, 76, 255), width=2)
+                bbox = draw.textbbox((0, 0), label, font=button_font)
+                text_width = bbox[2] - bbox[0]
+                draw.text((left + (button_width - text_width) / 2, button_y + 7), label, font=button_font, fill=(88, 62, 54, 255))
+                action_rects.append(rect)
     return canvas, action_rects, (width - 52, 10, width - 13, 50)
 
 
 class BubbleOverlay:
     CLASS_NAME = "NijikaDesktopPetBubbleWindow"
 
-    def __init__(self, on_action):
+    def __init__(self, on_action, on_close):
         self.on_action = on_action
+        self.on_close = on_close
         self.hwnd: int | None = None
         self.notice: BubbleNotice | None = None
         self.expires_at: float | None = None
@@ -570,7 +618,10 @@ class BubbleOverlay:
             y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
             left, top, right, bottom = self.close_rect
             if left <= x <= right and top <= y <= bottom:
+                notice = self.notice
                 self.hide()
+                if notice:
+                    self.on_close(notice)
                 return 0
             for index, (left, top, right, bottom) in enumerate(self.action_rects):
                 if left <= x <= right and top <= y <= bottom:
@@ -582,7 +633,10 @@ class BubbleOverlay:
                 self.hide()
             return 0
         if message == WM_RBUTTONUP:
+            notice = self.notice
             self.hide()
+            if notice:
+                self.on_close(notice)
             return 0
         if message == WM_DESTROY:
             self.notice = None
@@ -615,7 +669,15 @@ class PetWindow:
         self.width = width
         self.height = width * 3 // 2
         self.sprites = SpriteSet(self.width, self.height)
-        self.bubble = BubbleOverlay(self._bubble_action)
+        self.bubble = BubbleOverlay(self._bubble_action, self._bubble_close)
+        try:
+            self.notifications: NotificationStore | None = NotificationStore()
+            self.notifications.prune()
+        except (OSError, sqlite3.Error):
+            self.notifications = None
+        self.active_notice_id: str | None = None
+        self.next_notice_poll = 0.0
+        self.defer_next_notice_until = 0.0
         self.chat_enabled = True
         self.next_chat = time.monotonic() + random.uniform(7.0, 11.0)
         self.state = "curious"
@@ -668,8 +730,12 @@ class PetWindow:
         if request_choice:
             notice = BubbleNotice(
                 "演示选择 · DeepSeek",
-                "下一步的外观方案需要你选择。",
-                actions=("方案 A", "方案 B"),
+                "希望后续提醒怎样展示？",
+                actions=("简洁气泡", "详细卡片"),
+                action_descriptions=(
+                    "只显示关键结论，尽量不打断当前工作。",
+                    "同时展示背景与可选步骤，便于判断。",
+                ),
                 kind="agent", duration=None,
             )
         else:
@@ -681,10 +747,66 @@ class PetWindow:
             )
         self.bubble.show(notice, self._bubble_anchor())
 
+    def _poll_notifications(self, now: float) -> None:
+        if self.notifications is None or now < self.next_notice_poll:
+            return
+        self.next_notice_poll = now + 0.35
+        if now < self.defer_next_notice_until:
+            return
+        try:
+            pending = self.notifications.next_pending()
+        except sqlite3.Error:
+            return
+        if pending is None:
+            if self.bubble.notice and self.bubble.notice.request_id:
+                self.bubble.hide()
+            self.active_notice_id = None
+            return
+        if self.bubble.notice and self.bubble.notice.request_id == pending.id:
+            return
+        self.active_notice_id = pending.id
+        self.bubble.show(
+            BubbleNotice(f"{pending.agent} · {pending.title}", pending.message,
+                         actions=pending.choices,
+                         action_descriptions=pending.choice_descriptions,
+                         kind="agent", duration=None,
+                         request_id=pending.id),
+            self._bubble_anchor(),
+        )
+        self.set_state("curious")
+
+    def _bubble_close(self, notice: BubbleNotice) -> None:
+        if not notice.request_id or self.notifications is None:
+            return
+        try:
+            self.notifications.dismiss(notice.request_id)
+        except sqlite3.Error:
+            pass
+        self.active_notice_id = None
+        self.next_notice_poll = 0.0
+
     def _bubble_action(self, notice: BubbleNotice, index: int) -> None:
         if notice.kind != "agent" or index >= len(notice.actions):
             return
         selected = notice.actions[index]
+        if notice.request_id:
+            if self.notifications is None:
+                return
+            try:
+                result = self.notifications.answer(notice.request_id, index)
+            except sqlite3.Error:
+                return
+            if result is None or result.status != "answered":
+                return
+            self.active_notice_id = None
+            self.defer_next_notice_until = time.monotonic() + 2.5
+            self.bubble.show(
+                BubbleNotice("虹夏 · 已回复", f"已选择「{selected}」，Agent 可以读取结果。",
+                             duration=2.5),
+                self._bubble_anchor(),
+            )
+            self.set_state("happy")
+            return
         self.bubble.show(
             BubbleNotice(
                 "虹夏 · 演示结果",
@@ -754,6 +876,7 @@ class PetWindow:
         dt = min(0.10, max(0.0, now - self.last_tick))
         self.last_tick = now
         self.bubble.tick(now)
+        self._poll_notifications(now)
         if self.chat_enabled and now >= self.next_chat:
             self.next_chat = now + random.uniform(110.0, 180.0)
             if not self.drag_start and self.bubble.notice is None:

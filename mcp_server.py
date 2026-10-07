@@ -1,0 +1,86 @@
+"""Codex-facing MCP tools for the local Nijika desktop pet."""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import time
+
+from mcp.server import MCPServer
+from pydantic import BaseModel, Field
+
+from notification_store import NotificationStore
+
+
+AGENT_NAME = os.environ.get("NIJIKA_AGENT_NAME", "Codex")
+mcp = MCPServer("nijika-desktop-pet")
+store = NotificationStore()
+
+
+class CreatedResult(BaseModel):
+    request_id: str
+    status: str
+    instruction: str
+
+
+class ReplyResult(BaseModel):
+    request_id: str
+    status: str
+    choice: str | None = None
+    choice_description: str | None = None
+    choice_index: int | None = None
+
+
+class DecisionOption(BaseModel):
+    label: str = Field(description="Short visible choice name, such as 保留现状 or 重做界面; avoid bare A/B labels")
+    description: str = Field(description="One concise sentence explaining what this choice changes or trades off")
+
+
+@mcp.tool()
+def show_completion(task: str, summary: str) -> CreatedResult:
+    """Tell the user on the desktop that this Agent finished a task; return an ID to check their response."""
+    notice = store.create(AGENT_NAME, task, summary, ("已查看", "稍后"))
+    return CreatedResult(
+        request_id=notice.id, status=notice.status,
+        instruction="Call get_reply or wait_for_reply to read the user's desktop response.",
+    )
+
+
+@mcp.tool()
+def request_decision(task: str, question: str, options: list[DecisionOption]) -> CreatedResult:
+    """Ask one concrete desktop question with 2–3 distinct choices, each with a short explanation of its effect."""
+    if not 2 <= len(options) <= 3:
+        raise ValueError("request_decision requires 2–3 explained choices")
+    notice = store.create(AGENT_NAME, task, question,
+                          [option.model_dump() for option in options])
+    return CreatedResult(
+        request_id=notice.id, status=notice.status,
+        instruction="Call wait_for_reply with this request_id; a pending result means try again later.",
+    )
+
+
+@mcp.tool()
+def get_reply(request_id: str) -> ReplyResult:
+    """Read a desktop request's status and selected choice without waiting."""
+    notice = store.get(request_id)
+    return ReplyResult(**(notice.result() if notice else
+                          {"request_id": request_id, "status": "not_found"}))
+
+
+@mcp.tool()
+async def wait_for_reply(request_id: str, timeout_seconds: int = 20) -> ReplyResult:
+    """Wait up to 60 seconds for a desktop click; repeat if the result remains pending."""
+    if not 1 <= timeout_seconds <= 60:
+        raise ValueError("timeout_seconds must be 1–60")
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        notice = store.get(request_id)
+        if notice is None:
+            return ReplyResult(request_id=request_id, status="not_found")
+        if notice.status != "pending" or time.monotonic() >= deadline:
+            return ReplyResult(**notice.result())
+        await asyncio.sleep(0.25)
+
+
+if __name__ == "__main__":
+    mcp.run()
