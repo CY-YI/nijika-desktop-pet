@@ -8,4 +8,6 @@
 
 2026-10-07 接入层：`mcp_server.py` 用官方 Python MCP SDK 的 stdio 传输供 Codex 启动，提供完成提醒、请求选择和查询/等待回复工具。`notification_store.py` 以用户本机 `%LOCALAPPDATA%/NijikaDesktopPet/notifications.sqlite3` 作为进程间队列；Agent 工具写入，桌宠每约 350 毫秒读取最早待处理消息，点击或关闭时写回结果。简单决策及短成果审阅使用 `request_decision`，气泡显示足够的正文和选项简介，Agent 读取选择后在原任务中继续；`show_completion` 仅表示收到较复杂成果的提醒，不代表批准。通知先于日常闲聊显示；桌宠未运行时消息保留。消息只在本机，不开放 HTTP 端口。已处理记录 7 天后清理，待处理超过 30 天失效。Codex 多个任务可分别启动 stdio 子进程，SQLite 事务负责串行化写入。
 
+2026-10-07 Work 本机插件层：`.agents/plugins/marketplace.json` 暴露 `plugins/nijika-work-local/`，其 `mcp.json` 以 `nijika-work-pet` 名称通过插件内的 Python 启动脚本运行同一个本机 EXE，避免与已有 Codex 直接配置的 `nijika-pet` 同名；插件 skill 约束简短决策、等待回执与回退行为。这层只在可启动本机 stdio MCP 的本地执行环境有效；托管 Work 需另有远程 HTTPS MCP 与身份验证。当前验证边界是插件安装、清单启用、插件启动入口及本机 MCP 协议，Work 会话端到端检查仍单列为待办。
+
 Windows 本机负责绘制和消息循环；图像生成只负责制作静态素材，不进入运行时。`build.ps1` 用 PyInstaller 分别打包桌宠窗口版和 MCP 标准输入输出服务版，图像作为桌宠只读资源嵌入。通知记录位于用户本机目录；角色位置和动态偏好仍未持久化。
