@@ -44,6 +44,7 @@ class Notification:
     message: str
     choices: tuple[str, ...]
     choice_descriptions: tuple[str, ...]
+    choice_recommended: tuple[bool, ...]
     status: str
     selected_index: int | None
     created_at: int
@@ -104,6 +105,9 @@ class NotificationStore:
             id=row["id"], agent=row["agent"], title=row["title"],
             message=row["message"], choices=labels,
             choice_descriptions=descriptions,
+            choice_recommended=tuple(False if isinstance(item, str) else
+                                     item.get("recommended", False)
+                                     for item in stored_choices),
             status=row["status"], selected_index=row["selected_index"],
             created_at=row["created_at"], updated_at=row["updated_at"],
         )
@@ -122,11 +126,17 @@ class NotificationStore:
             elif isinstance(item, dict):
                 label = _required_text(item.get("label"), "choice label", 20)
                 description = _required_text(item.get("description"), "choice description", 48)
+                recommended = item.get("recommended", False)
+                if not isinstance(recommended, bool):
+                    raise ValueError("recommended must be true or false")
                 if len(description) < 6 or description == label or "\n" in description:
                     raise ValueError("each choice needs a distinct one-line description of at least 6 characters")
             else:
                 raise ValueError("each choice must be a label or label/description object")
-            normalized.append({"label": label, "description": description})
+            normalized.append({"label": label, "description": description,
+                               "recommended": recommended if isinstance(item, dict) else False})
+        if sum(item["recommended"] for item in normalized) > 1:
+            raise ValueError("at most one choice may be recommended")
         if any("\n" in item["label"] or _choice_width(item["label"]) > 20
                for item in normalized):
             raise ValueError("choice labels must fit within 20 display columns")

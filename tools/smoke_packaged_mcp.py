@@ -16,7 +16,7 @@ from notification_store import NotificationStore  # noqa: E402
 
 
 async def main() -> None:
-    executable = ROOT / "dist" / "虹夏MCP.exe"
+    executable = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "dist" / "虹夏MCP-v2.exe"
     if not executable.is_file():
         raise SystemExit(f"Missing packaged MCP server: {executable}")
     with tempfile.TemporaryDirectory() as directory:
@@ -32,7 +32,7 @@ async def main() -> None:
             created = await client.call_tool(
                 "request_decision",
                 {"task": "打包验证", "question": "请选择", "options": [
-                    {"label": "保持现状", "description": "先不改动，继续核对当前运行效果。"},
+                    {"label": "保持现状", "description": "先不改动，继续核对当前运行效果。", "recommended": True},
                     {"label": "优化提醒", "description": "增加说明，让桌面选择更容易理解。"},
                 ]},
             )
@@ -40,6 +40,7 @@ async def main() -> None:
             request_id = created.structured_content["request_id"]
             store = NotificationStore(path)
             assert store.next_pending().id == request_id
+            assert store.get(request_id).choice_recommended == (True, False)
             store.answer(request_id, 1)
             result = await client.call_tool("get_reply", {"request_id": request_id})
             assert result.structured_content["status"] == "answered"

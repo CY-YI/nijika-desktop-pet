@@ -21,9 +21,10 @@ choice = render_bubble(
         "Codex · 文案审阅", "双击“虹夏桌宠.exe”即可看到坐姿角色。Codex 完成任务后，桌宠可显示提醒与选择。接受这段说明吗？",
         actions=("接受文案", "需要修改"),
         action_descriptions=(
-            "采用这段文案，无需回到聊天确认。",
+            "文案已经完整，可直接采用并继续下一步。",
             "暂不定稿，后续再说明修改要求。",
         ),
+        action_recommended=(True, False),
         kind="agent", duration=None, request_id="preview",
     )
 )[0]

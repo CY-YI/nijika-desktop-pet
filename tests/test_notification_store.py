@@ -21,7 +21,7 @@ class NotificationStoreTests(unittest.TestCase):
     def test_fifo_reply_and_restart(self) -> None:
         first = self.sender.create("Codex", "完成", "任务结束", ["已查看", "稍后"])
         second = self.sender.create("Codex", "选择", "请选择下一步", [
-            {"label": "方案A", "description": "保留当前桌宠动作，改动范围较小。"},
+            {"label": "方案A", "description": "保留当前桌宠动作，改动范围较小。", "recommended": True},
             {"label": "方案B", "description": "增加明显弹跳，提醒更醒目。"},
         ])
         self.assertEqual(self.pet.next_pending().id, first.id)
@@ -32,6 +32,7 @@ class NotificationStoreTests(unittest.TestCase):
         reopened.answer(second.id, 0)
         self.assertEqual(self.sender.get(second.id).result()["choice"], "方案A")
         self.assertIn("改动范围", self.sender.get(second.id).result()["choice_description"])
+        self.assertEqual(reopened.get(second.id).choice_recommended, (True, False))
         self.assertIsNone(self.pet.next_pending())
 
     def test_dismissal_and_immutable_reply(self) -> None:
@@ -55,6 +56,11 @@ class NotificationStoreTests(unittest.TestCase):
             self.sender.create("Codex", "选择", "请选择", [
                 {"label": "自动隐藏后重新打开查看", "description": "提醒自动收起，可稍后重新打开查看。"},
                 {"label": "保留到手动关闭", "description": "提醒一直显示，直到你手动关闭。"},
+            ])
+        with self.assertRaisesRegex(ValueError, "at most one"):
+            self.sender.create("Codex", "选择", "请选择", [
+                {"label": "先做界面", "description": "先做界面，方便尽早检查交互。", "recommended": True},
+                {"label": "先做服务", "description": "先做服务，方便尽早验证连接。", "recommended": True},
             ])
         self.assertIsNone(self.pet.next_pending())
 

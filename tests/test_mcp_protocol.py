@@ -67,13 +67,15 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                         "request_decision",
                         {"task": "下一步", "question": "采用哪个方案？",
                          "options": [
-                             {"label": "保留现状", "description": "不改动作，先验证提醒流程。"},
+                             {"label": "保留现状", "description": "不改动作，先验证提醒流程。", "recommended": True},
                              {"label": "增强动作", "description": "增加弹跳，让提醒更加醒目。"},
                          ]},
                     )
                     self.assertIsNotNone(created.structured_content, repr(created))
                     request_id = created.structured_content["request_id"]
                     self.assertEqual(mcp_server.store.next_pending().id, request_id)
+                    self.assertEqual(mcp_server.store.get(request_id).choice_recommended,
+                                     (True, False))
                     mcp_server.store.answer(request_id, 1)
                     reply = await client.call_tool("get_reply", {"request_id": request_id})
                     self.assertEqual(reply.structured_content["choice"], "增强动作")

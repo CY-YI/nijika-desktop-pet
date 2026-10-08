@@ -129,6 +129,8 @@ user32.SetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPCWSTR]
 user32.SetWindowTextW.restype = wintypes.BOOL
 user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
 user32.ShowWindow.restype = wintypes.BOOL
+user32.IsWindowVisible.argtypes = [wintypes.HWND]
+user32.IsWindowVisible.restype = wintypes.BOOL
 user32.DestroyWindow.argtypes = [wintypes.HWND]
 user32.DestroyWindow.restype = wintypes.BOOL
 user32.SystemParametersInfoW.argtypes = [
@@ -339,6 +341,7 @@ class BubbleNotice:
     text: str
     actions: tuple[str, ...] = ()
     action_descriptions: tuple[str, ...] = ()
+    action_recommended: tuple[bool, ...] = ()
     kind: str = "chat"
     duration: float | None = 6.0
     request_id: str | None = None
@@ -449,9 +452,16 @@ def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, 
             top = button_y
             for index, label in enumerate(actions):
                 rect = (27, top, width - 27, top + option_heights[index])
-                draw.rounded_rectangle(rect, radius=13, fill=(255, 232, 185, 255),
+                recommended = (index < len(notice.action_recommended)
+                               and notice.action_recommended[index])
+                draw.rounded_rectangle(rect, radius=13,
+                                       fill=(255, 218, 146, 255) if recommended else (255, 232, 185, 255),
                                        outline=(143, 97, 76, 255), width=2)
-                draw.text((42, top + 8), fit_bubble_text(label, button_font, width - 95),
+                if recommended:
+                    draw.text((width - 95, top + 11), "推荐", font=small_font,
+                              fill=(161, 77, 57, 255))
+                draw.text((42, top + 8), fit_bubble_text(label, button_font,
+                          width - (170 if recommended else 95)),
                           font=button_font, fill=(88, 62, 54, 255))
                 for line_index, line in enumerate(option_lines[index]):
                     draw.text((43, top + 36 + line_index * 19), line,
@@ -765,13 +775,15 @@ class PetWindow:
                 self.bubble.hide()
             self.active_notice_id = None
             return
-        if self.bubble.notice and self.bubble.notice.request_id == pending.id:
+        if (self.bubble.notice and self.bubble.notice.request_id == pending.id
+                and self.bubble.hwnd and user32.IsWindowVisible(self.bubble.hwnd)):
             return
         self.active_notice_id = pending.id
         self.bubble.show(
             BubbleNotice(f"{pending.agent} · {pending.title}", pending.message,
                          actions=pending.choices,
                          action_descriptions=pending.choice_descriptions,
+                         action_recommended=pending.choice_recommended,
                          kind="agent", duration=None,
                          request_id=pending.id),
             self._bubble_anchor(),

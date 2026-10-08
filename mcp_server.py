@@ -34,6 +34,7 @@ class ReplyResult(BaseModel):
 class DecisionOption(BaseModel):
     label: str = Field(max_length=20, description="Meaningful visible choice name, at most 20 display columns (about 10 Chinese characters); avoid bare A/B labels")
     description: str = Field(min_length=6, max_length=48, description="One concise sentence explaining what this choice changes or trades off")
+    recommended: bool = Field(default=False, description="Mark at most one option as the recommended choice when there is a concrete reason")
 
 
 def invalid_notice(error: ValueError) -> CreatedResult:
@@ -59,11 +60,13 @@ def show_completion(task: str, summary: str) -> CreatedResult:
 
 @mcp.tool()
 def request_decision(task: str, question: str, options: list[DecisionOption]) -> CreatedResult:
-    """Ask and resolve a simple choice entirely on the desktop; include enough context to decide without opening chat."""
+    """Ask a desktop choice; recommend one option when justified, then record the clicked choice in this chat."""
     if not 2 <= len(options) <= 3:
         return invalid_notice(ValueError("request_decision requires 2–3 explained choices"))
     if isinstance(question, str) and (len(question) > 80 or question.count("\n") > 2):
         return invalid_notice(ValueError("decision questions must fit within 80 characters and 3 paragraphs"))
+    if sum(option.recommended for option in options) > 1:
+        return invalid_notice(ValueError("at most one choice may be recommended"))
     try:
         notice = store.create(AGENT_NAME, task, question,
                               [option.model_dump() for option in options])
@@ -71,13 +74,13 @@ def request_decision(task: str, question: str, options: list[DecisionOption]) ->
         return invalid_notice(error)
     return CreatedResult(
         request_id=notice.id, status=notice.status,
-        instruction="Call wait_for_reply with this request_id, then continue this task from the selected choice. Pending is not a decision; wait again or use get_reply later.",
+        instruction="Queued locally, not confirmed visible on screen. Keep this request_id; do not send a duplicate while pending. Call wait_for_reply, then write the selected choice in the Codex chat before continuing. Pending is not a decision.",
     )
 
 
 @mcp.tool()
 def get_reply(request_id: str) -> ReplyResult:
-    """Read a desktop request's status and selected choice without waiting."""
+    """Read a desktop reply; when answered, state the selected choice in the Codex chat before continuing."""
     notice = store.get(request_id)
     return ReplyResult(**(notice.result() if notice else
                           {"request_id": request_id, "status": "not_found"}))
@@ -85,7 +88,7 @@ def get_reply(request_id: str) -> ReplyResult:
 
 @mcp.tool()
 async def wait_for_reply(request_id: str, timeout_seconds: int = 20) -> ReplyResult:
-    """Wait up to 60 seconds for a desktop click; repeat if the result remains pending."""
+    """Wait up to 60 seconds for a click; when answered, state the choice in the Codex chat before continuing."""
     if not 1 <= timeout_seconds <= 60:
         raise ValueError("timeout_seconds must be 1–60")
     deadline = time.monotonic() + timeout_seconds

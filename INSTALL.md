@@ -1,8 +1,10 @@
 # 安装与运行
 
+本机 2026-10-08 更新：正在运行的旧 MCP 进程保留，Codex 全局入口及 Work 插件 0.1.4 指向 dist 目录中的新版虹夏MCP-v2.exe。新开的任务读取新工具定义；已打开的任务可能仍使用旧进程。桌宠主程序仍从原桌面和开机快捷方式启动，程序已一次性更新并重启。
+
 更新触发：2026-10-07 增加 Codex 本机 MCP 服务和带简介的选择题。
 
-系统：Windows 10/11 x64。成品版双击 `dist/虹夏桌宠.exe`，无需安装 Python。右键角色可切换动态、闲聊、手动说话和两种本地演示提醒；演示按钮不会联系真实 Agent。真实 Codex 消息由 `虹夏MCP.exe` 接收，桌宠运行时自动显示，未运行时保留待处理消息。退出时右键选“退出桌宠”。无登录或网络端口。
+系统：Windows 10/11 x64。成品版双击 `dist/虹夏桌宠.exe`，无需安装 Python。右键角色可切换动态、闲聊、手动说话和两种本地演示提醒；演示按钮不会联系真实 Agent。真实 Codex 消息由 `虹夏MCP-v2.exe` 接收，桌宠运行时自动显示，未运行时保留待处理消息。退出时右键选“退出桌宠”。无登录或网络端口。
 
 从 Git 获取源码后，在项目根目录使用 Python 3.12 执行：
 
@@ -20,10 +22,10 @@ python -m venv .venv
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-输出在 `dist/虹夏桌宠.exe` 和 `dist/虹夏MCP.exe`。当前电脑已配置 Codex；其他电脑构建后可在项目根目录运行：
+输出在 `dist/虹夏桌宠.exe` 和 `dist/虹夏MCP-v2.exe`。当前电脑已配置 Codex；其他电脑构建后可在项目根目录运行：
 
 ```powershell
-$mcpExe = (Resolve-Path -LiteralPath 'dist\虹夏MCP.exe').Path
+$mcpExe = (Resolve-Path -LiteralPath 'dist\虹夏MCP-v2.exe').Path
 codex mcp add nijika-pet -- $mcpExe
 codex mcp get nijika-pet
 ```
@@ -38,7 +40,7 @@ Codex 的审批策略可能要求先确认 MCP 工具调用。经用户明确授
 
 ## 桌面客户端 Work 本机接入
 
-本机插件目录为 `plugins/nijika-work-local/`，项目插件清单为 `.agents/plugins/marketplace.json`。插件的 `mcp.json` 通过 Python 启动脚本调用当前电脑上的 `dist/虹夏MCP.exe`，因此本机需要能从 PATH 找到 `python.exe`；换电脑或移动项目目录后，先重新构建并更新 `mcp.json` 中的 EXE 路径。当前电脑已执行：
+本机插件目录为 `plugins/nijika-work-local/`，项目插件清单为 `.agents/plugins/marketplace.json`。插件的 `mcp.json` 通过 Python 启动脚本调用当前电脑上的 `dist/虹夏MCP-v2.exe`，因此本机需要能从 PATH 找到 `python.exe`；换电脑或移动项目目录后，先重新构建并更新 `mcp.json` 中的 EXE 路径。当前电脑已执行：
 
 ```powershell
 codex plugin marketplace add . --json
