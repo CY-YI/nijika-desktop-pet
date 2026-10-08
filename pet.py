@@ -28,6 +28,16 @@ LABELS = {
 WINDOW_CLASS = "NijikaDesktopPetWindow"
 WIDTHS = (260, 320, 380)
 
+
+def log_notice_event(event: str, detail: str = "") -> None:
+    """Keep a small local diagnostic trail for queue/display failures."""
+    directory = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parent
+    try:
+        with (directory / "nijika-notice.log").open("a", encoding="utf-8") as log:
+            log.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {event} {detail}\n")
+    except OSError:
+        pass
+
 if sys.platform != "win32":
     raise SystemExit("This desktop pet currently supports Windows only.")
 
@@ -686,9 +696,13 @@ class PetWindow:
         try:
             self.notifications: NotificationStore | None = NotificationStore()
             self.notifications.prune()
-        except (OSError, sqlite3.Error):
+            log_notice_event("queue_ready", str(self.notifications.path))
+        except (OSError, sqlite3.Error) as error:
             self.notifications = None
+            log_notice_event("queue_start_failed", repr(error))
         self.active_notice_id: str | None = None
+        self.last_notice_error_at = 0.0
+        self.last_notice_show_log_at = 0.0
         self.next_notice_poll = 0.0
         self.defer_next_notice_until = 0.0
         self.chat_enabled = True
@@ -761,14 +775,27 @@ class PetWindow:
         self.bubble.show(notice, self._bubble_anchor())
 
     def _poll_notifications(self, now: float) -> None:
-        if self.notifications is None or now < self.next_notice_poll:
+        if now < self.next_notice_poll:
             return
         self.next_notice_poll = now + 0.35
+        if self.notifications is None:
+            try:
+                self.notifications = NotificationStore()
+                log_notice_event("queue_recovered", str(self.notifications.path))
+            except (OSError, sqlite3.Error) as error:
+                self.next_notice_poll = now + 2.0
+                if now - self.last_notice_error_at > 30:
+                    log_notice_event("queue_retry_failed", repr(error))
+                    self.last_notice_error_at = now
+                return
         if now < self.defer_next_notice_until:
             return
         try:
             pending = self.notifications.next_pending()
-        except sqlite3.Error:
+        except sqlite3.Error as error:
+            if now - self.last_notice_error_at > 30:
+                log_notice_event("queue_read_failed", repr(error))
+                self.last_notice_error_at = now
             return
         if pending is None:
             if self.bubble.notice and self.bubble.notice.request_id:
@@ -779,15 +806,25 @@ class PetWindow:
                 and self.bubble.hwnd and user32.IsWindowVisible(self.bubble.hwnd)):
             return
         self.active_notice_id = pending.id
-        self.bubble.show(
-            BubbleNotice(f"{pending.agent} · {pending.title}", pending.message,
-                         actions=pending.choices,
-                         action_descriptions=pending.choice_descriptions,
-                         action_recommended=pending.choice_recommended,
-                         kind="agent", duration=None,
-                         request_id=pending.id),
-            self._bubble_anchor(),
-        )
+        try:
+            self.bubble.show(
+                BubbleNotice(f"{pending.agent} · {pending.title}", pending.message,
+                             actions=pending.choices,
+                             action_descriptions=pending.choice_descriptions,
+                             action_recommended=pending.choice_recommended,
+                             kind="agent", duration=None,
+                             request_id=pending.id),
+                self._bubble_anchor(),
+            )
+        except Exception as error:
+            if now - self.last_notice_error_at > 30:
+                log_notice_event("bubble_show_failed", repr(error))
+                self.last_notice_error_at = now
+            return
+        if now - self.last_notice_show_log_at > 30:
+            log_notice_event("bubble_shown",
+                             f"id={pending.id} visible={bool(user32.IsWindowVisible(self.bubble.hwnd))}")
+            self.last_notice_show_log_at = now
         self.set_state("curious")
 
     def _bubble_close(self, notice: BubbleNotice) -> None:

@@ -26,6 +26,7 @@ class PetNotificationTests(unittest.TestCase):
             window.notifications = store
             window.next_notice_poll = 0
             window.defer_next_notice_until = 0
+            window.last_notice_show_log_at = 0
             window.bubble = bubble
             window.x = window.y = 0
             window.width = 320
