@@ -83,8 +83,7 @@ New-Item -ItemType Directory -Path $skillDirectory -Force | Out-Null
 if ((Test-Path -LiteralPath $skillTarget) -and
     (Get-FileHash -LiteralPath $skillTarget).Hash -ne
     (Get-FileHash -LiteralPath $skillSource).Hash) {
-    Copy-Item -LiteralPath $skillTarget -Destination
-        "$skillTarget.bak-nijika-$(Get-Date -Format 'yyyyMMdd-HHmmss-fff')"
+    Copy-Item -LiteralPath $skillTarget -Destination "$skillTarget.bak-nijika-$(Get-Date -Format 'yyyyMMdd-HHmmss-fff')"
 }
 Copy-Item -LiteralPath $skillSource -Destination $skillTarget -Force
 

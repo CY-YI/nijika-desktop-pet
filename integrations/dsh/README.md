@@ -12,4 +12,6 @@ powershell -ExecutionPolicy Bypass -File .\integrations\dsh\install.ps1
 
 安装后重启 DSH 桌面客户端或重开 DSH web 服务，并在**新 DSH 会话**中测试；已运行的会话未必热加载 MCP 工具和全局说明。保持 `dist/虹夏桌宠.exe` 运行，测试时让 DSH 发出一个真正需要选择的简短问题，检查桌面气泡、点击和 DSH 聊天中的读回。`pending` 只表示消息入队，不代表已显示或已确认。
 
+DSH 的 MCP 客户端对单次工具调用默认设有 60 秒超时。技能因此要求以同一请求 ID 连续进行 45 秒等待，最多约九分钟；一次等待返回 `pending` 不应结束任务。如果 DSH 会话被中断，或等待上限后已经结束，桌宠仍会保存较晚的点击，但当前 stdio MCP **不能独立唤醒已结束的 DSH 任务**。在原 DSH 会话发送“继续”或“我回复了”，新的技能规则会先调用 `get_reply` 读取旧请求，再继续原任务；不要重发同一道选择题。要实现无时限、无需补发聊天消息的自动恢复，还需要 DSH 主机侧事件桥接，目前未实现。
+
 可用 `dsh --profile web --dump-config` 检查合成配置是否含 `mcp-nijika-pet`。项目维护者可运行 `.\.venv\Scripts\python.exe tools\smoke_packaged_mcp.py` 在隔离消息库中验证 MCP 握手和点击回传；该测试本身不会触发正在运行的桌宠。当前 DSH 登录状态或模型权限仍由 DSH 自己管理。
