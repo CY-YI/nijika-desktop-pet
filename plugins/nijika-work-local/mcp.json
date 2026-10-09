@@ -7,7 +7,7 @@
       "args": [
         "-u",
         "${PLUGIN_ROOT}/scripts/run_mcp.py",
-        "D:\\deepseekharnes work\\提示功能作用的桌宠\\dist\\虹夏MCP-v2.exe"
+        "AUTO_LOCAL_MCP"
       ]
     }
   }

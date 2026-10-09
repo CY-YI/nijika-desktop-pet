@@ -42,7 +42,7 @@ def build(output: Path) -> None:
             data = (ROOT / name).read_bytes()
             if name == "plugins/nijika-work-local/mcp.json":
                 plugin = json.loads(data)
-                plugin["mcpServers"]["nijika-work-pet"]["args"][-1] = "INSTALLER_SETS_THIS_PATH"
+                plugin["mcpServers"]["nijika-work-pet"]["args"][-1] = "AUTO_LOCAL_MCP"
                 data = (json.dumps(plugin, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
             manifest[name] = hashlib.sha256(data).hexdigest()
             archive.writestr(f"{PREFIX}/{name}", data)

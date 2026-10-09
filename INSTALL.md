@@ -42,7 +42,7 @@ Codex 的审批策略可能要求先确认 MCP 工具调用。经用户明确授
 
 ## 桌面客户端 Work 本机接入
 
-本机插件目录为 `plugins/nijika-work-local/`，项目插件清单为 `.agents/plugins/marketplace.json`。插件的 `mcp.json` 通过 Python 启动脚本调用当前电脑上的 `dist/虹夏MCP-v2.exe`，因此本机需要能从 PATH 找到 `python.exe`；换电脑或移动项目目录后，先重新构建并更新 `mcp.json` 中的 EXE 路径。当前电脑已安装并启用 0.1.5 版，技能要求短决策连续等待、恢复会话时先读取旧请求。安装命令为：
+本机插件目录为 `plugins/nijika-work-local/`，项目插件清单为 `.agents/plugins/marketplace.json`。源码中的 `mcp.json` 不再包含开发者电脑路径；Python 启动脚本优先查找同一项目根目录的 `dist/虹夏MCP-v2.exe`，也可读取 `NIJIKA_MCP_EXE` 或正式安装目录。插件运行仍需要能从 PATH 找到 `python.exe`。私下试用包的安装脚本会按收件人目录写入确定的 EXE 路径。当前电脑已安装并启用 0.1.5 版，技能要求短决策连续等待、恢复会话时先读取旧请求。安装命令为：
 
 ```powershell
 codex plugin marketplace add . --json
