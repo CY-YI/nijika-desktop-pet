@@ -26,6 +26,7 @@ FILES = (
     "plugins/nijika-work-local/skills/nijika-work-dialog/SKILL.md",
     "integrations/dsh/README.md",
     "integrations/dsh/nijika-dsh-dialog/SKILL.md",
+    "distribution/README.md",
 )
 PREFIX = "虹夏桌宠-项目文档与预览"
 

@@ -1,0 +1,3 @@
+# BEGIN NIJIKA-CODEX-DIALOG
+For Codex work that needs my review or a concrete decision, use the installed nijika-desktop-dialog skill and the nijika-pet MCP tools. Resolve short choices in the desktop bubble with meaningful labels, one-sentence descriptions and at most one reasoned recommendation. For a longer result, send one show_completion notice before the final chat response. Pending means queued, not visible or approved. Wait on the same request ID as the skill instructs. After an answered click, state my choice in this Codex chat and continue; on a resumed turn read an unresolved request ID first. If the tools are unavailable, continue in chat.
+# END NIJIKA-CODEX-DIALOG
