@@ -24,6 +24,8 @@ FILES = (
     "art/motion-preview.gif",
     "skills/nijika-desktop-dialog/SKILL.md",
     "plugins/nijika-work-local/skills/nijika-work-dialog/SKILL.md",
+    "integrations/dsh/README.md",
+    "integrations/dsh/nijika-dsh-dialog/SKILL.md",
 )
 PREFIX = "虹夏桌宠-项目文档与预览"
 
@@ -36,7 +38,7 @@ def package(output: Path) -> None:
         archive.writestr(
             f"{PREFIX}/文档目录.md",
             "# 文档目录\n\n先看《项目概览-对外分享.md》，再看 README.md 和 INSTALL.md。"
-            "本包包含项目文档、两份桌宠交互技能说明和效果预览；"
+            "本包包含项目文档、三份桌宠交互技能说明和效果预览；"
             "不包含 EXE、完整源码或角色素材复用许可。\n",
         )
         for name in FILES:
