@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 build/
 dist/
+diagnostics/
+/虹夏桌宠-项目文档与预览-*.zip
 .pyinstaller-cache/
 *.spec
 *.log

@@ -26,6 +26,7 @@ LABELS = {
     "wink": "眨眼俏皮", "thinking": "思考", "pout": "小生气", "excited": "加油",
 }
 WINDOW_CLASS = "NijikaDesktopPetWindow"
+ERROR_CLASS_ALREADY_EXISTS = 1410
 WIDTHS = (260, 320, 380)
 
 
@@ -520,7 +521,9 @@ class BubbleOverlay:
         window_class.hCursor = user32.LoadCursorW(None, ctypes.c_void_p(32512))
         window_class.lpszClassName = self.CLASS_NAME
         if not user32.RegisterClassW(ctypes.byref(window_class)):
-            raise ctypes.WinError(ctypes.get_last_error())
+            error = ctypes.get_last_error()
+            if error != ERROR_CLASS_ALREADY_EXISTS:
+                raise ctypes.WinError(error)
         self.hwnd = user32.CreateWindowExW(
             WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
             self.CLASS_NAME, "虹夏消息气泡", WS_POPUP,

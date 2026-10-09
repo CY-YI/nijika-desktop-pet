@@ -1,5 +1,6 @@
 """Verify a queued decision recovers when its bubble window becomes hidden."""
 
+import ctypes
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,10 +8,18 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from notification_store import NotificationStore
-from pet import BubbleNotice, PetWindow, user32
+from pet import BubbleNotice, BubbleOverlay, PetWindow, user32
 
 
 class PetNotificationTests(unittest.TestCase):
+    def test_bubble_reuses_registered_window_class(self) -> None:
+        bubble = BubbleOverlay(Mock(), Mock())
+        with (patch.object(user32, "RegisterClassW", return_value=0),
+              patch.object(ctypes, "get_last_error", return_value=1410),
+              patch.object(user32, "CreateWindowExW", return_value=123)):
+            bubble._ensure_window()
+        self.assertEqual(bubble.hwnd, 123)
+
     def test_hidden_pending_bubble_is_shown_again(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = NotificationStore(Path(directory) / "notifications.sqlite3")
