@@ -61,6 +61,8 @@ powershell -ExecutionPolicy Bypass -File .\integrations\codex\install-hooks.ps1
 
 在会产生审批卡的任务中测试：保持虹夏运行，执行一个由当前审批策略要求授权的实际操作，应同时看到 Codex 审批卡和“命令需要授权”气泡。气泡“知道了”只记录收到提醒，**不会授予权限**；仍在 Codex 审批卡批准或拒绝。操作完成后，尚未点击的匹配提醒由 `PostToolUse` 收起。使用“不请求审批”的任务不会产生 `PermissionRequest` 事件。当前集成只覆盖本机 Codex 的受支持事件；不能据此声称 Work、DSH 或云端执行的系统权限也已接通。
 
+2026-10-11 本机实测：用户完成信任后，运行时确认两项 hook 均已信任、启用。独立 Codex CLI 在 `on-request` / `read-only` 下弹出真实审批卡，虹夏自动显示提醒，用户点击“知道了”的回执已保存；原审批继续等待授权，随后取消测试申请，未执行申请中的写入操作。这项验收覆盖本机 Codex CLI。安装到其他电脑仍须由该电脑的用户自行审阅并信任，不分发本机的信任记录。
+
 维护者可运行 `.\.venv\Scripts\python.exe tools\smoke_approval_hook.py` 隔离检查安装幂等性、打包 hook 的 stdin 输入、去重与操作完成后的收起。模拟事件不执行其中的命令，也不等同于真实平台审批验收。
 
 ### ChatGPT 桌面客户端 Work（本机任务）
