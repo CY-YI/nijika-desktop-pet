@@ -1,6 +1,7 @@
-param(
+﻿param(
     [switch]$Codex,
     [switch]$Work,
+    [switch]$CodexHooks,
     [switch]$Dsh,
     [switch]$AutoStart,
     [switch]$NoLaunch,
@@ -19,7 +20,7 @@ if ($targetRoot.Equals($sourceRoot, [StringComparison]::OrdinalIgnoreCase) -or
 }
 if (-not [Environment]::Is64BitOperatingSystem) { throw 'Windows x64 is required.' }
 
-foreach ($relative in @('dist\虹夏桌宠.exe', 'dist\虹夏MCP-v2.exe',
+foreach ($relative in @('dist\虹夏桌宠.exe', 'dist\虹夏MCP-v2.exe', 'dist\虹夏审批提醒.exe',
         'assets\icons\nijika-shortcut.ico', 'skills\nijika-desktop-dialog\SKILL.md',
         'plugins\nijika-work-local\mcp.json', 'integrations\dsh\install.ps1')) {
     if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot $relative) -PathType Leaf)) {
@@ -47,7 +48,7 @@ $petExe = Join-Path $targetRoot 'dist\虹夏桌宠.exe'
 $mcpExe = Join-Path $targetRoot 'dist\虹夏MCP-v2.exe'
 $icon = Join-Path $targetRoot 'assets\icons\nijika-shortcut.ico'
 $manifestPath = Join-Path $targetRoot 'plugins\nijika-work-local\mcp.json'
-$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+$manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $manifest.mcpServers.'nijika-work-pet'.args[-1] = $mcpExe
 [IO.File]::WriteAllText($manifestPath,
     ($manifest | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
@@ -116,6 +117,11 @@ if ($Work) {
     & codex plugin add nijika-work-local@nijika-local --json
     if ($LASTEXITCODE -ne 0) { throw 'Work plugin installation failed.' }
     Write-Output 'Work plugin installed. Restart the ChatGPT desktop app and use a new local Work task.'
+}
+
+if ($CodexHooks) {
+    & (Join-Path $targetRoot 'integrations\codex\install-hooks.ps1') -CodexHome $CodexHome `
+        -ApprovalExe (Join-Path $targetRoot 'dist\虹夏审批提醒.exe')
 }
 
 if ($Dsh) {

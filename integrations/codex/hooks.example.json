@@ -1,0 +1,26 @@
+{
+  "description": "虹夏命令审批提醒：只通知，不决定授权",
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": ".*",
+        "hooks": [{
+          "type": "command",
+          "command": "YOUR_NIJIKA_APPROVAL_EXE_HERE",
+          "timeout": 5,
+          "statusMessage": "通过虹夏提醒命令审批"
+        }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [{
+          "type": "command",
+          "command": "YOUR_NIJIKA_APPROVAL_EXE_HERE",
+          "timeout": 5
+        }]
+      }
+    ]
+  }
+}

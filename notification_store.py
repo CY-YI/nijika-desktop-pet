@@ -18,9 +18,9 @@ def default_database_path() -> Path:
     override = os.environ.get("NIJIKA_PET_DB_PATH")
     if override:
         return Path(override).expanduser()
-    local = os.environ.get("LOCALAPPDATA")
-    base = Path(local) if local else Path.home() / "AppData" / "Local"
-    return base / "NijikaDesktopPet" / "notifications.sqlite3"
+    # MSIX hosts can redirect AppData into a package-private cache. A user-owned
+    # folder outside AppData gives Explorer, Codex and DSH the same physical file.
+    return Path.home() / ".nijika-desktop-pet" / "notifications.sqlite3"
 
 
 def _required_text(value: str, label: str, maximum: int) -> str:
@@ -49,6 +49,7 @@ class Notification:
     selected_index: int | None
     created_at: int
     updated_at: int
+    kind: str = "agent"
 
     def result(self) -> dict[str, str | int | None]:
         choice = self.choices[self.selected_index] if self.selected_index is not None else None
@@ -81,6 +82,14 @@ class NotificationStore:
                 CREATE INDEX IF NOT EXISTS notifications_pending
                 ON notifications(status, created_at, id)
             """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS notice_tags (
+                    notification_id TEXT PRIMARY KEY,
+                    event_key TEXT UNIQUE,
+                    kind TEXT NOT NULL,
+                    priority INTEGER NOT NULL DEFAULT 0
+                )
+            """)
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -110,10 +119,12 @@ class NotificationStore:
                                      for item in stored_choices),
             status=row["status"], selected_index=row["selected_index"],
             created_at=row["created_at"], updated_at=row["updated_at"],
+            kind=row["kind"] if "kind" in row.keys() else "agent",
         )
 
     def create(self, agent: str, title: str, message: str,
-               choices: tuple[str | dict[str, str], ...] | list[str | dict[str, str]]) -> Notification:
+               choices: tuple[str | dict[str, str], ...] | list[str | dict[str, str]],
+               *, event_key: str | None = None, kind: str = "agent") -> Notification:
         agent = _required_text(agent, "agent", 20)
         title = _required_text(title, "title", 30)
         message = _required_text(message, "message", 120)
@@ -145,24 +156,39 @@ class NotificationStore:
         now = int(time.time())
         notice_id = uuid.uuid4().hex
         with self._connect() as connection:
+            # Serialize deduplication with insertion across hook processes.
+            connection.execute("BEGIN IMMEDIATE")
+            if event_key:
+                existing = connection.execute(
+                    "SELECT notification_id FROM notice_tags WHERE event_key=?", (event_key,)
+                ).fetchone()
+                if existing:
+                    notice_id = existing[0]
+                    return self.get(notice_id)
             connection.execute(
                 "INSERT INTO notifications VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?)",
                 (notice_id, agent, title, message, json.dumps(normalized, ensure_ascii=False), now, now),
+            )
+            connection.execute(
+                "INSERT INTO notice_tags VALUES (?, ?, ?, ?)",
+                (notice_id, event_key, kind, 100 if kind == "approval" else 0),
             )
         return self.get(notice_id)
 
     def get(self, notice_id: str) -> Notification | None:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM notifications WHERE id = ?", (notice_id,)
+                "SELECT n.*, COALESCE(t.kind, 'agent') AS kind FROM notifications n "
+                "LEFT JOIN notice_tags t ON t.notification_id=n.id WHERE n.id = ?", (notice_id,)
             ).fetchone()
         return self._decode(row)
 
     def next_pending(self) -> Notification | None:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM notifications WHERE status = 'pending' "
-                "ORDER BY created_at, rowid LIMIT 1"
+                "SELECT n.*, COALESCE(t.kind, 'agent') AS kind FROM notifications n "
+                "LEFT JOIN notice_tags t ON t.notification_id=n.id WHERE n.status = 'pending' "
+                "ORDER BY COALESCE(t.priority, 0) DESC, n.created_at, n.rowid LIMIT 1"
             ).fetchone()
         return self._decode(row)
 
@@ -186,6 +212,16 @@ class NotificationStore:
                 )
         return self.get(notice_id)
 
+    def resolve_approval(self, event_key: str) -> None:
+        """Tool completion clears the reminder without fabricating a user click."""
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE notifications SET status='resolved', updated_at=? "
+                "WHERE status='pending' AND id IN "
+                "(SELECT notification_id FROM notice_tags WHERE kind='approval' AND event_key=?)",
+                (int(time.time()), event_key),
+            )
+
     def dismiss(self, notice_id: str) -> Notification | None:
         with self._connect() as connection:
             connection.execute(
@@ -206,4 +242,7 @@ class NotificationStore:
             connection.execute(
                 "DELETE FROM notifications WHERE status != 'pending' AND updated_at < ?",
                 (now - 7 * 86400,),
+            )
+            connection.execute(
+                "DELETE FROM notice_tags WHERE notification_id NOT IN (SELECT id FROM notifications)"
             )

@@ -11,3 +11,6 @@ Write-Output (Join-Path $root 'dist\虹夏桌宠.exe')
 & $python -m PyInstaller --noconfirm --clean --onefile --console --name '虹夏MCP-v2' --distpath 'dist' --workpath 'build' --specpath 'build' 'mcp_server.py'
 if ($LASTEXITCODE -ne 0) { throw "MCP server build failed with exit code $LASTEXITCODE" }
 Write-Output (Join-Path $root 'dist\虹夏MCP-v2.exe')
+& $python -m PyInstaller --noconfirm --clean --onefile --console --name '虹夏审批提醒' --distpath 'dist' --workpath 'build' --specpath 'build' 'approval_hook.py'
+if ($LASTEXITCODE -ne 0) { throw "Approval hook build failed with exit code $LASTEXITCODE" }
+Write-Output (Join-Path $root 'dist\虹夏审批提醒.exe')

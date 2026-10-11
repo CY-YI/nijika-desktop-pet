@@ -32,3 +32,13 @@
 | `wait_for_reply` | `request_id`、最长 60 秒 | 等待桌面点击；超时仍返回 `pending`，可再次调用 |
 
 本阶段在同一用户机器上通过 stdio 和 SQLite 交换，不提供 HTTP/WebSocket、账户或第三方传输。Agent 来源名称由 MCP 服务启动环境决定，输入内容限制长度并作为纯文本绘制。`request_decision` 不接受只有 A/B 名称的字符串列表；每个选项名称最多占 20 个显示列，且必须有 6–48 字的一句话简介。短结果能放入问题正文时，Agent 应调用 `request_decision`、等候选择并在同一任务中继续，不重复要求聊天确认；复杂审阅才调用 `show_completion`。`show_completion` 与 `request_decision` 的输入无效时返回 `status=invalid`、空 `request_id` 和可修正的错误说明。示例按钮仍只影响本地演示；带 `request_id` 的真实提醒才写回队列。MCP 客户端是否继续等待取决于该客户端的调用流程；桌宠不会独立唤醒已经结束的 Agent 会话。
+
+## 本机运行与审批事件（2026-10-11）
+
+- 默认数据库：`%USERPROFILE%\.nijika-desktop-pet\notifications.sqlite3`。`NIJIKA_PET_DB_PATH` 仍可显式覆盖；覆盖时禁用旧库桥接。
+- `LegacyQueueBridge.sync()`：旧库待处理请求复制到新库并保留 ID；新库的点击或关闭结果写回对应旧库。桥接记录单独存在 `legacy_origins` 表，不改变原通知的九列表结构。
+- `renderer-status.json`：桌宠每约三秒原子更新进程 ID、时间、实际数据库路径/文件标识、当前通知 ID、气泡可见性和矩形。供本机诊断使用，不是 MCP 显示回执或用户确认。
+- 审批程序 stdin：Codex JSON 事件，最多 1 MiB；`PermissionRequest` 创建 `kind=approval` 的优先通知，`PostToolUse` 收起匹配的未处理通知并标记 `resolved`。`notice_tags` 保存事件摘要哈希、种类和优先级，不存储原始命令。
+- 审批程序 stdout：始终为空，退出码 0，不输出授权决定。格式错误仅在 stderr 写固定错误提示，不阻断 Codex 原审批流程。“知道了”只产生通知回执。
+
+审批 hook 要求本人审阅并信任；当前任务不请求审批时不会有该事件。真实平台审批验收与模拟输入测试分开记录，配置步骤见 `AGENT_SETUP.md`。

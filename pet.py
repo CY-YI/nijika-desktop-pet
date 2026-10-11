@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import json
 import math
+import os
 import random
 import sqlite3
 import sys
@@ -15,6 +17,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from notification_store import Notification, NotificationStore
+from legacy_queue import LegacyQueueBridge, legacy_database_paths
 
 
 EXPRESSIONS = (
@@ -70,6 +73,11 @@ class WNDCLASSW(ctypes.Structure):
 
 class SIZE(ctypes.Structure):
     _fields_ = [("cx", wintypes.LONG), ("cy", wintypes.LONG)]
+
+
+class MONITORINFO(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
+                ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
 
 
 class BLENDFUNCTION(ctypes.Structure):
@@ -142,6 +150,14 @@ user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
 user32.ShowWindow.restype = wintypes.BOOL
 user32.IsWindowVisible.argtypes = [wintypes.HWND]
 user32.IsWindowVisible.restype = wintypes.BOOL
+user32.IsWindow.argtypes = [wintypes.HWND]
+user32.IsWindow.restype = wintypes.BOOL
+user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+user32.GetWindowRect.restype = wintypes.BOOL
+user32.MonitorFromRect.argtypes = [ctypes.POINTER(wintypes.RECT), wintypes.DWORD]
+user32.MonitorFromRect.restype = wintypes.HANDLE
+user32.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(MONITORINFO)]
+user32.GetMonitorInfoW.restype = wintypes.BOOL
 user32.DestroyWindow.argtypes = [wintypes.HWND]
 user32.DestroyWindow.restype = wintypes.BOOL
 user32.SystemParametersInfoW.argtypes = [
@@ -190,6 +206,7 @@ SW_SHOWNOACTIVATE = 4
 SWP_NOSIZE = 0x0001
 SWP_NOZORDER = 0x0004
 SWP_NOACTIVATE = 0x0010
+SWP_SHOWWINDOW = 0x0040
 ULW_ALPHA = 0x00000002
 WM_DESTROY = 0x0002
 WM_CLOSE = 0x0010
@@ -206,6 +223,19 @@ MF_CHECKED = 0x0008
 TPM_RIGHTBUTTON = 0x0002
 TPM_RETURNCMD = 0x0100
 SPI_GETWORKAREA = 0x0030
+
+
+def monitor_work_area(anchor: tuple[int, int, int, int]) -> wintypes.RECT:
+    x, y, width, height = anchor
+    rect = wintypes.RECT(x, y, x + width, y + height)
+    monitor = user32.MonitorFromRect(ctypes.byref(rect), 2)
+    info = MONITORINFO()
+    info.cbSize = ctypes.sizeof(info)
+    if monitor and user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+        return info.rcWork
+    work = wintypes.RECT()
+    user32.SystemParametersInfoW(SPI_GETWORKAREA, 0, ctypes.byref(work), 0)
+    return work
 
 
 def resource_dir() -> Path:
@@ -416,7 +446,7 @@ def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, 
     text_y = 62
     content_bottom = text_y + len(lines) * 33
     footer_y = None
-    if notice.kind == "agent":
+    if notice.kind in ("agent", "approval"):
         footer_y = content_bottom + 7
         content_bottom = footer_y + 25
     button_y = content_bottom + 9 if notice.actions else None
@@ -452,7 +482,8 @@ def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, 
     for index, line in enumerate(lines):
         draw.text((27, text_y + index * 33), line, font=body_font, fill=(65, 56, 55, 255))
     if footer_y is not None:
-        footer = ("点击选项后，Agent 会按你的决定继续" if notice.request_id and described
+        footer = ("审批提醒 · 气泡点击不会授权命令" if notice.kind == "approval"
+                  else "点击选项后，Agent 会按你的决定继续" if notice.request_id and described
                   else "完成提醒 · 点击仅确认收到" if notice.request_id
                   else "本地演示 · 未连接 Agent")
         draw.text((27, footer_y), footer, font=small_font, fill=(123, 108, 98, 255))
@@ -500,6 +531,7 @@ class BubbleOverlay:
         self.on_action = on_action
         self.on_close = on_close
         self.hwnd: int | None = None
+        self.owner: int | None = None
         self.notice: BubbleNotice | None = None
         self.expires_at: float | None = None
         self.width = self.height = 0
@@ -511,8 +543,9 @@ class BubbleOverlay:
         self._callback = WNDPROC(self._wnd_proc)
 
     def _ensure_window(self) -> None:
-        if self.hwnd:
+        if self.hwnd and user32.IsWindow(self.hwnd):
             return
+        self.hwnd = None
         module = kernel32.GetModuleHandleW(None)
         window_class = WNDCLASSW()
         window_class.style = CS_DBLCLKS
@@ -527,7 +560,7 @@ class BubbleOverlay:
         self.hwnd = user32.CreateWindowExW(
             WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
             self.CLASS_NAME, "虹夏消息气泡", WS_POPUP,
-            0, 0, 1, 1, None, None, module, None,
+            0, 0, 1, 1, self.owner, None, module, None,
         )
         if not self.hwnd:
             raise ctypes.WinError(ctypes.get_last_error())
@@ -580,10 +613,9 @@ class BubbleOverlay:
         pet_x, pet_y, pet_width, _ = self.anchor
         x = pet_x + (pet_width - self.width) // 2
         y = pet_y - self.height + 31
-        work = wintypes.RECT()
-        if user32.SystemParametersInfoW(SPI_GETWORKAREA, 0, ctypes.byref(work), 0):
-            x = max(work.left + 8, min(x, work.right - self.width - 8))
-            y = max(work.top + 8, min(y, work.bottom - self.height - 8))
+        work = monitor_work_area(self.anchor)
+        x = max(work.left + 8, min(x, work.right - self.width - 8))
+        y = max(work.top + 8, min(y, work.bottom - self.height - 8))
         return x, y
 
     def show(self, notice: BubbleNotice, anchor: tuple[int, int, int, int]) -> None:
@@ -610,8 +642,24 @@ class BubbleOverlay:
         user32.ShowWindow(self.hwnd, SW_SHOWNOACTIVATE)
         user32.SetWindowPos(
             self.hwnd, ctypes.c_void_p(-1), x, y, self.width, self.height,
-            SWP_NOACTIVATE,
+            SWP_NOACTIVATE | SWP_SHOWWINDOW,
         )
+
+    def ensure_display(self, anchor: tuple[int, int, int, int]) -> bool:
+        if not self.hwnd or not user32.IsWindow(self.hwnd):
+            return False
+        self.anchor = anchor
+        x, y = self._position()
+        if not user32.SetWindowPos(
+            self.hwnd, ctypes.c_void_p(-1), x, y, self.width, self.height,
+            SWP_NOACTIVATE | SWP_SHOWWINDOW,
+        ):
+            return False
+        rect = wintypes.RECT()
+        return bool(user32.IsWindowVisible(self.hwnd)
+                    and user32.GetWindowRect(self.hwnd, ctypes.byref(rect))
+                    and (rect.left, rect.top, rect.right, rect.bottom)
+                    == (x, y, x + self.width, y + self.height))
 
     def reposition(self, anchor: tuple[int, int, int, int]) -> None:
         self.anchor = anchor
@@ -704,9 +752,14 @@ class PetWindow:
             self.notifications = None
             log_notice_event("queue_start_failed", repr(error))
         self.active_notice_id: str | None = None
+        self.legacy_bridge = (LegacyQueueBridge(self.notifications, legacy_database_paths())
+                              if self.notifications and not os.environ.get("NIJIKA_PET_DB_PATH") else None)
+        self.next_legacy_sync = 0.0
         self.last_notice_error_at = 0.0
         self.last_notice_show_log_at = 0.0
         self.next_notice_poll = 0.0
+        self.next_health_write = 0.0
+        self.last_logged_notice_id: str | None = None
         self.defer_next_notice_until = 0.0
         self.chat_enabled = True
         self.next_chat = time.monotonic() + random.uniform(7.0, 11.0)
@@ -749,7 +802,7 @@ class PetWindow:
     def say(self, phrase: str | None = None) -> None:
         if not self.hwnd:
             return
-        if self.bubble.notice and self.bubble.notice.kind == "agent":
+        if self.bubble.notice and self.bubble.notice.kind in ("agent", "approval"):
             return
         self.bubble.show(
             BubbleNotice("虹夏 · 日常", phrase or random.choice(DAILY_LINES)),
@@ -784,6 +837,8 @@ class PetWindow:
         if self.notifications is None:
             try:
                 self.notifications = NotificationStore()
+                if not os.environ.get("NIJIKA_PET_DB_PATH"):
+                    self.legacy_bridge = LegacyQueueBridge(self.notifications, legacy_database_paths())
                 log_notice_event("queue_recovered", str(self.notifications.path))
             except (OSError, sqlite3.Error) as error:
                 self.next_notice_poll = now + 2.0
@@ -793,6 +848,13 @@ class PetWindow:
                 return
         if now < self.defer_next_notice_until:
             return
+        bridge = getattr(self, "legacy_bridge", None)
+        if bridge and now >= self.next_legacy_sync:
+            self.next_legacy_sync = now + 1.0
+            errors = bridge.sync()
+            if errors and now - self.last_notice_error_at > 30:
+                log_notice_event("legacy_sync_failed", "; ".join(errors))
+                self.last_notice_error_at = now
         try:
             pending = self.notifications.next_pending()
         except sqlite3.Error as error:
@@ -806,7 +868,7 @@ class PetWindow:
             self.active_notice_id = None
             return
         if (self.bubble.notice and self.bubble.notice.request_id == pending.id
-                and self.bubble.hwnd and user32.IsWindowVisible(self.bubble.hwnd)):
+                and self.bubble.ensure_display(self._bubble_anchor())):
             return
         self.active_notice_id = pending.id
         try:
@@ -815,7 +877,7 @@ class PetWindow:
                              actions=pending.choices,
                              action_descriptions=pending.choice_descriptions,
                              action_recommended=pending.choice_recommended,
-                             kind="agent", duration=None,
+                             kind=pending.kind, duration=None,
                              request_id=pending.id),
                 self._bubble_anchor(),
             )
@@ -824,11 +886,47 @@ class PetWindow:
                 log_notice_event("bubble_show_failed", repr(error))
                 self.last_notice_error_at = now
             return
-        if now - self.last_notice_show_log_at > 30:
+        if pending.id != self.last_logged_notice_id or now - self.last_notice_show_log_at > 30:
             log_notice_event("bubble_shown",
                              f"id={pending.id} visible={bool(user32.IsWindowVisible(self.bubble.hwnd))}")
             self.last_notice_show_log_at = now
+            self.last_logged_notice_id = pending.id
         self.set_state("curious")
+
+    def poll_notifications_safely(self) -> None:
+        now = time.monotonic()
+        try:
+            self._poll_notifications(now)
+        except Exception as error:
+            if now - self.last_notice_error_at > 30:
+                log_notice_event("notice_poll_failed", repr(error))
+                self.last_notice_error_at = now
+        finally:
+            self._write_notification_health(now)
+
+    def _write_notification_health(self, now: float) -> None:
+        if now < self.next_health_write or self.notifications is None:
+            return
+        self.next_health_write = now + 3.0
+        try:
+            path = self.notifications.path
+            stat = path.stat()
+            rect = wintypes.RECT()
+            hwnd = self.bubble.hwnd
+            has_rect = hwnd and user32.GetWindowRect(hwnd, ctypes.byref(rect))
+            payload = {
+                "pid": os.getpid(), "heartbeat_at": time.time(),
+                "database": str(path.resolve()), "database_file_id": stat.st_ino,
+                "active_notice_id": self.bubble.notice.request_id if self.bubble.notice else None,
+                "window_visible": bool(hwnd and user32.IsWindowVisible(hwnd)),
+                "bubble_rect": [rect.left, rect.top, rect.right, rect.bottom] if has_rect else None,
+            }
+            target = path.with_name("renderer-status.json")
+            temporary = target.with_suffix(".tmp")
+            temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            temporary.replace(target)
+        except OSError:
+            pass
 
     def _bubble_close(self, notice: BubbleNotice) -> None:
         if not notice.request_id or self.notifications is None:
@@ -841,7 +939,7 @@ class PetWindow:
         self.next_notice_poll = 0.0
 
     def _bubble_action(self, notice: BubbleNotice, index: int) -> None:
-        if notice.kind != "agent" or index >= len(notice.actions):
+        if notice.kind not in ("agent", "approval") or index >= len(notice.actions):
             return
         selected = notice.actions[index]
         if notice.request_id:
@@ -857,7 +955,8 @@ class PetWindow:
             self.defer_next_notice_until = time.monotonic() + 2.5
             self.bubble.show(
                 BubbleNotice("虹夏 · 已回复",
-                             f"已选择「{selected}」，Agent 会按此继续。" if any(notice.action_descriptions)
+                             "已收到审批提醒，请在 Codex 审批卡授权。" if notice.kind == "approval"
+                             else f"已选择「{selected}」，Agent 会按此继续。" if any(notice.action_descriptions)
                              else "已收到完成提醒。",
                              duration=2.5),
                 self._bubble_anchor(),
@@ -933,7 +1032,6 @@ class PetWindow:
         dt = min(0.10, max(0.0, now - self.last_tick))
         self.last_tick = now
         self.bubble.tick(now)
-        self._poll_notifications(now)
         if self.chat_enabled and now >= self.next_chat:
             self.next_chat = now + random.uniform(110.0, 180.0)
             if not self.drag_start and self.bubble.notice is None:
@@ -1109,16 +1207,24 @@ class PetWindow:
             self.popup_menu()
             return 0
         if message == WM_TIMER:
-            if wparam == 1:
-                self.tick()
-            elif wparam == 3:
-                user32.DestroyWindow(hwnd)
+            try:
+                if wparam == 1:
+                    self.tick()
+                elif wparam == 2:
+                    self.poll_notifications_safely()
+                elif wparam == 3:
+                    user32.DestroyWindow(hwnd)
+            except Exception as error:
+                if time.monotonic() - self.last_notice_error_at > 30:
+                    log_notice_event("timer_failed", repr(error))
+                    self.last_notice_error_at = time.monotonic()
             return 0
         if message == WM_CLOSE:
             user32.DestroyWindow(hwnd)
             return 0
         if message == WM_DESTROY:
             user32.KillTimer(hwnd, 1)
+            user32.KillTimer(hwnd, 2)
             user32.KillTimer(hwnd, 3)
             if self.high_res_timer:
                 winmm.timeEndPeriod(1)
@@ -1148,6 +1254,7 @@ class PetWindow:
         if not self.hwnd:
             raise ctypes.WinError(ctypes.get_last_error())
         self.show_pose(self.state)
+        self.bubble.owner = self.hwnd
         user32.ShowWindow(self.hwnd, SW_SHOWNOACTIVATE)
         user32.SetWindowPos(
             self.hwnd, ctypes.c_void_p(-1), self.x, self.y,
@@ -1155,6 +1262,9 @@ class PetWindow:
         )
         self.high_res_timer = winmm.timeBeginPeriod(1) == 0
         user32.SetTimer(self.hwnd, 1, 10, None)
+        if not user32.SetTimer(self.hwnd, 2, 350, None):
+            raise ctypes.WinError(ctypes.get_last_error())
+        self.poll_notifications_safely()
         if self.demo_seconds:
             user32.SetTimer(self.hwnd, 3, self.demo_seconds * 1000, None)
         message = wintypes.MSG()

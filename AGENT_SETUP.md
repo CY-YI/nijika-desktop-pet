@@ -1,6 +1,6 @@
 # 接入 Agent：Codex、ChatGPT Work、DSH 与其他本机客户端
 
-虹夏由两个 Windows 程序组成：`虹夏桌宠.exe` 负责桌面显示，`虹夏MCP-v2.exe` 是 Agent 按需启动的 stdio MCP 服务。两者须在**同一台 Windows 10/11 x64 电脑、同一用户会话**中运行；只需手动启动桌宠，不要手动双击 MCP 程序。MCP 不开放网络端口，普通云端聊天无法直接调用本机 EXE。
+虹夏的两个核心程序是：`虹夏桌宠.exe` 负责桌面显示，`虹夏MCP-v2.exe` 是 Agent 按需启动的 stdio MCP 服务；另附可选的 `虹夏审批提醒.exe` 用于 Codex 的命令审批事件。它们须在**同一台 Windows 10/11 x64 电脑、同一用户会话**中运行；只需手动启动桌宠，不要手动双击 MCP 或审批程序。MCP 不开放网络端口，普通云端聊天无法直接调用本机 EXE。
 
 ## 已收到 Windows 私下试用 ZIP
 
@@ -27,7 +27,7 @@ powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1 -Dsh -NoLaun
 
 ## 从 Git 源码构建
 
-先按 [INSTALL.md](INSTALL.md) 安装 Python 依赖并运行 `build.ps1`，确认 `dist/` 中生成两个 EXE。桌宠仍需单独启动。
+先按 [INSTALL.md](INSTALL.md) 安装 Python 依赖并运行 `build.ps1`，确认 `dist/` 中生成三个 EXE。桌宠仍需单独启动。
 
 ### Codex
 
@@ -44,6 +44,22 @@ Copy-Item -LiteralPath '.\skills\nijika-desktop-dialog\SKILL.md' -Destination $s
 ```
 
 把 [Codex 全局触发规则](distribution/codex-global-instructions.txt) 合并到 `%USERPROFILE%\.codex\AGENTS.md`，可使其他工程的新 Codex 任务也知道何时使用桌宠；本仓库的 `AGENTS.md` 只覆盖本仓库。若已存在同名 `nijika-pet` 服务，先用 `codex mcp get nijika-pet` 核对旧路径，不要重复添加。新开 Codex 任务后再测试；旧任务不保证热加载工具和技能。
+
+### Codex 命令审批提醒（可选）
+
+普通决策由 Agent 调用 MCP，命令权限申请则由 Codex 的审批事件触发，两者是不同入口。源码构建完成后运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\integrations\codex\install-hooks.ps1
+```
+
+试用包安装时可改用 `distribution/install.ps1 -Codex -CodexHooks -NoLaunch`。脚本向 `%USERPROFILE%\.codex\hooks.json` 添加 `PermissionRequest` 和 `PostToolUse` 定义，保留其他 hook 并备份已有文件；重复安装替换本项目条目，不重复叠加。
+
+**安装定义后还须本人审阅并信任这两个 hook。** 在 Codex CLI 交互会话输入 `/hooks`，核对它们调用的是本机 `虹夏审批提醒.exe`，按界面完成审阅，再开新任务。[Codex 官方 hooks 文档](https://learn.chatgpt.com/docs/hooks)要求非托管 hook 在审阅并信任前跳过执行；本脚本不会替你写入信任或修改审批策略。
+
+在会产生审批卡的任务中测试：保持虹夏运行，执行一个由当前审批策略要求授权的实际操作，应同时看到 Codex 审批卡和“命令需要授权”气泡。气泡“知道了”只记录收到提醒，**不会授予权限**；仍在 Codex 审批卡批准或拒绝。操作完成后，尚未点击的匹配提醒由 `PostToolUse` 收起。使用“不请求审批”的任务不会产生 `PermissionRequest` 事件。当前集成只覆盖本机 Codex 的受支持事件；不能据此声称 Work、DSH 或云端执行的系统权限也已接通。
+
+维护者可运行 `.\.venv\Scripts\python.exe tools\smoke_approval_hook.py` 隔离检查安装幂等性、打包 hook 的 stdin 输入、去重与操作完成后的收起。模拟事件不执行其中的命令，也不等同于真实平台审批验收。
 
 ### ChatGPT 桌面客户端 Work（本机任务）
 
@@ -86,6 +102,8 @@ powershell -ExecutionPolicy Bypass -File .\integrations\dsh\install.ps1
 把示例路径改成该电脑上 EXE 的真实绝对路径。为了让 Agent **主动**在需要审阅或选择时调用工具，还需给该客户端添加触发说明，可参考 [Codex 技能](skills/nijika-desktop-dialog/SKILL.md) 或 [DSH 技能](integrations/dsh/nijika-dsh-dialog/SKILL.md) 并适配其工具名称。仅注册 MCP 不保证模型每次都会主动调用。
 
 ## 验证与当前边界
+
+三个本机入口默认共用 `%USERPROFILE%\.nijika-desktop-pet\notifications.sqlite3`。更新桌宠与 MCP 后重新启动桌宠；已有旧 MCP 进程的待处理消息由兼容桥接保留原 ID，点击仍会回传。新配置不要继续指定旧 AppData 路径；隔离测试可显式设置 `NIJIKA_PET_DB_PATH`。
 
 1. 确认桌面能看到虹夏；在 Agent **新任务**里提出一个确实需要你二选一的简短问题。
 2. Agent 应调用 `request_decision`，气泡显示来源、问题、各选项的一句影响说明；点击后 Agent 应通过 `wait_for_reply`/`get_reply` 读回，并在**原聊天**写明所选项。
