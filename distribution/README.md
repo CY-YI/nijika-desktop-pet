@@ -10,7 +10,7 @@ powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1
 
 这会把两个程序复制到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，在桌面创建“虹夏桌宠”快捷方式，并启动桌宠。以后双击快捷方式即可。桌宠运行时右键角色可切换动作、气泡或退出。想要开机启动，在安装命令末尾加 `-AutoStart`。
 
-Agent 接入是可选的。电脑上已安装相应客户端后，关闭正在运行的旧任务和桌宠，再按需要重跑安装脚本并附加参数：
+Agent 接入是可选的。完整配置、源码安装方式和验证步骤见包内 `AGENT_SETUP.md`。电脑上已安装相应客户端后，关闭正在运行的旧任务和桌宠，再按需要重跑安装脚本并附加参数：
 
 ```powershell
 # Codex：安装 MCP 与自动触发技能

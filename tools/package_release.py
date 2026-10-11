@@ -28,6 +28,7 @@ FILES = (
     "distribution/install.ps1",
     "distribution/codex-global-instructions.txt",
     "distribution/README.md",
+    "AGENT_SETUP.md",
 )
 
 

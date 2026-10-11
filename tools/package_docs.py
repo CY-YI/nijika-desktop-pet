@@ -27,6 +27,7 @@ FILES = (
     "integrations/dsh/README.md",
     "integrations/dsh/nijika-dsh-dialog/SKILL.md",
     "distribution/README.md",
+    "AGENT_SETUP.md",
 )
 PREFIX = "虹夏桌宠-项目文档与预览"
 
