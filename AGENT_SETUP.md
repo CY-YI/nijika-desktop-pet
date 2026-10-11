@@ -57,6 +57,8 @@ powershell -ExecutionPolicy Bypass -File .\integrations\codex\install-hooks.ps1
 
 **安装定义后还须本人审阅并信任这两个 hook。** 在 Codex CLI 交互会话输入 `/hooks`，核对它们调用的是本机 `虹夏审批提醒.exe`，按界面完成审阅，再开新任务。[Codex 官方 hooks 文档](https://learn.chatgpt.com/docs/hooks)要求非托管 hook 在审阅并信任前跳过执行；本脚本不会替你写入信任或修改审批策略。
 
+当前 CLI 的 `/hooks` 页分别显示 `Installed / Active / Review`：仅安装时两项均为 `1 / 0 / 1`，不能视为已启用执行。回车可审阅选中的事件；页面底部的 `t trust all` 用于保存信任（仅在核对所有列出的 hook 都愿意信任时使用）。确认本项目两项的 `Active` 变为 `1`、`Review` 变为 `0`。在桌宠选择“已设置信任”只是状态回传，不会修改 Codex 的信任配置；若仍显示 `untrusted`，请核对该 CLI 使用的配置目录与来源路径。
+
 在会产生审批卡的任务中测试：保持虹夏运行，执行一个由当前审批策略要求授权的实际操作，应同时看到 Codex 审批卡和“命令需要授权”气泡。气泡“知道了”只记录收到提醒，**不会授予权限**；仍在 Codex 审批卡批准或拒绝。操作完成后，尚未点击的匹配提醒由 `PostToolUse` 收起。使用“不请求审批”的任务不会产生 `PermissionRequest` 事件。当前集成只覆盖本机 Codex 的受支持事件；不能据此声称 Work、DSH 或云端执行的系统权限也已接通。
 
 维护者可运行 `.\.venv\Scripts\python.exe tools\smoke_approval_hook.py` 隔离检查安装幂等性、打包 hook 的 stdin 输入、去重与操作完成后的收起。模拟事件不执行其中的命令，也不等同于真实平台审批验收。
