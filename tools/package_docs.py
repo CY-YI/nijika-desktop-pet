@@ -22,6 +22,7 @@ FILES = (
     "art/PROMPTS.md",
     "art/bubble-preview.png",
     "art/motion-preview.gif",
+    "art/control-panel-preview.jpg",
     "skills/nijika-desktop-dialog/SKILL.md",
     "plugins/nijika-work-local/skills/nijika-work-dialog/SKILL.md",
     "integrations/dsh/README.md",
