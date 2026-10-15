@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw
 from notification_store import Notification, NotificationStore
 from legacy_queue import LegacyQueueBridge, legacy_database_paths
 from control_store import ControlStore, DEFAULTS
+from companion_store import CompanionStore
 
 
 EXPRESSIONS = (
@@ -284,6 +285,30 @@ def draw_star(draw: ImageDraw.ImageDraw, x: int, y: int, radius: int, opacity: f
     )
 
 
+def format_countdown(seconds: int) -> str:
+    seconds = max(0, int(seconds))
+    return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+
+def draw_focus_badge(image: Image.Image, text: str, *, mode: str) -> None:
+    """Paint a small timer chip above the character's hair."""
+    draw = ImageDraw.Draw(image, "RGBA")
+    font = bubble_font(max(15, image.width // 20), bold=True)
+    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    text_width = probe.textlength(text, font=font)
+    width = int(text_width) + 34
+    height = int(font.size) + 16
+    # Top-right corner stays transparent for every pose, so the chip never hides the face.
+    left = max(4, image.width - width - 8)
+    top = max(2, int(image.height * 0.012))
+    fill = (255, 244, 214, 243) if mode == "focus" else (223, 244, 226, 243)
+    outline = (196, 132, 96, 255) if mode == "focus" else (104, 156, 108, 255)
+    draw.rounded_rectangle((left, top, left + width, top + height), radius=height // 2,
+                           fill=fill, outline=outline, width=2)
+    draw.text((left + 17, top + 5), text, font=font,
+              fill=(126, 78, 60, 255) if mode == "focus" else (52, 104, 60, 255))
+
+
 def render_pose(
     source: Image.Image, *, shift_x: float = 0.0, shift_y: float = 0.0,
     angle: float = 0.0, scale_x: float = 1.0, scale_y: float = 1.0,
@@ -368,8 +393,10 @@ class SpriteSet:
             self.bitmap = None
         self.sources.clear()
 
-    def render(self, name: str, **pose: float) -> None:
+    def render(self, name: str, badge: tuple[str, str] | None = None, **pose: float) -> None:
         image = render_pose(self.sources[name], **pose)
+        if badge:
+            draw_focus_badge(image, badge[0], mode=badge[1])
         raw = premultiplied_bgra(image)
         ctypes.memmove(self.bits, raw, len(raw))
 
@@ -739,6 +766,13 @@ STATE_LINES = {
     "pout": "哼，也要记得照顾自己哦。",
     "excited": "加油！这次也一定能做到！",
 }
+REMINDER_LINES = {
+    "sedentary": ("坐久啦", "站起来走两步吧，肩膀也放松一下。"),
+    "water": ("该喝水了", "先喝几口水，我在这里等你回来。"),
+    "eye": ("眼睛歇一会儿", "抬头看看远处，二十秒就好。"),
+}
+FOCUS_DONE_LINES = ("专注完成啦", "这一轮做得很棒，休息几分钟吧。")
+BREAK_DONE_LINES = ("休息结束", "准备好了的话，我们再开始下一轮。")
 
 class PetWindow:
     def __init__(self, width: int | None = None, demo_seconds: int = 0):
@@ -780,6 +814,18 @@ class PetWindow:
         self.defer_next_notice_until = 0.0
         self.chat_enabled = preferences["chat_enabled"]
         self.next_chat = time.monotonic() + random.uniform(7.0, 11.0)
+
+        try:
+            self.companion: CompanionStore | None = CompanionStore()
+            self.companion.prune_notes()
+            greeting = self.companion.affection()
+            log_notice_event("companion_ready", f"days={greeting['days']} stage={greeting['stage']['name']}")
+        except (OSError, sqlite3.Error) as error:
+            self.companion = None
+            log_notice_event("companion_start_failed", repr(error))
+        self.next_companion_poll = 0.0
+        self.last_reminder_at = 0.0
+        self.badge_cache: tuple[str, str] | None = None
         self.state = preferences["expression"]
         self.motion_mode = preferences["motion"]
         self.motion_started = time.monotonic()
@@ -951,6 +997,102 @@ class PetWindow:
         self.settings_revision = preferences["revision"]
         self.next_health_write = 0.0
 
+    def _poll_companion(self, now: float) -> None:
+        """Turn timer phases and break reminders into one bubble at a time."""
+        if self.companion is None or now < self.next_companion_poll:
+            return
+        self.next_companion_poll = now + 1.0
+        try:
+            event = self.companion.take_event()
+            timer = self.companion.pomodoro()
+        except (OSError, sqlite3.Error) as error:
+            self.companion = None
+            log_notice_event("companion_poll_failed", repr(error))
+            return
+        self.badge_cache = self._focus_badge(timer)
+        busy = self.bubble.notice is not None or self.active_notice_id is not None
+        if event and not busy:
+            title, text = FOCUS_DONE_LINES if event == "focus_done" else BREAK_DONE_LINES
+            self.bubble.show(BubbleNotice(f"虹夏 · {title}", text, duration=9.0), self._bubble_anchor())
+            self.set_state("excited" if event == "focus_done" else "happy")
+            return
+        if timer["status"] == "running" or busy:
+            return
+        try:
+            kind = self.companion.due_reminder()
+        except (OSError, sqlite3.Error) as error:
+            self.companion = None
+            log_notice_event("companion_poll_failed", repr(error))
+            return
+        if kind:
+            title, text = REMINDER_LINES[kind]
+            self.bubble.show(BubbleNotice(f"虹夏 · {title}", text, duration=9.0), self._bubble_anchor())
+            self.set_state("worried")
+
+    @staticmethod
+    def _focus_badge(timer: dict) -> tuple[str, str] | None:
+        if timer["status"] not in ("running", "paused"):
+            return None
+        label = format_countdown(timer["remaining_seconds"])
+        return (("暂停 " if timer["status"] == "paused" else "") + label, timer["mode"])
+
+    def record_affection(self, kind: str) -> None:
+        if self.companion is None:
+            return
+        try:
+            self.companion.record_interaction(kind)
+        except (OSError, sqlite3.Error) as error:
+            log_notice_event("affection_save_failed", repr(error))
+
+    def _timer_menu(self) -> tuple[str, str]:
+        """Describe the next sensible action for the right-click menu."""
+        if self.companion is None:
+            return ("start", "专注计时：不可用")
+        try:
+            timer = self.companion.pomodoro()
+        except (OSError, sqlite3.Error):
+            return ("start", "专注计时：不可用")
+        if timer["status"] == "running":
+            return ("pause", "暂停专注 · " + format_countdown(timer["remaining_seconds"]))
+        if timer["status"] == "paused":
+            return ("resume", "继续专注 · " + format_countdown(timer["remaining_seconds"]))
+        return ("start", "开始专注 · " + str(timer["focus_minutes"]) + " 分钟")
+
+    def toggle_focus(self) -> None:
+        if self.companion is None:
+            self.say("专注计时还没准备好，稍后再试试。")
+            return
+        try:
+            timer = self.companion.pomodoro()
+            action = "pause" if timer["status"] == "running" else "resume" if timer["status"] == "paused" else "start"
+            result = self.companion.pomodoro_action(action)
+        except (OSError, sqlite3.Error, ValueError) as error:
+            log_notice_event("focus_action_failed", repr(error))
+            self.say("专注计时没能启动，稍后再试试。")
+            return
+        self.badge_cache = self._focus_badge(result)
+        if action == "start":
+            self.bubble.show(
+                BubbleNotice("虹夏 · 开始专注", f"这一轮 {result['focus_minutes']} 分钟，我陪着你。", duration=5.0),
+                self._bubble_anchor(),
+            )
+            self.start_bounce(1)
+        elif action == "pause":
+            self.say("好，先休息一下。")
+        else:
+            self.say("继续加油，我们接着来！")
+
+    def reset_focus(self) -> None:
+        if self.companion is None:
+            return
+        try:
+            result = self.companion.pomodoro_action("reset")
+        except (OSError, sqlite3.Error, ValueError) as error:
+            log_notice_event("focus_reset_failed", repr(error))
+            return
+        self.badge_cache = self._focus_badge(result)
+        self.say("这一轮先到这里，辛苦了。")
+
     def _write_notification_health(self, now: float) -> None:
         if now < self.next_health_write or self.notifications is None:
             return
@@ -1022,13 +1164,13 @@ class PetWindow:
         )
         self.set_state("happy")
 
-    def show_pose(self, name: str, **pose: float) -> None:
+    def show_pose(self, name: str, *, badge: tuple[str, str] | None = None, **pose: float) -> None:
         if not self.hwnd:
             return
-        key = (name, *pose.values())
+        key = (name, *pose.values(), badge)
         if key == self.current_frame:
             return
-        self.sprites.render(name, **pose)
+        self.sprites.render(name, badge=badge, **pose)
         screen_dc = user32.GetDC(None)
         destination = wintypes.POINT(self.x, self.y)
         source = wintypes.POINT(0, 0)
@@ -1141,6 +1283,7 @@ class PetWindow:
         self.show_pose(
             name, shift_y=shift_y, angle=angle,
             scale_x=scale_x, scale_y=scale_y, sparkle=sparkle,
+            badge=self.badge_cache,
         )
 
     def resize(self, width: int, *, directory: Path | None = None) -> None:
@@ -1167,10 +1310,13 @@ class PetWindow:
         menu = user32.CreatePopupMenu()
         try:
             options = [(101 + index, LABELS[name]) for index, name in enumerate(EXPRESSIONS)]
+            timer_action, timer_title = self._timer_menu()
             options += [
                 (601, "设置中心 / 添加 Agent"),
                 (201, "小号"), (202, "中号"), (203, "大号"),
                 (401, "动态：活泼明显"), (402, "动态：轻柔自然"), (403, "动态：关闭"),
+                (701, timer_title),
+                (702, "结束这一轮专注"),
                 (501, "让虹夏说句话"), (502, "演示：完成提醒"),
                 (503, "演示：请求选择"),
                 (504, "日常闲聊：开启" if self.chat_enabled else "日常闲聊：关闭"),
@@ -1202,6 +1348,10 @@ class PetWindow:
         elif 401 <= command <= 403:
             self.set_motion(("lively", "gentle", "off")[command - 401])
             self.save_control_preferences({"motion": self.motion_mode})
+        elif command == 701:
+            self.toggle_focus()
+        elif command == 702:
+            self.reset_focus()
         elif command == 501:
             self.say()
         elif command == 502:
@@ -1283,6 +1433,7 @@ class PetWindow:
                     index = (EXPRESSIONS.index(self.state) + 1) % len(EXPRESSIONS)
                     self.set_state(EXPRESSIONS[index])
                     self.say(STATE_LINES[self.state])
+                    self.record_affection("pet")
             self.drag_start = None
             self.dragged = False
             self.tick()
@@ -1296,6 +1447,7 @@ class PetWindow:
                     self.tick()
                 elif wparam == 2:
                     self.poll_notifications_safely()
+                    self._poll_companion(time.monotonic())
                 elif wparam == 3:
                     user32.DestroyWindow(hwnd)
             except Exception as error:

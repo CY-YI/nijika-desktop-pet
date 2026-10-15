@@ -17,6 +17,8 @@
       <p class="nav-caption">我的小小工作伙伴</p>
       <nav aria-label="设置中心导航">
         <button class="nav-item active" data-page="agents" aria-current="page"><span>⌘</span>Agent 接入<span class="nav-dot"></span></button>
+        <button class="nav-item" data-page="focus"><span>◷</span>专注与提醒</button>
+        <button class="nav-item" data-page="notes"><span>✎</span>今日便签与陪伴</button>
         <button class="nav-item" data-page="skins"><span>♧</span>角色衣橱</button>
         <button class="nav-item" data-page="settings"><span>☷</span>动作与陪伴</button>
         <button class="nav-item" data-page="support"><span>♡</span>投喂支持</button>
@@ -38,6 +40,64 @@
           <div id="agents-list" class="agent-grid"></div>
           <div id="empty-agents" class="empty-agents" hidden><span class="empty-symbol">⌘</span><div><h3>第一个伙伴，正在等你接入</h3><p>支持 Codex、ChatGPT Work、DeepSeek Harness 和其他 MCP 客户端。</p></div><button class="button secondary" data-add-agent>添加第一个 Agent <span>＋</span></button></div>
           <div class="tip-card"><span>i</span><p><strong>两种提醒，各有分工。</strong>普通问答由 Agent 调用工具；命令授权由已接通的客户端审批事件触发，仍在原审批卡中批准。</p></div>
+        </section>
+
+        <section id="page-focus" class="page" hidden>
+          <div class="page-heading"><div><p class="eyebrow">ONE ROUND AT A TIME</p><h1>专注与提醒</h1><p>开启一轮专注，也让虹夏记得提醒你歇一歇。</p></div></div>
+          <div class="focus-layout">
+            <div class="focus-card">
+              <div class="focus-ring" id="focus-ring"><span id="focus-mode">准备开始</span><strong id="focus-clock">25:00</strong><small id="focus-hint">点下面的按钮开始第一轮</small></div>
+              <div class="focus-actions">
+                <button id="focus-primary" class="button primary">开始专注</button>
+                <button id="focus-reset" class="button secondary">结束这一轮</button>
+              </div>
+              <div class="focus-stats">
+                <div><strong id="focus-completed">0</strong><span>今日完成轮数</span></div>
+                <div><strong id="focus-minutes">0</strong><span>今日专注分钟</span></div>
+                <div><strong id="focus-streak">0</strong><span>陪伴天数</span></div>
+              </div>
+              <form id="focus-form" class="focus-settings">
+                <label>专注时长（分钟）<input id="focus-length" name="focus_minutes" type="number" min="1" max="180" required></label>
+                <label>休息时长（分钟）<input id="break-length" name="break_minutes" type="number" min="1" max="180" required></label>
+                <button class="button secondary" type="submit">保存时长</button>
+              </form>
+            </div>
+            <div>
+              <div class="section-title"><h2>健康提醒</h2><span>由虹夏的气泡发出</span></div>
+              <form id="reminder-form" class="settings-card">
+                <div class="setting-block setting-toggle"><div><label for="reminder-enabled">开启定时提醒</label><p>到时间由虹夏提醒你起身、喝水和看远处。</p></div><input id="reminder-enabled" type="checkbox" role="switch" checked></div>
+                <div class="setting-block"><label class="field-label" for="sedentary-minutes">久坐提醒间隔</label><input id="sedentary-minutes" type="number" min="5" max="240" required><p>默认 50 分钟。设为想要的间隔后保存即可。</p></div>
+                <div class="setting-block"><label class="field-label" for="water-minutes">喝水提醒间隔</label><input id="water-minutes" type="number" min="5" max="240" required></div>
+                <div class="setting-block"><label class="field-label" for="eye-minutes">护眼提醒间隔</label><input id="eye-minutes" type="number" min="5" max="240" required></div>
+                <div class="settings-footer"><span id="reminder-status" role="status">提醒间隔会保存在本机</span><button class="button primary" type="submit">保存提醒</button></div>
+                <div class="pause-row"><span>正在忙？先安静一会儿</span><button id="pause-reminders" class="button secondary" type="button">免打扰 60 分钟</button><button id="resume-reminders" class="button secondary" type="button" hidden>恢复提醒</button></div>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section id="page-notes" class="page" hidden>
+          <div class="page-heading"><div><p class="eyebrow">SMALL THINGS, TOGETHER</p><h1>今日便签与陪伴</h1><p>今天想做的几件小事，写下就不用记在脑子里。</p></div></div>
+          <div class="notes-layout">
+            <div class="settings-card">
+              <div class="setting-block"><label class="field-label" for="note-text">今天想做什么？</label><div class="note-input"><input id="note-text" maxlength="120" placeholder="例如：写完周报、整理素材、给同事回消息"><button id="add-note" class="button primary" type="button">添加</button></div><p>最多保留 20 条，完成打勾后虹夏会记一次陪伴。</p></div>
+              <ul id="notes-list" class="notes-list"></ul>
+              <p id="notes-empty" class="quiet-note">今天还没有便签，写下第一件小事吧。</p>
+            </div>
+            <div class="bond-card">
+              <span class="hero-tag"><span>✦</span> 陪伴记录</span>
+              <h2 id="bond-stage">初识</h2>
+              <p id="bond-line">刚认识，慢慢来就好。</p>
+              <div class="bond-bar"><i id="bond-progress"></i></div>
+              <div class="bond-stats">
+                <div><strong id="bond-days">1</strong><span>陪伴天数</span></div>
+                <div><strong id="bond-points">0</strong><span>默契值</span></div>
+                <div><strong id="bond-interactions">0</strong><span>互动次数</span></div>
+              </div>
+              <p class="bond-note" id="bond-next">下一次亲密阶段会在 30 点默契值。</p>
+              <small>摸头、完成专注、打勾便签都会慢慢累积。</small>
+            </div>
+          </div>
         </section>
 
         <section id="page-skins" class="page" hidden>

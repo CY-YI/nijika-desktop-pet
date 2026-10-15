@@ -16,6 +16,9 @@
 | `POST /api/skins/import` | 有限大小的 PNG 或皮肤 ZIP | 校验并导入本机图片包；仅含图片及清单，不能含脚本 |
 | `POST /api/support` | 作者名、说明、可选 HTTPS 支持链接 | 保存本机投喂展示配置，不发起支付 |
 | `POST /api/support/image` | PNG/JPEG 图片 | 验证、转存收款展示图，尚无图片时显示未配置 |
+| `POST /api/focus` | `action` = start/pause/resume/reset/skip；configure 时附 `focus_minutes`、`break_minutes` | 返回番茄钟视图（状态、模式、剩余秒数、今日完成数与专注秒数）；时长限 1–180 整数分钟 |
+| `POST /api/reminders` | `enabled`、`sedentary_minutes`、`water_minutes`、`eye_minutes`（5–240）；或单独 `pause_minutes`（0–480） | 保存健康提醒配置或写入/取消免打扰，返回当前状态；改间隔会重置对应的起始时间 |
+| `POST /api/notes` | `action` = add/toggle/remove，add 附 `text`，toggle/remove 附 `id` | 新增或更新当天便签；每天最多 20 条、每条约 1–120 字；打勾只在首次完成时加好感度 |
 
 Agent 配置预览具有有效期；文件在预览后发生变化时拒绝覆盖并要求重新检测。新增字段与最终路由以实现和测试为准，未实现项不能记为已交付。
 

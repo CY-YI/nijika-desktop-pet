@@ -5,6 +5,7 @@ import io
 import json
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -209,6 +210,36 @@ class LocalAPITests(unittest.TestCase):
         self.assertEqual(reply["choice"],"收到测试")
         self.assertEqual(reply["status"],"answered")
         self.assertEqual(self.call("/api/state")["agents"][0]["status"],"exported")
+
+    def test_focus_reminder_and_note_endpoints_drive_the_companion_snapshot(self):
+        started = self.call("/api/focus",{"action":"start"})
+        self.assertEqual(started["status"],"running")
+        self.assertGreater(started["remaining_seconds"],0)
+        configured = self.call("/api/focus",{"action":"configure","focus_minutes":30,"break_minutes":10})
+        self.assertEqual((configured["focus_minutes"],configured["break_minutes"]),(30,10))
+        with self.assertRaises(HTTPError):
+            self.call("/api/focus",{"action":"configure","focus_minutes":999,"break_minutes":10})
+        with self.assertRaises(HTTPError):
+            self.call("/api/focus",{"action":"explode"})
+
+        reminders = self.call("/api/reminders",{"enabled":True,"sedentary_minutes":70,"water_minutes":30,"eye_minutes":20})
+        self.assertEqual(reminders["sedentary_minutes"],70)
+        paused = self.call("/api/reminders",{"pause_minutes":30})
+        self.assertGreater(paused["paused_until"],time.time())
+        with self.assertRaises(HTTPError):
+            self.call("/api/reminders",{"water_minutes":3})
+
+        note = self.call("/api/notes",{"action":"add","text":"  写周报  "})
+        self.assertEqual(note["text"],"写周报")
+        self.assertTrue(self.call("/api/notes",{"action":"toggle","id":note["id"]})["done"])
+        with self.assertRaises(HTTPError):
+            self.call("/api/notes",{"action":"add","text":""})
+        self.assertTrue(self.call("/api/notes",{"action":"remove","id":note["id"]})["removed"])
+
+        snapshot = self.call("/api/state")["companion"]
+        self.assertEqual({"pomodoro","reminders","notes","affection"},set(snapshot))
+        self.assertEqual(snapshot["notes"],[])
+        self.assertGreaterEqual(snapshot["affection"]["points"],1)
 
 
 if __name__ == "__main__":

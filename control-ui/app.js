@@ -49,14 +49,14 @@ function download(data, filename, type="application/json") {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 function gotoPage(page) {
-  if (!["agents","skins","settings","support"].includes(page)) page = "agents";
+  if (!["agents","focus","notes","skins","settings","support"].includes(page)) page = "agents";
   $$(".page").forEach(item => item.hidden = item.id !== "page-" + page);
   $$(".nav-item").forEach(item => {
     item.classList.toggle("active", item.dataset.page === page);
     if (item.dataset.page === page) item.setAttribute("aria-current", "page");
     else item.removeAttribute("aria-current");
   });
-  $("#page-name").textContent = {agents:"Agent 接入",skins:"角色衣橱",settings:"动作与陪伴",support:"投喂支持"}[page];
+  $("#page-name").textContent = {agents:"Agent 接入",focus:"专注与提醒",notes:"今日便签与陪伴",skins:"角色衣橱",settings:"动作与陪伴",support:"投喂支持"}[page];
   history.replaceState(null,"", "#" + page);
 }
 $$(".nav-item").forEach(item => item.addEventListener("click", () => gotoPage(item.dataset.page)));
@@ -149,6 +149,76 @@ function renderSupport() {
     for (const key of ["name","message","url"]) $("#support-form").elements[key].value = support[key];
   }
 }
+
+let focusSignature = "", notesSignature = "", reminderDirty = false;
+function renderCompanion() {
+  const data = state.companion;
+  if (!data) return;
+  const timer = data.pomodoro;
+  const running = timer.status === "running", breaking = timer.mode === "break";
+  const ring = $("#focus-ring");
+  ring.classList.toggle("running",running && !breaking);
+  ring.classList.toggle("breaking",running && breaking);
+  $("#focus-mode").textContent = timer.status === "idle" ? "准备开始" : timer.status === "paused" ? "已暂停" : breaking ? "休息中" : "专注中";
+  $("#focus-clock").textContent = countdown(timer.remaining_seconds);
+  $("#focus-hint").textContent = timer.status === "running"
+    ? (breaking ? "喝完水、伸个懒腰再回来。" : "这一轮结束前，先专心做手上的事。")
+    : timer.status === "paused" ? "点继续专注就会接着计时。" : "点下面的按钮开始第一轮";
+  $("#focus-primary").textContent = running ? "暂停专注" : timer.status === "paused" ? "继续专注" : "开始专注";
+  $("#focus-completed").textContent = timer.completed_today;
+  $("#focus-minutes").textContent = Math.round((timer.focus_seconds_today || 0) / 60);
+  $("#focus-streak").textContent = data.affection.days;
+  const form = $("#focus-form");
+  if (document.activeElement?.tagName !== "INPUT") {
+    form.elements.focus_minutes.value = timer.focus_minutes;
+    form.elements.break_minutes.value = timer.break_minutes;
+  }
+  const reminders = data.reminders, paused = reminders.paused_until * 1000 > Date.now();
+  if (!reminderDirty) {
+    $("#reminder-enabled").checked = reminders.enabled;
+    $("#sedentary-minutes").value = reminders.sedentary_minutes;
+    $("#water-minutes").value = reminders.water_minutes;
+    $("#eye-minutes").value = reminders.eye_minutes;
+  }
+  $("#reminder-status").textContent = !reminders.enabled ? "提醒已关闭"
+    : paused ? "免打扰中，恢复后继续计时" : "提醒间隔会保存在本机";
+  $("#pause-reminders").hidden = paused;
+  $("#resume-reminders").hidden = !paused;
+  const signature = JSON.stringify(data.notes);
+  if (signature !== notesSignature) { notesSignature = signature; renderNotes(); }
+  const bond = data.affection, stage = bond.stage;
+  $("#bond-stage").textContent = stage.name;
+  $("#bond-line").textContent = stage.line;
+  $("#bond-progress").style.width = Math.round(stage.progress * 100) + "%";
+  $("#bond-days").textContent = bond.days;
+  $("#bond-points").textContent = bond.points;
+  $("#bond-interactions").textContent = bond.interactions;
+  $("#bond-next").textContent = stage.next_at === null ? "已经是最亲密的阶段了，谢谢你一直在这里。"
+    : "下一次亲密阶段会在 " + stage.next_at + " 点默契值。";
+  focusSignature = JSON.stringify(timer);
+}
+function countdown(seconds) {
+  seconds = Math.max(0,Math.round(seconds || 0));
+  return String(Math.floor(seconds / 60)).padStart(2,"0") + ":" + String(seconds % 60).padStart(2,"0");
+}
+function renderNotes() {
+  const list = $("#notes-list"), notes = state.companion.notes;
+  list.replaceChildren();
+  $("#notes-empty").hidden = notes.length !== 0;
+  for (const note of notes) {
+    const item = node("li"); item.classList.toggle("done",note.done);
+    const label = node("label");
+    const box = node("input"); box.type = "checkbox"; box.checked = note.done;
+    box.addEventListener("change",() => guarded(async () => {
+      await api("/api/notes",{action:"toggle",id:note.id}); await refresh(true);
+    }));
+    label.append(box,node("span",null,note.text));
+    item.append(label,button("×","remove-note",() => guarded(async () => {
+      await api("/api/notes",{action:"remove",id:note.id}); await refresh(true);
+    })));
+    list.append(item);
+  }
+}
 async function refresh(force=false) {
   try {
     state = await api("/api/state");
@@ -163,6 +233,7 @@ async function refresh(force=false) {
     if (!settingsDirty) syncSettings();
     const nextSupport = JSON.stringify(state.support);
     if (force || nextSupport !== supportSignature) {supportSignature = nextSupport; renderSupport();}
+    renderCompanion();
     $("#settings-status").textContent = settingsDirty ? "有未保存的修改" : !online ? "已保存；桌宠启动后应用" :
       !state.renderer.supports_control ? "当前桌宠需更新后重启，才能应用面板设置" :
       state.renderer.applied_revision >= state.settings.revision ? "已同步到桌面上的虹夏" : "已保存，等待桌宠应用…";
@@ -278,6 +349,51 @@ $("#support-file").addEventListener("change",event => {
 $("#start-pet").addEventListener("click",event => guarded(async () => {
   const result = await api("/api/pet/start",{}); toast(result.message); await refresh();
 },event.currentTarget));
+
+$("#focus-primary").addEventListener("click",event => guarded(async () => {
+  const timer = state.companion.pomodoro;
+  const action = timer.status === "running" ? "pause" : timer.status === "paused" ? "resume" : "start";
+  await api("/api/focus",{action});
+  await refresh(true);
+  toast(action === "start" ? "这一轮专注开始了。" : action === "pause" ? "已暂停，随时可以继续。" : "继续这一轮专注。");
+},event.currentTarget));
+$("#focus-reset").addEventListener("click",event => guarded(async () => {
+  await api("/api/focus",{action:"reset"}); await refresh(true); toast("这一轮先结束了。");
+},event.currentTarget));
+$("#focus-form").addEventListener("submit",event => {
+  event.preventDefault();
+  guarded(async () => {
+    await api("/api/focus",{action:"configure",focus_minutes:Number($("#focus-length").value),
+      break_minutes:Number($("#break-length").value)});
+    await refresh(true); toast("专注与休息时长已保存。");
+  },event.currentTarget.querySelector('[type="submit"]'));
+});
+$("#reminder-form").addEventListener("input",() => reminderDirty = true);
+$("#reminder-form").addEventListener("submit",event => {
+  event.preventDefault();
+  guarded(async () => {
+    await api("/api/reminders",{enabled:$("#reminder-enabled").checked,
+      sedentary_minutes:Number($("#sedentary-minutes").value),water_minutes:Number($("#water-minutes").value),
+      eye_minutes:Number($("#eye-minutes").value)});
+    reminderDirty = false; await refresh(true); toast("提醒设置已保存，间隔从此刻重新计算。");
+  },event.currentTarget.querySelector('[type="submit"]'));
+});
+$("#pause-reminders").addEventListener("click",event => guarded(async () => {
+  await api("/api/reminders",{pause_minutes:60}); await refresh(true); toast("好，接下来 60 分钟不打扰你。");
+},event.currentTarget));
+$("#resume-reminders").addEventListener("click",event => guarded(async () => {
+  await api("/api/reminders",{pause_minutes:0}); await refresh(true); toast("提醒已恢复。");
+},event.currentTarget));
+$("#add-note").addEventListener("click",event => guarded(async () => {
+  const input = $("#note-text"), text = input.value.trim();
+  if (!text) throw new Error("先写点内容再添加。");
+  if (state.companion.notes.length >= 20) throw new Error("今天的便签已经有 20 条了。");
+  await api("/api/notes",{action:"add",text}); input.value = "";
+  await refresh(true); toast("记下来了。");
+},event.currentTarget));
+$("#note-text").addEventListener("keydown",event => {
+  if (event.key === "Enter") { event.preventDefault(); $("#add-note").click(); }
+});
 gotoPage(location.hash.slice(1));
 refresh();
 setInterval(() => refresh(),3000);

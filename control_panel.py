@@ -17,6 +17,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from agent_setup import AgentSetup
+from companion_store import CompanionStore
 from control_store import ControlStore, IDENTIFIER, SPRITES
 from notification_store import NotificationStore
 
@@ -36,6 +37,7 @@ class ControlApplication:
     def __init__(self, database: Path | None = None, root: Path | None = None, home: Path | None = None):
         self.store = ControlStore(database)
         self.notifications = NotificationStore(self.store.database)
+        self.companion = CompanionStore(self.store.database)
         self.root = root or application_root()
         self.setup = AgentSetup(self.root, self.store, home)
 
@@ -68,7 +70,8 @@ class ControlApplication:
             # Backups are local recovery artifacts, not useful to every state poll.
             agent.pop("backups", None)
         return {"renderer": self.renderer(), "settings": self.store.settings(), "agents": agents,
-                "clients": self.setup.clients(), "skins": self.store.skins(), "support": self.store.support()}
+                "clients": self.setup.clients(), "skins": self.store.skins(), "support": self.store.support(),
+                "companion": self.companion.snapshot()}
 
     def post(self, route: str, data: dict) -> dict:
         if route == "/api/agents/plan":
@@ -94,6 +97,30 @@ class ControlApplication:
             return self.store.update_settings(data)
         if route == "/api/support":
             return self.store.update_support(data)
+        if route == "/api/focus":
+            action = data.get("action")
+            if not isinstance(action, str):
+                raise ValueError("请选择专注计时的操作。")
+            if action == "configure":
+                return self.companion.pomodoro_action("configure",
+                                                      focus_minutes=data.get("focus_minutes"),
+                                                      break_minutes=data.get("break_minutes"))
+            return self.companion.pomodoro_action(action)
+        if route == "/api/reminders":
+            if "pause_minutes" in data:
+                return self.companion.pause_reminders(data["pause_minutes"])
+            patch = {key: value for key, value in data.items() if key != "pause_minutes"}
+            return self.companion.update_reminders(patch)
+        if route == "/api/notes":
+            action = data.get("action")
+            if action == "add":
+                return self.companion.add_note(data.get("text", ""))
+            if action == "toggle":
+                return self.companion.toggle_note(int(data.get("id", 0)))
+            if action == "remove":
+                self.companion.remove_note(int(data.get("id", 0)))
+                return {"removed": True}
+            raise ValueError("不支持的便签操作。")
         if route == "/api/pet/start":
             if self.renderer()["online"]:
                 return {"started": False, "message": "虹夏已经在桌面运行。"}
