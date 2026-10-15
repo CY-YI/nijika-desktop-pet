@@ -16,6 +16,64 @@ from control_store import ControlStore
 
 CLIENTS = {"codex": "Codex", "work": "ChatGPT Work", "dsh": "DeepSeek Harness", "custom": "其他 MCP 客户端"}
 
+GUIDES = {
+    "codex": {
+        "title": "接下来请照这 4 步做",
+        "steps": [
+            "重启 Codex 或新开一个任务，让刚写入的 MCP 配置和技能生效（已打开的旧任务不会自动刷新）。",
+            "把下面这段示例提示词粘贴到 Codex 新任务里发送，做第一次验证。",
+            "如果第一次弹出 MCP 工具授权，选择允许；任务结束或需要你选择时，桌面虹夏会弹出气泡。",
+            "没有气泡时先确认桌面虹夏正在运行，再回设置中心点一次“测试提醒”对比。",
+        ],
+        "prompt": "这个任务结束时，请用虹夏桌宠的 show_completion 给我发一条桌面完成提醒，标题写任务名，summary 写一句话结果。"
+                  "如果中途需要我在两个方案里做选择，请改用 request_decision，每个选项写清楚名称和一句说明，然后等我点击。"
+                  "现在先调用一次工具让我确认链路是否通。",
+        "tip": "配置正确后，正常任务会自动按规则调用，不需要每次重复这段提示词；它适合第一次验证或临时提醒。",
+    },
+    "work": {
+        "title": "接下来请照这 4 步做",
+        "steps": [
+            "重启 ChatGPT 桌面客户端，让本机 Work 插件重新加载。",
+            "打开一个在本机运行的 Work 新任务（云端 Work 不能运行本机程序）。",
+            "确认工具列表里能看到虹夏，然后粘贴下面的示例提示词发送。",
+            "任务结束或需要选择时，桌面出现虹夏气泡；点完选择后回到该 Work 任务继续。",
+        ],
+        "prompt": "这个任务结束时，请调用虹夏桌宠的 show_completion 给我发一条桌面完成提醒。"
+                  "如果需要我在两个方案里选择，请调用 request_decision，每个选项写一句说明，然后等我桌面点击后再继续。",
+        "tip": "Work 首次使用需要重启客户端；当前只有本机运行的 Work 任务能连接虹夏。",
+    },
+    "dsh": {
+        "title": "接下来请照这 4 步做",
+        "steps": [
+            "重启 DeepSeek Harness 桌面客户端，让新的 MCP 配置生效。",
+            "新建一个会话（旧会话不会自动加载新配置）。",
+            "把下面的示例提示词粘贴进去发送，确认虹夏工具可被调用。",
+            "桌面出现气泡后点击选项；如果点击较晚，回到该会话继续说“我回复了”即可读取结果。",
+        ],
+        "prompt": "这个任务结束时，请调用虹夏桌宠的 show_completion 发一条桌面完成提醒；"
+                  "需要我在多个方案里选择时，请用 request_decision 写清每个选项的名称和一句说明，然后等待我点击。",
+        "tip": "已结束的会话不会被桌面点击自动唤醒，回答晚于等待时间时需要回到该会话说一句“我回复了”。",
+    },
+    "custom": {
+        "title": "接下来请照这 5 步做",
+        "steps": [
+            "用“下载 MCP 配置”把 JSON 存到本机。",
+            "把 JSON 里的命令与环境变量填入客户端的 MCP 服务配置（保留客户端原有服务）。",
+            "把触发说明加入客户端的规则或系统提示词，让它在完成或需要选择时主动调用。",
+            "重启该客户端并新建任务，确认服务器状态为已连接。",
+            "粘贴下面的示例提示词做一次验证，桌面出现气泡即表示链路可用。",
+        ],
+        "prompt": "你有一个名为 nijika-pet 的 MCP 工具。任务结束时用 show_completion 发桌面完成提醒；"
+                  "需要我在方案间选择时用 request_decision，给出每个选项的名称和一句说明，等待我点击后再继续。",
+        "tip": "未知客户端不会被自动修改，请按其官方文档填写 stdio MCP 配置，不要写入模型密钥。",
+    },
+}
+
+
+def client_guide(client: str) -> dict:
+    """Return the operator-facing steps and a copy-paste prompt for one client."""
+    return GUIDES.get(client, GUIDES["custom"])
+
 
 def marked_block(original: str, block: str, start: str, end: str) -> str:
     first, last = original.find(start), original.find(end)
@@ -164,7 +222,8 @@ class AgentSetup:
                 "files": [{"path": str(item["path"]), "purpose": item["purpose"],
                            "action": "更新并备份" if item["before"] is not None else "新建"} for item in files],
                 "external_action": bool(commands), "export": self.export(source_name),
-                "instructions": (self.root / "distribution/codex-global-instructions.txt").read_text(encoding="utf-8-sig")}
+                "instructions": (self.root / "distribution/codex-global-instructions.txt").read_text(encoding="utf-8-sig"),
+                "guide": client_guide(client)}
 
     def apply(self, plan_id: str) -> dict:
         with self.lock:
@@ -216,4 +275,5 @@ class AgentSetup:
                     "test_request_id": None, "updated_at": int(time.time()), "backups": backups}
             self.store.save_agent(item)
             del self.plans[plan_id]
-            return {"agent": item, "notes": plan["notes"], "backup_count": len(backups)}
+            return {"agent": {**item, "guide": client_guide(plan["client"])},
+                    "notes": plan["notes"], "backup_count": len(backups)}

@@ -87,13 +87,23 @@ function renderAgents() {
     card.append(node("p","",description));
     const actions = node("div","agent-actions");
     const test = button(agent.test?.status === "pending" ? "等待桌面点击" : "测试提醒","button secondary", () => guarded(() => testAgent(agent.id),test));
+    const guideButton = button("接入步骤","button secondary", () => openGuide(agent));
     const exportButton = button("导出配置","button secondary", () => guarded(() => exportAgent(agent.id),exportButton));
     const remove = button("移除档案","remove-agent", () => guarded(async () => {
       await api("/api/agents/remove",{id:agent.id}); await refresh();
       toast("已移除面板档案，客户端配置保持不变。");
     },remove));
-    actions.append(test,exportButton,remove); card.append(actions); list.append(card);
+    actions.append(test,guideButton,exportButton,remove); card.append(actions); list.append(card);
   }
+}
+function openGuide(agent) {
+  wizard = {step:3,client:agent.client,plan:{guide:agent.guide},agent,busy:false,guideOnly:true};
+  $("#wizard-success-title").textContent = "接入 " + agent.name + " · 照做步骤";
+  $("#wizard-success-text").textContent = "按下面的顺序操作；示例提示词可以直接复制粘贴给 AI 客户端。";
+  $("#success-notes").replaceChildren();
+  renderGuide(agent.guide);
+  renderWizard();
+  $("#agent-dialog").showModal();
 }
 async function testAgent(id) {
   const result = await api("/api/agents/test",{id}); await refresh();
@@ -250,12 +260,33 @@ function chooseClient(client) {
   $("#agent-location").value = state.clients.find(item => item.id === client)?.location || "";
   $("#advanced-location").hidden = client === "custom";
 }
+function renderGuide(guide) {
+  if (!guide) return;
+  $("#guide-title").textContent = guide.title;
+  const steps = $("#guide-steps"); steps.replaceChildren();
+  for (const text of guide.steps) steps.append(node("li", "", text));
+  $("#guide-prompt").textContent = guide.prompt;
+  $("#guide-tip").textContent = guide.tip;
+}
+async function copyText(text, control) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (error) {
+    const area = node("textarea"); area.value = text;
+    area.style.position = "fixed"; area.style.opacity = "0";
+    document.body.append(area); area.select();
+    document.execCommand("copy"); area.remove();
+  }
+  if (control) {const label = control.textContent; control.textContent = "已复制 ✓"; setTimeout(() => control.textContent = label, 1800);}
+  toast("提示词已复制，可直接粘贴给 AI 客户端。");
+}
 function renderWizard() {
   for (const step of [1,2,3]) $("#wizard-step-" + ["","one","two","three"][step]).hidden = wizard.step !== step;
   $$(".stepper li").forEach((item,index) => {item.classList.toggle("current",index+1 === wizard.step); item.classList.toggle("done",index+1 < wizard.step);});
   $("#wizard-back").textContent = wizard.step === 1 ? "取消" : wizard.step === 2 ? "← 上一步" : "完成";
   $("#wizard-next").textContent = wizard.step === 1 ? "检测并继续 →" : wizard.step === 2 ?
-    wizard.client === "custom" ? "保存配置档案" : "应用并添加" : wizard.client === "custom" ? "下载 MCP 配置" : "发送测试提醒";
+    wizard.client === "custom" ? "保存配置档案" : "应用并添加" : wizard.guideOnly ? "知道了，关闭" :
+    wizard.client === "custom" ? "下载 MCP 配置" : "发送测试提醒";
   $("#wizard-next").disabled = wizard.busy; $("#wizard-back").disabled = wizard.busy; $("#close-wizard").disabled = wizard.busy;
   $("#wizard-error").hidden = true;
 }
@@ -274,6 +305,7 @@ function openWizard() {
 }
 $$("[data-add-agent]").forEach(item => item.addEventListener("click",openWizard));
 $("#close-wizard").addEventListener("click",() => $("#agent-dialog").close());
+$("#copy-guide-prompt").addEventListener("click",() => copyText($("#guide-prompt").textContent,$("#copy-guide-prompt")));
 $("#agent-dialog").addEventListener("cancel",event => {if (wizard.busy) event.preventDefault();});
 $("#wizard-back").addEventListener("click",() => {
   if (wizard.step === 2) {wizard.step = 1; renderWizard();}
@@ -292,6 +324,7 @@ $("#agent-form").addEventListener("submit",async event => {
       if (!wizard.plan.files.length) $("#plan-files").append(node("li","field-help",wizard.client === "custom" ? "生成通用 MCP 配置，不修改客户端文件。" : "已有配置无需改动，将保存管理面板档案。"));
       $("#plan-notes").replaceChildren(...wizard.plan.notes.map(text => node("p","",text)));
       $("#plan-export").textContent = JSON.stringify(wizard.plan.export,null,2) + "\n\n" + wizard.plan.instructions;
+      renderGuide(wizard.plan.guide);
       wizard.step = 2;
     } else if (wizard.step === 2) {
       const result = await api("/api/agents/apply",{plan_id:wizard.plan.plan_id}); wizard.agent = result.agent;
@@ -299,9 +332,12 @@ $("#agent-form").addEventListener("submit",async event => {
       $("#wizard-success-text").textContent = wizard.client === "custom" ? "下载 MCP 配置，并把触发说明加入客户端规则。" :
         "已保存配置；" + (result.backup_count ? result.backup_count + " 个原文件已备份。" : "原有配置均已保留。");
       $("#success-notes").replaceChildren(...result.notes.map(text => node("p","",text)));
+      renderGuide(wizard.plan.guide);
       wizard.step = 3; await refresh();
     } else {
-      if (wizard.client === "custom") {
+      if (wizard.guideOnly) {
+        $("#agent-dialog").close();
+      } else if (wizard.client === "custom") {
         download(JSON.stringify(wizard.plan.export,null,2),"nijika-mcp.json");
         download(wizard.plan.instructions,"nijika-agent-instructions.txt","text/plain;charset=utf-8");
       } else await testAgent(wizard.agent.id);

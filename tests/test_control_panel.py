@@ -201,6 +201,8 @@ class LocalAPITests(unittest.TestCase):
     def test_same_pending_test_reused_click_readback_is_not_external_agent_verification(self):
         plan = self.call("/api/agents/plan", {"client":"custom","name":"本机测试"})
         result = self.call("/api/agents/apply", {"plan_id":plan["plan_id"]})
+        self.assertEqual(result["agent"]["guide"]["title"], "接下来请照这 5 步做")
+        self.assertIn("nijika-pet", result["agent"]["guide"]["prompt"])
         first = self.call("/api/agents/test", {"id":result["agent"]["id"]})
         second = self.call("/api/agents/test", {"id":result["agent"]["id"]})
         self.assertEqual(first["request_id"],second["request_id"])
@@ -208,6 +210,9 @@ class LocalAPITests(unittest.TestCase):
         self.app.notifications.answer(first["request_id"],0)
         reply = self.call("/api/notices/" + first["request_id"])
         self.assertEqual(reply["choice"],"收到测试")
+        agent = self.call("/api/state")["agents"][0]
+        self.assertEqual(agent["guide"]["title"], "接下来请照这 5 步做")
+        self.assertEqual(len(agent["guide"]["steps"]), 5)
         self.assertEqual(reply["status"],"answered")
         self.assertEqual(self.call("/api/state")["agents"][0]["status"],"exported")
 
