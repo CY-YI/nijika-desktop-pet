@@ -14,8 +14,9 @@
 - [x] 复用构建产物：`dist/虹夏桌宠.exe`（2026-10-15 16:55，约 40 MB）随后与设置中心启动、心跳及本机 API 均正常。
 - [x] 更新 `REQUIREMENTS.md`（第一版范围与四项验收记录）、`CHANGELOG.md`，并把“第二档大概率 D 组”记为待用户最终勾选的倾向，不是已确认范围。
 - [x] `tools/accept_companion.py` 保留为可复用的实机验收脚本；一次性验收脚本与临时便签已清理。
-- [ ] 重新生成分享包（`tools/package_release.py`、`tools/package_docs.py`），确认清单不再包含旧控制中心 EXE。
-- [ ] 提交并推送 `main`；待用户为第二档勾选具体功能后再开新范围。
+- [x] 重新生成分享包：`tools/package_docs.py` 与 `tools/package_release.py` 均以 2026-10-15 重新输出；试用包清单核对后只含 `虹夏桌宠.exe`、`虹夏MCP-v2.exe`、`虹夏审批提醒.exe`，不再包含旧控制中心 EXE；试用包 SHA256 为 `1039096c3fe98bd3144def0d432aa90317838e8a4f988df193cc6978c3f0f04d`。
+- [x] 敏感数据扫描：源码、脚本、配置模板与文档未发现真实密钥、私钥或令牌，命中的仅为 `YOUR_API_KEY_HERE` 占位符。
+- [x] 提交并推送 `main`：`d76c915 Add phase 1 focus timer, break reminders, daily notes and companionship`。待用户为第二档勾选具体功能后再开新范围。
 
 ## 当前任务：单程序合并与功能对比选型（2026-10-15）
 
