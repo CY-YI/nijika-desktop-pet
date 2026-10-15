@@ -1,5 +1,15 @@
 # 接入 Agent：Codex、ChatGPT Work、DSH 与其他本机客户端
 
+## 优先使用控制中心（2026-10-15）
+
+双击 `dist/虹夏控制中心.exe`，或右键已更新的桌宠选择“控制中心 / 添加 Agent”。选择客户端、给伙伴命名，常用配置路径会自动填入；仅使用其他用户目录时展开高级位置。点击“检测并继续”，核对具体文件、备份和保留行为，再选择“应用并添加”。已有 Codex `nijika-pet` 服务会保留；同名服务路径失效或存在冲突时停止并提示，不盲目覆盖。
+
+Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 desktop/web 配置与专用技能；Work 向导在用户数据目录准备本机插件，再调用 Codex CLI 注册与安装。Work 当前仍需 PATH 中可用的 `codex` 和 `python.exe`，仅限能运行本机程序的 Work。其他兼容客户端选择“其他 MCP 客户端”，下载标准 stdio 配置和触发说明后导入。
+
+配置成功后按说明重启客户端或新建任务。面板“测试提醒”由面板直接发送，点击结果会显示“本机测试已点击”，证明桌宠显示与队列回传可用；这不等于外部 Agent 已发现工具或会主动调用。还需在客户端新任务让 Agent 发出一次选择题。普通通知的状态与命令审批 hook 的本人信任分别处理。移除面板档案不删除客户端原配置。
+
+向导不读取或要求填写模型密钥，不替用户信任 hook，不开放云端入口。以下命令说明保留，供高级配置和故障排查。
+
 虹夏的两个核心程序是：`虹夏桌宠.exe` 负责桌面显示，`虹夏MCP-v2.exe` 是 Agent 按需启动的 stdio MCP 服务；另附可选的 `虹夏审批提醒.exe` 用于 Codex 的命令审批事件。它们须在**同一台 Windows 10/11 x64 电脑、同一用户会话**中运行；只需手动启动桌宠，不要手动双击 MCP 或审批程序。MCP 不开放网络端口，普通云端聊天无法直接调用本机 EXE。
 
 ## 已收到 Windows 私下试用 ZIP
@@ -27,7 +37,7 @@ powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1 -Dsh -NoLaun
 
 ## 从 Git 源码构建
 
-先按 [INSTALL.md](INSTALL.md) 安装 Python 依赖并运行 `build.ps1`，确认 `dist/` 中生成三个 EXE。桌宠仍需单独启动。
+先按 [INSTALL.md](INSTALL.md) 安装 Python 依赖并运行 `build.ps1`，确认 `dist/` 中生成四个 EXE。桌宠仍需单独启动。
 
 ### Codex
 

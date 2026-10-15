@@ -9,6 +9,7 @@ import math
 import os
 import random
 import sqlite3
+import subprocess
 import sys
 import time
 from ctypes import wintypes
@@ -18,6 +19,7 @@ from PIL import Image, ImageDraw
 
 from notification_store import Notification, NotificationStore
 from legacy_queue import LegacyQueueBridge, legacy_database_paths
+from control_store import ControlStore, DEFAULTS
 
 
 EXPRESSIONS = (
@@ -312,7 +314,7 @@ def render_pose(
 
 
 class SpriteSet:
-    def __init__(self, width: int, height: int):
+    def __init__(self, width: int, height: int, directory: Path | None = None):
         self.width = width
         self.height = height
         self.sources: dict[str, Image.Image] = {}
@@ -325,7 +327,7 @@ class SpriteSet:
             raise ctypes.WinError(ctypes.get_last_error())
         try:
             for name in SPRITE_NAMES:
-                with Image.open(resource_dir() / f"{name}.png") as source:
+                with Image.open((directory or resource_dir()) / f"{name}.png") as source:
                     art = source.convert("RGBA").resize(
                         (width - 20, height - 30), Image.Resampling.LANCZOS
                     )
@@ -739,10 +741,25 @@ STATE_LINES = {
 }
 
 class PetWindow:
-    def __init__(self, width: int = 320, demo_seconds: int = 0):
-        self.width = width
-        self.height = width * 3 // 2
-        self.sprites = SpriteSet(self.width, self.height)
+    def __init__(self, width: int | None = None, demo_seconds: int = 0):
+        try:
+            self.controls: ControlStore | None = ControlStore()
+            preferences = self.controls.settings()
+        except (OSError, sqlite3.Error) as error:
+            self.controls = None
+            preferences = {**DEFAULTS, "revision": 0}
+            log_notice_event("control_store_unavailable", repr(error))
+        self.settings_revision = preferences["revision"]
+        self.next_settings_poll = 0.0
+        try:
+            self.sprite_directory = (self.controls.skin_directory(preferences["skin"]) if self.controls else None) or resource_dir()
+        except ValueError:
+            preferences = self.controls.update_settings({"skin": "default"})
+            self.settings_revision = preferences["revision"]
+            self.sprite_directory = resource_dir()
+        self.width = width or preferences["width"]
+        self.height = self.width * 3 // 2
+        self.sprites = SpriteSet(self.width, self.height, self.sprite_directory)
         self.bubble = BubbleOverlay(self._bubble_action, self._bubble_close)
         try:
             self.notifications: NotificationStore | None = NotificationStore()
@@ -761,10 +778,10 @@ class PetWindow:
         self.next_health_write = 0.0
         self.last_logged_notice_id: str | None = None
         self.defer_next_notice_until = 0.0
-        self.chat_enabled = True
+        self.chat_enabled = preferences["chat_enabled"]
         self.next_chat = time.monotonic() + random.uniform(7.0, 11.0)
-        self.state = "curious"
-        self.motion_mode = "lively"
+        self.state = preferences["expression"]
+        self.motion_mode = preferences["motion"]
         self.motion_started = time.monotonic()
         self.blink_until = 0.0
         self.wink_until = 0.0
@@ -896,6 +913,12 @@ class PetWindow:
     def poll_notifications_safely(self) -> None:
         now = time.monotonic()
         try:
+            self._apply_control_settings(now)
+        except Exception as error:
+            if now - self.last_notice_error_at > 30:
+                log_notice_event("control_settings_failed", repr(error))
+                self.last_notice_error_at = now
+        try:
             self._poll_notifications(now)
         except Exception as error:
             if now - self.last_notice_error_at > 30:
@@ -903,6 +926,30 @@ class PetWindow:
                 self.last_notice_error_at = now
         finally:
             self._write_notification_health(now)
+
+    def _apply_control_settings(self, now: float) -> None:
+        if self.controls is None:
+            return
+        if now < self.next_settings_poll:
+            return
+        self.next_settings_poll = now + 1.0
+        preferences = self.controls.settings()
+        if preferences["revision"] == self.settings_revision:
+            return
+        try:
+            directory = self.controls.skin_directory(preferences["skin"]) or resource_dir()
+        except ValueError:
+            preferences = self.controls.update_settings({"skin": "default"})
+            directory = resource_dir()
+        self.resize(preferences["width"], directory=directory)
+        if self.motion_mode != preferences["motion"]:
+            self.set_motion(preferences["motion"])
+        self.set_state(preferences["expression"], react=False)
+        self.chat_enabled = preferences["chat_enabled"]
+        if not self.chat_enabled and self.bubble.notice and self.bubble.notice.kind == "chat":
+            self.bubble.hide()
+        self.settings_revision = preferences["revision"]
+        self.next_health_write = 0.0
 
     def _write_notification_health(self, now: float) -> None:
         if now < self.next_health_write or self.notifications is None:
@@ -916,6 +963,8 @@ class PetWindow:
             has_rect = hwnd and user32.GetWindowRect(hwnd, ctypes.byref(rect))
             payload = {
                 "pid": os.getpid(), "heartbeat_at": time.time(),
+                "supports_control": self.controls is not None, "applied_revision": self.settings_revision,
+                "width": self.width, "motion": self.motion_mode,
                 "database": str(path.resolve()), "database_file_id": stat.st_ino,
                 "active_notice_id": self.bubble.notice.request_id if self.bubble.notice else None,
                 "window_visible": bool(hwnd and user32.IsWindowVisible(hwnd)),
@@ -1094,15 +1143,17 @@ class PetWindow:
             scale_x=scale_x, scale_y=scale_y, sparkle=sparkle,
         )
 
-    def resize(self, width: int) -> None:
-        if width == self.width:
+    def resize(self, width: int, *, directory: Path | None = None) -> None:
+        directory = directory or self.sprite_directory
+        if width == self.width and directory == self.sprite_directory:
             return
         height = width * 3 // 2
-        replacement = SpriteSet(width, height)
+        replacement = SpriteSet(width, height, directory)
         previous = self.sprites
         self.x += self.width - width
         self.y += self.height - height
         self.width, self.height, self.sprites = width, height, replacement
+        self.sprite_directory = directory
         self.current_frame = None
         user32.SetWindowPos(
             self.hwnd, None, self.x, self.y, width, height,
@@ -1117,6 +1168,7 @@ class PetWindow:
         try:
             options = [(101 + index, LABELS[name]) for index, name in enumerate(EXPRESSIONS)]
             options += [
+                (601, "控制中心 / 添加 Agent"),
                 (201, "小号"), (202, "中号"), (203, "大号"),
                 (401, "动态：活泼明显"), (402, "动态：轻柔自然"), (403, "动态：关闭"),
                 (501, "让虹夏说句话"), (502, "演示：完成提醒"),
@@ -1143,10 +1195,13 @@ class PetWindow:
             user32.DestroyMenu(menu)
         if 101 <= command < 101 + len(EXPRESSIONS):
             self.set_state(EXPRESSIONS[command - 101])
+            self.save_control_preferences({"expression": self.state})
         elif 201 <= command <= 203:
             self.resize(WIDTHS[command - 201])
+            self.save_control_preferences({"width": self.width})
         elif 401 <= command <= 403:
             self.set_motion(("lively", "gentle", "off")[command - 401])
+            self.save_control_preferences({"motion": self.motion_mode})
         elif command == 501:
             self.say()
         elif command == 502:
@@ -1155,11 +1210,41 @@ class PetWindow:
             self.show_demo_notice(request_choice=True)
         elif command == 504:
             self.chat_enabled = not self.chat_enabled
+            self.save_control_preferences({"chat_enabled": self.chat_enabled})
             self.next_chat = time.monotonic() + random.uniform(110.0, 180.0)
             if not self.chat_enabled and self.bubble.notice and self.bubble.notice.kind == "chat":
                 self.bubble.hide()
+        elif command == 601:
+            self.open_control_panel()
         elif command == 301:
             user32.DestroyWindow(self.hwnd)
+
+    def open_control_panel(self) -> None:
+        user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
+        user32.FindWindowW.restype = wintypes.HWND
+        window = user32.FindWindowW(None, "虹夏桌宠 · 控制中心")
+        if window:
+            user32.ShowWindow(window, 9)
+            user32.SetForegroundWindow(window)
+            return
+        if getattr(sys, "frozen", False):
+            executable = Path(sys.executable).with_name("虹夏控制中心.exe")
+            command = [str(executable)]
+        else:
+            command = [sys.executable, str(Path(__file__).with_name("control_panel.py"))]
+        try:
+            subprocess.Popen(command, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        except OSError as error:
+            log_notice_event("control_panel_start_failed", repr(error))
+            self.say("控制中心未能启动，请检查是否已安装完整程序。")
+
+    def save_control_preferences(self, patch: dict) -> None:
+        if self.controls is None:
+            return
+        try:
+            self.controls.update_settings(patch)
+        except (OSError, sqlite3.Error) as error:
+            log_notice_event("control_settings_save_failed", repr(error))
 
     def _wnd_proc(self, hwnd: int, message: int, wparam: int, lparam: int) -> int:
         if message == WM_LBUTTONDOWN:
@@ -1247,7 +1332,7 @@ class PetWindow:
             raise ctypes.WinError(ctypes.get_last_error())
         self.hwnd = user32.CreateWindowExW(
             WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_APPWINDOW,
-            WINDOW_CLASS, "虹夏桌宠 · 好奇", WS_POPUP,
+            WINDOW_CLASS, f"虹夏桌宠 · {LABELS[self.state]}", WS_POPUP,
             self.x, self.y, self.width, self.height,
             None, None, module, None,
         )

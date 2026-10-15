@@ -16,6 +16,7 @@ FILES = (
     "dist/虹夏桌宠.exe",
     "dist/虹夏MCP-v2.exe",
     "dist/虹夏审批提醒.exe",
+    "dist/虹夏控制中心.exe",
     "integrations/codex/hooks.example.json",
     "integrations/codex/install-hooks.ps1",
     "assets/icons/nijika-shortcut.ico",

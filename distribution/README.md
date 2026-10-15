@@ -1,6 +1,6 @@
 # 虹夏桌宠 · Windows 私下试用包
 
-适用 Windows 10/11 x64。先把整个 ZIP 解压到普通文件夹；不要直接在 ZIP 预览窗口运行脚本。桌宠本体不需要管理员权限、Python 或联网；程序不会开放网络端口。
+适用 Windows 10/11 x64。先把整个 ZIP 解压到普通文件夹；不要直接在 ZIP 预览窗口运行脚本。桌宠本体不需要管理员权限、Python 或联网；控制中心使用 Microsoft Edge WebView2，并仅开放本机回环管理端口。无需账号登录。
 
 在解压文件夹打开 PowerShell，运行：
 
@@ -8,7 +8,7 @@
 powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1
 ```
 
-这会把桌宠、MCP 与可选审批提醒程序复制到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，在桌面创建“虹夏桌宠”快捷方式，并启动桌宠。以后双击快捷方式即可。桌宠运行时右键角色可切换动作、气泡或退出。想要开机启动，在安装命令末尾加 `-AutoStart`。
+这会把桌宠、MCP、可选审批提醒程序和控制中心复制到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，在桌面创建“虹夏桌宠”与“虹夏控制中心”快捷方式，并启动桌宠。双击控制中心可添加 Agent、导入皮肤、调整动作和配置投喂入口；右键角色也可打开控制中心。想要桌宠开机启动，在安装命令末尾加 `-AutoStart`。
 
 Agent 接入是可选的。完整配置、源码安装方式和验证步骤见包内 `AGENT_SETUP.md`。电脑上已安装相应客户端后，关闭正在运行的旧任务和桌宠，再按需要重跑安装脚本并附加参数：
 

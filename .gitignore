@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 build/
 dist/
+dist-next/
 diagnostics/
 /虹夏桌宠-项目文档与预览-*.zip
 /虹夏桌宠-Windows私下试用-*.zip
