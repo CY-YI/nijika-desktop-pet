@@ -26,6 +26,17 @@ Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 de
 
 看不到“接入步骤”时，在“Agent 接入”页对应伙伴卡片上点“接入步骤”，可随时重新查看该客户端的步骤与提示词。
 
+向导的“接入步骤”里同时列出这次配置用到的每个文件与绝对路径，可逐条复制或点“复制全部路径”。各客户端的文件位置如下（`<用户目录>` 为你的 Windows 用户目录，例如 `C:\Users\CY`）：
+
+| 客户端 | MCP 程序 | 客户端配置 | 主动提醒规则 | 技能（可选） |
+| --- | --- | --- | --- | --- |
+| Codex | `dist\虹夏MCP-v2.exe` | `<用户目录>\.codex\config.toml` | `<用户目录>\.codex\AGENTS.md` | `<用户目录>\.codex\skills\nijika-desktop-dialog\SKILL.md` |
+| Work | `dist\虹夏MCP-v2.exe` | 插件目录 `integrations\work\plugins\nijika-work-local\mcp.json` | `<用户目录>\.codex\AGENTS.md` | 插件内 `skills\nijika-work-dialog\SKILL.md` |
+| DSH | `dist\虹夏MCP-v2.exe` | `<用户目录>\.dsh\profiles\desktop\cordis.patch.yml` 与 `profiles\web\cordis.patch.yml` | `<用户目录>\.dsh\AGENTS.md` | `<用户目录>\.dsh\skills\nijika-dsh-dialog\SKILL.md` |
+| 其他 MCP 客户端 | `dist\虹夏MCP-v2.exe` | 向导导出的 `nijika-mcp.json` | 向导导出的 `nijika-agent-instructions.txt` | 按客户端规则自行导入 |
+
+`config.toml` 与 `cordis.patch.yml` 中写入的服务名分别为 `nijika-pet` 和 `mcp-nijika-pet`，`NIJIKA_AGENT_NAME` 决定气泡显示的来源名。路径由向导自动填入，不需要手抄；上述表格用于手动排查。
+
 向导不读取或要求填写模型密钥，不替用户信任 hook，不开放云端入口。以下命令说明保留，供高级配置和故障排查。
 
 虹夏的两个核心程序是：`虹夏桌宠.exe` 负责桌面显示，`虹夏MCP-v2.exe` 是 Agent 按需启动的 stdio MCP 服务；另附可选的 `虹夏审批提醒.exe` 用于 Codex 的命令审批事件。它们须在**同一台 Windows 10/11 x64 电脑、同一用户会话**中运行；只需手动启动桌宠，不要手动双击 MCP 或审批程序。MCP 不开放网络端口，普通云端聊天无法直接调用本机 EXE。

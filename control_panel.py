@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from agent_setup import AgentSetup, client_guide
+from agent_setup import AgentSetup, client_files, client_guide
 from companion_store import CompanionStore
 from control_store import ControlStore, IDENTIFIER, SPRITES
 from notification_store import NotificationStore
@@ -68,6 +68,8 @@ class ControlApplication:
             request_id = agent.get("test_request_id")
             agent["test"] = self.notice(request_id) if request_id else None
             agent["guide"] = client_guide(agent.get("client", "custom"))
+            agent["needed_files"] = client_files(agent.get("client", "custom"), self.setup.mcp,
+                                                 Path(agent.get("location", "")))
             # Backups are local recovery artifacts, not useful to every state poll.
             agent.pop("backups", None)
         return {"renderer": self.renderer(), "settings": self.store.settings(), "agents": agents,

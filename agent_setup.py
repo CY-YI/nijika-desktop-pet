@@ -75,6 +75,56 @@ def client_guide(client: str) -> dict:
     return GUIDES.get(client, GUIDES["custom"])
 
 
+def client_files(client: str, mcp: Path, directory: Path) -> list[dict]:
+    """List the concrete files each client needs, with absolute paths.
+
+    ``exists`` is measured on the current machine so the settings window can show
+    which pieces are already in place and which the user still has to create.
+    """
+    skill = directory / "skills" / "nijika-desktop-dialog" / "SKILL.md"
+    entries = [
+        {"label": "虹夏 MCP 程序（所有客户端共用）", "path": str(mcp), "kind": "程序", "required": True},
+    ]
+    if client == "codex":
+        entries += [
+            {"label": "Codex 配置（写入 MCP 服务）", "path": str(directory / "config.toml"), "kind": "配置", "required": True},
+            {"label": "Codex 主动提醒规则", "path": str(directory / "AGENTS.md"), "kind": "规则", "required": True},
+            {"label": "桌面交互技能", "path": str(skill), "kind": "技能", "required": False},
+        ]
+    elif client == "dsh":
+        entries += [
+            {"label": "DSH desktop 配置", "path": str(directory / "profiles" / "desktop" / "cordis.patch.yml"),
+             "kind": "配置", "required": True},
+            {"label": "DSH web 配置", "path": str(directory / "profiles" / "web" / "cordis.patch.yml"),
+             "kind": "配置", "required": True},
+            {"label": "DSH 主动提醒规则", "path": str(directory / "AGENTS.md"), "kind": "规则", "required": True},
+            {"label": "桌面交互技能", "path": str(directory / "skills" / "nijika-dsh-dialog" / "SKILL.md"),
+             "kind": "技能", "required": False},
+        ]
+    elif client == "work":
+        staging = directory / "integrations" / "work"
+        entries += [
+            {"label": "Work 插件市场清单", "path": str(staging / ".agents" / "plugins" / "marketplace.json"),
+             "kind": "插件", "required": True},
+            {"label": "Work 插件定义", "path": str(staging / "plugins" / "nijika-work-local" / "plugin.json"),
+             "kind": "插件", "required": True},
+            {"label": "Work MCP 启动配置", "path": str(staging / "plugins" / "nijika-work-local" / "mcp.json"),
+             "kind": "配置", "required": True},
+            {"label": "Work 主动提醒规则", "path": str(directory / "AGENTS.md"), "kind": "规则", "required": True},
+        ]
+    else:
+        entries += [
+            {"label": "标准 MCP 配置（需导入所选客户端）", "path": "由“导出配置”按钮下载的 nijika-mcp.json",
+             "kind": "配置", "required": True},
+            {"label": "主动提醒规则（一并导入客户端规则）", "path": "由向导下载的 nijika-agent-instructions.txt",
+             "kind": "规则", "required": True},
+        ]
+    for entry in entries:
+        target = Path(entry["path"])
+        entry["exists"] = target.is_file() if target.is_absolute() else False
+    return entries
+
+
 def marked_block(original: str, block: str, start: str, end: str) -> str:
     first, last = original.find(start), original.find(end)
     if (first >= 0) != (last >= 0) or (first >= 0 and last < first):
@@ -223,7 +273,7 @@ class AgentSetup:
                            "action": "更新并备份" if item["before"] is not None else "新建"} for item in files],
                 "external_action": bool(commands), "export": self.export(source_name),
                 "instructions": (self.root / "distribution/codex-global-instructions.txt").read_text(encoding="utf-8-sig"),
-                "guide": client_guide(client)}
+                "guide": client_guide(client), "needed_files": client_files(client, self.mcp, directory)}
 
     def apply(self, plan_id: str) -> dict:
         with self.lock:
@@ -275,5 +325,6 @@ class AgentSetup:
                     "test_request_id": None, "updated_at": int(time.time()), "backups": backups}
             self.store.save_agent(item)
             del self.plans[plan_id]
-            return {"agent": {**item, "guide": client_guide(plan["client"])},
+            return {"agent": {**item, "guide": client_guide(plan["client"]),
+                              "needed_files": client_files(plan["client"], self.mcp, Path(plan["location"]))},
                     "notes": plan["notes"], "backup_count": len(backups)}

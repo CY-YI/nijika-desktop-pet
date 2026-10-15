@@ -101,7 +101,7 @@ function openGuide(agent) {
   $("#wizard-success-title").textContent = "接入 " + agent.name + " · 照做步骤";
   $("#wizard-success-text").textContent = "按下面的顺序操作；示例提示词可以直接复制粘贴给 AI 客户端。";
   $("#success-notes").replaceChildren();
-  renderGuide(agent.guide);
+  renderGuide(agent.guide, agent.needed_files);
   renderWizard();
   $("#agent-dialog").showModal();
 }
@@ -260,15 +260,34 @@ function chooseClient(client) {
   $("#agent-location").value = state.clients.find(item => item.id === client)?.location || "";
   $("#advanced-location").hidden = client === "custom";
 }
-function renderGuide(guide) {
+function renderGuide(guide, neededFiles) {
   if (!guide) return;
   $("#guide-title").textContent = guide.title;
   const steps = $("#guide-steps"); steps.replaceChildren();
   for (const text of guide.steps) steps.append(node("li", "", text));
   $("#guide-prompt").textContent = guide.prompt;
   $("#guide-tip").textContent = guide.tip;
+  wizard.neededFiles = neededFiles || [];
+  renderNeededFiles(wizard.neededFiles);
 }
-async function copyText(text, control) {
+function renderNeededFiles(files) {
+  const list = $("#guide-files"); list.replaceChildren();
+  for (const file of files || []) {
+    const item = node("li");
+    const head = node("div","file-head");
+    head.append(node("span","file-kind " + (file.exists ? "ok" : "missing"), file.kind +
+      (file.required ? "" : " · 可选") + (file.exists ? " · 已有" : file.required ? " · 待写入" : "")));
+    head.append(node("span","file-label","",file.label));
+    item.append(head);
+    const path = node("div","file-path-row");
+    const code = node("code","file-path","",file.path);
+    path.append(code, button("复制","file-copy",() => copyText(file.path, null, "路径已复制")));
+    item.append(path);
+    list.append(item);
+  }
+  $("#guide-files").dataset.empty = files && files.length ? "" : "1";
+}
+async function copyText(text, control, message="提示词已复制，可直接粘贴给 AI 客户端。") {
   try {
     await navigator.clipboard.writeText(text);
   } catch (error) {
@@ -278,7 +297,7 @@ async function copyText(text, control) {
     document.execCommand("copy"); area.remove();
   }
   if (control) {const label = control.textContent; control.textContent = "已复制 ✓"; setTimeout(() => control.textContent = label, 1800);}
-  toast("提示词已复制，可直接粘贴给 AI 客户端。");
+  toast(message);
 }
 function renderWizard() {
   for (const step of [1,2,3]) $("#wizard-step-" + ["","one","two","three"][step]).hidden = wizard.step !== step;
@@ -306,6 +325,10 @@ function openWizard() {
 $$("[data-add-agent]").forEach(item => item.addEventListener("click",openWizard));
 $("#close-wizard").addEventListener("click",() => $("#agent-dialog").close());
 $("#copy-guide-prompt").addEventListener("click",() => copyText($("#guide-prompt").textContent,$("#copy-guide-prompt")));
+$("#copy-guide-files").addEventListener("click",() => {
+  const lines = (wizard.neededFiles || []).map(file => file.label + "\n" + file.path);
+  copyText(lines.join("\n\n"), $("#copy-guide-files"), "已复制全部文件路径。");
+});
 $("#agent-dialog").addEventListener("cancel",event => {if (wizard.busy) event.preventDefault();});
 $("#wizard-back").addEventListener("click",() => {
   if (wizard.step === 2) {wizard.step = 1; renderWizard();}
@@ -324,7 +347,7 @@ $("#agent-form").addEventListener("submit",async event => {
       if (!wizard.plan.files.length) $("#plan-files").append(node("li","field-help",wizard.client === "custom" ? "生成通用 MCP 配置，不修改客户端文件。" : "已有配置无需改动，将保存管理面板档案。"));
       $("#plan-notes").replaceChildren(...wizard.plan.notes.map(text => node("p","",text)));
       $("#plan-export").textContent = JSON.stringify(wizard.plan.export,null,2) + "\n\n" + wizard.plan.instructions;
-      renderGuide(wizard.plan.guide);
+      renderGuide(wizard.plan.guide, wizard.plan.needed_files);
       wizard.step = 2;
     } else if (wizard.step === 2) {
       const result = await api("/api/agents/apply",{plan_id:wizard.plan.plan_id}); wizard.agent = result.agent;
@@ -332,7 +355,7 @@ $("#agent-form").addEventListener("submit",async event => {
       $("#wizard-success-text").textContent = wizard.client === "custom" ? "下载 MCP 配置，并把触发说明加入客户端规则。" :
         "已保存配置；" + (result.backup_count ? result.backup_count + " 个原文件已备份。" : "原有配置均已保留。");
       $("#success-notes").replaceChildren(...result.notes.map(text => node("p","",text)));
-      renderGuide(wizard.plan.guide);
+      renderGuide(wizard.plan.guide, wizard.plan.needed_files);
       wizard.step = 3; await refresh();
     } else {
       if (wizard.guideOnly) {

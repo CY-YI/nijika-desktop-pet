@@ -203,6 +203,9 @@ class LocalAPITests(unittest.TestCase):
         result = self.call("/api/agents/apply", {"plan_id":plan["plan_id"]})
         self.assertEqual(result["agent"]["guide"]["title"], "接下来请照这 5 步做")
         self.assertIn("nijika-pet", result["agent"]["guide"]["prompt"])
+        files = result["agent"]["needed_files"]
+        self.assertTrue(any(str(ROOT / "dist/虹夏MCP-v2.exe") == item["path"] for item in files))
+        self.assertTrue(all("label" in item and "exists" in item for item in files))
         first = self.call("/api/agents/test", {"id":result["agent"]["id"]})
         second = self.call("/api/agents/test", {"id":result["agent"]["id"]})
         self.assertEqual(first["request_id"],second["request_id"])
@@ -213,6 +216,7 @@ class LocalAPITests(unittest.TestCase):
         agent = self.call("/api/state")["agents"][0]
         self.assertEqual(agent["guide"]["title"], "接下来请照这 5 步做")
         self.assertEqual(len(agent["guide"]["steps"]), 5)
+        self.assertTrue(len(agent["needed_files"]) >= 3)
         self.assertEqual(reply["status"],"answered")
         self.assertEqual(self.call("/api/state")["agents"][0]["status"],"exported")
 
