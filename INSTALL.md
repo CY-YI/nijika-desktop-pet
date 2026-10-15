@@ -1,6 +1,6 @@
 # 安装与运行
 
-2026-10-15：新增 `dist/虹夏控制中心.exe` 和桌宠右键“控制中心 / 添加 Agent”。成品控制中心使用系统 Microsoft Edge WebView2；本机已实测独立窗口启动。其他电脑若缺少该运行时，请从 [Microsoft 官方页面](https://developer.microsoft.com/microsoft-edge/webview2/)安装，或使用 `虹夏控制中心.exe --browser` 在浏览器打开同一管理面板。两种方式都仅绑定本机回环地址，窗口版关闭后停止其服务。
+2026-10-15：设置中心与桌宠合并为同一个 `dist/虹夏桌宠.exe`。右键角色选择“设置中心 / 添加 Agent”，或双击桌面的“虹夏桌宠设置”快捷方式（等价于 `虹夏桌宠.exe --control-panel`），即可打开设置窗口。设置窗口使用系统 Microsoft Edge WebView2；其他电脑若缺少该运行时，请从 [Microsoft 官方页面](https://developer.microsoft.com/microsoft-edge/webview2/)安装，或用 `虹夏桌宠.exe --control-panel --browser` 在浏览器打开同一管理面板。所有方式都仅绑定本机回环地址，窗口关闭后停止其服务。
 
 控制中心首页点击“添加 Agent”，选择 Codex、ChatGPT 本机 Work 或 DSH，确认自动检测的位置和计划改动后应用。已有文件会保留备份，其他客户端条目不会被清空；通用 MCP 客户端可下载配置与触发说明。面板不收集模型 API 密钥，不会替用户信任审批 hook。具体范围见 `AGENT_SETUP.md`。
 
@@ -32,7 +32,7 @@ python -m venv .venv
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-输出在 `dist/虹夏桌宠.exe`、`dist/虹夏MCP-v2.exe`、`dist/虹夏审批提醒.exe` 和 `dist/虹夏控制中心.exe`。第三个程序供可选的 Codex 命令审批提醒使用，安装与审阅步骤见 `AGENT_SETUP.md`。当前电脑已配置 Codex；其他电脑也可使用控制中心向导，或在项目根目录运行：
+输出在 `dist/虹夏桌宠.exe`（桌宠与设置中心）、`dist/虹夏MCP-v2.exe` 和 `dist/虹夏审批提醒.exe`。第三个程序供可选的 Codex 命令审批提醒使用，安装与审阅步骤见 `AGENT_SETUP.md`。当前电脑已配置 Codex；其他电脑也可使用设置中心向导，或在项目根目录运行：
 
 ```powershell
 $mcpExe = (Resolve-Path -LiteralPath 'dist\虹夏MCP-v2.exe').Path

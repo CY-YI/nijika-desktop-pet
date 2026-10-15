@@ -8,7 +8,7 @@
 powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1
 ```
 
-这会把桌宠、MCP、可选审批提醒程序和控制中心复制到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，在桌面创建“虹夏桌宠”与“虹夏控制中心”快捷方式，并启动桌宠。双击控制中心可添加 Agent、导入皮肤、调整动作和配置投喂入口；右键角色也可打开控制中心。想要桌宠开机启动，在安装命令末尾加 `-AutoStart`。
+这会把桌宠（含设置中心）、MCP 和可选审批提醒程序复制到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，在桌面创建“虹夏桌宠”与“虹夏桌宠设置”快捷方式，并启动桌宠。双击“虹夏桌宠设置”可添加 Agent、导入皮肤、调整动作和配置投喂入口；右键角色同样可以打开设置中心。想要桌宠开机启动，在安装命令末尾加 `-AutoStart`。
 
 Agent 接入是可选的。完整配置、源码安装方式和验证步骤见包内 `AGENT_SETUP.md`。电脑上已安装相应客户端后，关闭正在运行的旧任务和桌宠，再按需要重跑安装脚本并附加参数：
 

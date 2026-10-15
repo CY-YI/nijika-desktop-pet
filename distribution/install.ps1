@@ -20,7 +20,7 @@ if ($targetRoot.Equals($sourceRoot, [StringComparison]::OrdinalIgnoreCase) -or
 }
 if (-not [Environment]::Is64BitOperatingSystem) { throw 'Windows x64 is required.' }
 
-foreach ($relative in @('dist\虹夏桌宠.exe', 'dist\虹夏MCP-v2.exe', 'dist\虹夏审批提醒.exe', 'dist\虹夏控制中心.exe',
+foreach ($relative in @('dist\虹夏桌宠.exe', 'dist\虹夏MCP-v2.exe', 'dist\虹夏审批提醒.exe',
         'assets\icons\nijika-shortcut.ico', 'skills\nijika-desktop-dialog\SKILL.md',
         'plugins\nijika-work-local\mcp.json', 'integrations\dsh\install.ps1')) {
     if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot $relative) -PathType Leaf)) {
@@ -61,8 +61,9 @@ if (-not $NoShortcuts) {
     $shortcut.WorkingDirectory = Split-Path -Parent $petExe
     $shortcut.IconLocation = $icon
     $shortcut.Save()
-    $controlShortcut = $shell.CreateShortcut((Join-Path $desktop '虹夏控制中心.lnk'))
-    $controlShortcut.TargetPath = Join-Path $targetRoot 'dist\虹夏控制中心.exe'
+    $controlShortcut = $shell.CreateShortcut((Join-Path $desktop '虹夏桌宠设置.lnk'))
+    $controlShortcut.TargetPath = $petExe
+    $controlShortcut.Arguments = '--control-panel'
     $controlShortcut.WorkingDirectory = Split-Path -Parent $petExe
     $controlShortcut.IconLocation = $icon
     $controlShortcut.Save()

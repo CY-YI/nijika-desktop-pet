@@ -1168,7 +1168,7 @@ class PetWindow:
         try:
             options = [(101 + index, LABELS[name]) for index, name in enumerate(EXPRESSIONS)]
             options += [
-                (601, "控制中心 / 添加 Agent"),
+                (601, "设置中心 / 添加 Agent"),
                 (201, "小号"), (202, "中号"), (203, "大号"),
                 (401, "动态：活泼明显"), (402, "动态：轻柔自然"), (403, "动态：关闭"),
                 (501, "让虹夏说句话"), (502, "演示：完成提醒"),
@@ -1222,16 +1222,15 @@ class PetWindow:
     def open_control_panel(self) -> None:
         user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
         user32.FindWindowW.restype = wintypes.HWND
-        window = user32.FindWindowW(None, "虹夏桌宠 · 控制中心")
+        window = user32.FindWindowW(None, "虹夏桌宠 · 设置中心")
         if window:
             user32.ShowWindow(window, 9)
             user32.SetForegroundWindow(window)
             return
         if getattr(sys, "frozen", False):
-            executable = Path(sys.executable).with_name("虹夏控制中心.exe")
-            command = [str(executable)]
+            command = [str(Path(sys.executable)), "--control-panel"]
         else:
-            command = [sys.executable, str(Path(__file__).with_name("control_panel.py"))]
+            command = [sys.executable, str(Path(__file__).resolve()), "--control-panel"]
         try:
             subprocess.Popen(command, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         except OSError as error:
@@ -1366,10 +1365,16 @@ class PetWindow:
 def main() -> None:
     parser = argparse.ArgumentParser(description="虹夏桌宠")
     parser.add_argument("--self-test", action="store_true", help="check bundled sprite assets")
+    parser.add_argument("--control-panel", action="store_true",
+                        help="run the settings window instead of the desktop companion")
     parser.add_argument("--demo-seconds", type=int, default=0, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.self_test:
         print(sprite_metrics())
+        return
+    if args.control_panel:
+        from control_panel import run_panel
+        run_panel([])
         return
     try:
         user32.SetProcessDpiAwarenessContext.argtypes = [ctypes.c_void_p]

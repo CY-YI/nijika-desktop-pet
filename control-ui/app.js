@@ -168,7 +168,7 @@ async function refresh(force=false) {
       state.renderer.applied_revision >= state.settings.revision ? "已同步到桌面上的虹夏" : "已保存，等待桌宠应用…";
     $("#connection-error").hidden = true;
   } catch (error) {
-    $("#connection-error").textContent = "无法连接控制中心：" + error.message;
+    $("#connection-error").textContent = "无法连接设置中心：" + error.message;
     $("#connection-error").hidden = false;
   }
 }

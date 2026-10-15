@@ -21,6 +21,9 @@ from control_store import ControlStore, IDENTIFIER, SPRITES
 from notification_store import NotificationStore
 
 
+WINDOW_TITLE = "虹夏桌宠 · 设置中心"
+
+
 def resource_root() -> Path:
     return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 
@@ -94,10 +97,10 @@ class ControlApplication:
         if route == "/api/pet/start":
             if self.renderer()["online"]:
                 return {"started": False, "message": "虹夏已经在桌面运行。"}
-            executable = self.root / "dist" / "虹夏桌宠.exe"
+            executable = Path(sys.executable) if getattr(sys, "frozen", False) else self.root / "dist" / "虹夏桌宠.exe"
             if not executable.is_file():
                 raise ValueError("找不到桌宠 EXE，请先构建或安装完整程序。")
-            subprocess.Popen([str(executable)], cwd=executable.parent,
+            subprocess.Popen([str(executable)], cwd=Path(executable).parent,
                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             return {"started": True, "message": "已启动，正在等待桌宠心跳。"}
         raise ValueError("不支持的操作。")
@@ -219,21 +222,29 @@ class ControlHandler(BaseHTTPRequestHandler):
             self.send_json({"error": "本机文件或数据暂时不可用，请检查目录权限与客户端状态后重试。"}, 503)
 
 
-def main():
+def run_panel(argv: list[str] | None = None) -> None:
+    """Start the local management service and its WebView2 window.
+
+    Called both by this module's ``main`` and by ``pet.py --control-panel`` so the
+    desktop companion and its settings live in a single executable.
+    """
     parser = argparse.ArgumentParser(description="虹夏桌宠 · 设置与 Agent 接入")
     parser.add_argument("--browser", action="store_true", help="在浏览器打开面板")
     parser.add_argument("--serve-only", action="store_true", help="仅启动本机服务，供开发和隔离验证")
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--agent-home", type=Path, help="隔离测试用的客户端用户目录")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     app = ControlApplication(home=args.agent_home)
     server = ControlServer(app, args.port)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     status = app.store.root / "panel-status.json"
     status.write_text(json.dumps({"pid": os.getpid(), "url": server.origin}, ensure_ascii=False), encoding="utf-8")
-    if sys.stdout:
-        print(server.origin, flush=True)
+    try:
+        if sys.stdout:
+            print(server.origin, flush=True)
+    except (OSError, ValueError):
+        pass
     try:
         if args.serve_only:
             thread.join()
@@ -242,7 +253,7 @@ def main():
             thread.join()
         else:
             import webview
-            webview.create_window("虹夏桌宠 · 控制中心", server.origin, width=1220, height=820, min_size=(950, 680))
+            webview.create_window(WINDOW_TITLE, server.origin, width=1220, height=820, min_size=(950, 680))
             webview.start(gui="edgechromium", debug=False, private_mode=True)
     except KeyboardInterrupt:
         pass
@@ -254,6 +265,10 @@ def main():
                 status.unlink()
         except (OSError, ValueError):
             pass
+
+
+def main():
+    run_panel()
 
 
 if __name__ == "__main__":
