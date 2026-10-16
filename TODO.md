@@ -8,8 +8,9 @@
 - [x] `control-ui/styles.css` 新增 `.creator-card` 等样式与窄屏单列适配。
 - [x] 与 `control_store.py` 实际校验逐条核对：PNG 必须 RGBA 且含全透明像素、四角透明、`0.62 ≤ w/h ≤ 0.72`、最小边 ≥32、≤800 万像素、≤32 MB；ZIP 只允许九张指定 PNG 与可选 `manifest.json`（≤4096B）、≤10 条目、解压 ≤64 MB、九张同尺寸。
 - [x] 验证：`node --check control-ui/app.js` 通过；隔离服务 HTTP 实测新卡片、两个复制按钮与提示词注入均存在；87 个 JS 引用元素 ID 全部存在于 HTML；39 项回归通过。
-- [ ] 待办：正式设置窗口读取安装版 EXE 内嵌界面，需重建并重装后才可见本次新卡片；重建后重启桌宠复验。
-- 边界：本轮浏览器内核在本机无法启动（`windows sandbox failed: helper_unknown_error`），未做像素级视觉复验，仅完成 HTTP 级与静态一致性校验。
+- [x] 重建 `dist\虹夏桌宠.exe` 并替换安装版；从 PyInstaller 归档提取确认三份 control-ui 资源均含新卡片；重启桌宠与设置窗口，对运行中的设置服务用系统 Edge 无头模式真实渲染“角色衣橱”页，确认卡片、两块格式标注与提示词框排版正常。
+- [x] 更新 2026-10-17 试用包与文档分享包；试用包内 EXE 哈希与仓库一致，分支已推送。
+- 边界：cua 内置浏览器内核在本机无法启动（`windows sandbox failed: helper_unknown_error`），改用系统 Edge 无头渲染补验；桌面点击结果由用户本人决定。
 
 ## 当前任务：验证前端设置 UI 与各 Agent 接入步骤（2026-10-17）
 
