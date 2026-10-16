@@ -9,6 +9,7 @@
 | `GET /api/state` | 无 | 桌宠心跳摘要、已登记 Agent、设置、皮肤及投喂展示配置；不含现有客户端的密钥 |
 | `POST /api/agents/plan` | 客户端、显示名、可选配置根目录 | 检测结果、计划 ID、具体文件与操作，尚不写配置 |
 | `POST /api/agents/apply` | 计划 ID | 复核旧内容、备份后应用；返回已配置/需重启等实际状态 |
+| `POST /api/agents/prepare` | 已登记档案 `id` | 补生成或更新专属接入文件，返回带完整自动配置提示词及真实文件路径的 `agent`；不修改外部客户端配置 |
 | `POST /api/agents/test` | 档案 ID | 发带该来源名的本机测试通知；返回请求 ID，明确此步骤不证明外部 Agent 已调用 MCP |
 | `GET /api/notices/{id}` | 请求 ID | 队列回执及当前渲染心跳是否正在显示此 ID |
 | `POST /api/agents/remove` | 档案 ID | 移除管理面板档案；不擅自删除外部客户端配置 |
@@ -20,7 +21,7 @@
 | `POST /api/reminders` | `enabled`、`sedentary_minutes`、`water_minutes`、`eye_minutes`（5–240）；或单独 `pause_minutes`（0–480） | 保存健康提醒配置或写入/取消免打扰，返回当前状态；改间隔会重置对应的起始时间 |
 | `POST /api/notes` | `action` = add/toggle/remove，add 附 `text`，toggle/remove 附 `id` | 新增或更新当天便签；每天最多 20 条、每条约 1–120 字；打勾只在首次完成时加好感度 |
 
-Agent 配置预览具有有效期；文件在预览后发生变化时拒绝覆盖并要求重新检测。新增字段与最终路由以实现和测试为准，未实现项不能记为已交付。
+Agent 配置预览具有有效期；文件在预览后发生变化时拒绝覆盖并要求重新检测。`plan`、`apply` 的档案及 `state.agents[]` 包含 `guide`、`needed_files`、`bundle_directory`、`bundle_ready`；`guide.prompt` 为自包含安装提示词，`needed_files[].exists` 由实际文件检查得到。GET 状态只读；新档案在 apply、旧档案在明确调用 prepare 后生成接入文件。文件保留供后续接入，移除档案不清除外部配置或这些文件。新增字段与最终路由以实现和测试为准，未实现项不能记为已交付。
 
 决策选项可为其中一项设置 recommended: true，并在简介中说明推荐理由。pending 只表示消息已进入本机队列，不能证明气泡可见；等待时复用原 request_id，避免重复问题。Agent 收到 answered 后应在原聊天中确认所选项，再继续任务。桌宠只保存点击结果，不会自行向 Codex 聊天发送一条新的用户消息。
 

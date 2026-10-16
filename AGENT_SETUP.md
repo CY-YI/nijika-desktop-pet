@@ -1,14 +1,29 @@
 # 接入 Agent：Codex、ChatGPT Work、DSH 与其他本机客户端
 
-## 优先使用控制中心（2026-10-15）
+## 优先使用设置中心（2026-10-16）
 
 双击桌面的“虹夏桌宠设置”，或右键已更新的桌宠选择“设置中心 / 添加 Agent”（等价于 `虹夏桌宠.exe --control-panel`）。选择客户端、给伙伴命名，常用配置路径会自动填入；仅使用其他用户目录时展开高级位置。点击“检测并继续”，核对具体文件、备份和保留行为，再选择“应用并添加”。已有 Codex `nijika-pet` 服务会保留；同名服务路径失效或存在冲突时停止并提示，不盲目覆盖。
 
-Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 desktop/web 配置与专用技能；Work 向导在用户数据目录准备本机插件，再调用 Codex CLI 注册与安装。Work 当前仍需 PATH 中可用的 `codex` 和 `python.exe`，仅限能运行本机程序的 Work。其他兼容客户端选择“其他 MCP 客户端”，下载标准 stdio 配置和触发说明后导入。
+Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 desktop/web 配置与专用技能；Work 向导在用户数据目录准备本机插件，再调用 Codex CLI 注册与安装。Work 当前仍需 PATH 中可用的 `codex` 和 `python.exe`，仅限能运行本机程序的 Work。
+
+**其他客户端的最短接入流程**：选择“其他 MCP 客户端”并命名 → “检测并继续” → “生成并保存接入文件” → “复制自动配置提示词”，直接发给同一电脑上有文件读写、执行能力的 AI。它会识别自身客户端，核实配置位置，备份、合并 MCP 与持久提醒规则，再验证。无需手动下载 JSON 或逐项填写字段；卡片的“下载配置副本”仅供高级用途。
+
+每个伙伴都有固定的本机接入目录，界面显示实际绝对路径，默认位于 `%USERPROFILE%\.nijika-desktop-pet\integrations\agents\<档案ID>\`（自定义消息库时跟随其目录）。目录内自动保存：
+
+| 文件 | 用途 |
+| --- | --- |
+| `nijika-mcp.json` | 含本机 MCP 程序完整路径及来源名称的标准 stdio 配置 |
+| `nijika-agent-instructions.txt` | 任务完成、选择题、推荐选项与等待回执的持久提醒规则 |
+| `nijika-setup-prompt.txt` | 与“复制自动配置提示词”完全相同的完整安装提示词 |
+| `SKILL.md` | 对应客户端的桌宠交互技能，按客户端能力安装 |
+
+提示词自身也附完整 JSON、规则、上述文件路径及客户端已知目标路径；不依赖接收方先手动寻找文件。已添加的旧伙伴点击“接入步骤”时会补生成这些文件；仅刷新页面不写入文件。接入目录保留用于后续核对和重新接入，移除伙伴档案不删除它或外部客户端配置。文件不包含模型密钥，不进入 Git 或分享包。
+
+**能力边界**：普通云端聊天不能修改本机文件；未知客户端的目标配置路径必须由接收 AI 检测，无法唯一识别时只询问客户端名称或配置作用域。客户端若必须重载或本人确认权限，仍需完成这一必要步骤；提示词要求如实报告“配置已写入，待新会话验证”，不虚报全部完成。
 
 配置成功后按说明重启客户端或新建任务。面板“测试提醒”由面板直接发送，点击结果会显示“本机测试已点击”，证明桌宠显示与队列回传可用；这不等于外部 Agent 已发现工具或会主动调用。还需在客户端新任务让 Agent 发出一次选择题。普通通知的状态与命令审批 hook 的本人信任分别处理。移除面板档案不删除客户端原配置。
 
-向导第三步会直接列出该客户端的截图式操作步骤，并给出一段可点击“复制提示词”的示例。各客户端的验证提示词如下，可直接粘贴给对应 AI；这只用于第一次确认链路，配置正确后正常任务会自动按触发规则调用，不需要每次重复。
+向导第三步和已有卡片的“接入步骤”均提供上述完整自动配置提示词。以下短提示词仅供**已完成配置、工具已经可见**时单独验证；首次接入请优先复制界面中的完整提示词。
 
 **Codex 与 DSH 通用验证提示词**（把客户端的虹夏工具已经可见作为前提）：
 
@@ -31,9 +46,9 @@ Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 de
 | 客户端 | MCP 程序 | 客户端配置 | 主动提醒规则 | 技能（可选） |
 | --- | --- | --- | --- | --- |
 | Codex | `dist\虹夏MCP-v2.exe` | `<用户目录>\.codex\config.toml` | `<用户目录>\.codex\AGENTS.md` | `<用户目录>\.codex\skills\nijika-desktop-dialog\SKILL.md` |
-| Work | `dist\虹夏MCP-v2.exe` | 插件目录 `integrations\work\plugins\nijika-work-local\mcp.json` | `<用户目录>\.codex\AGENTS.md` | 插件内 `skills\nijika-work-dialog\SKILL.md` |
+| Work | `dist\虹夏MCP-v2.exe` | `<用户目录>\.nijika-desktop-pet\integrations\work\plugins\nijika-work-local\mcp.json`（另有插件清单） | 插件技能内的规则 | 插件内 `skills\nijika-work-dialog\SKILL.md` |
 | DSH | `dist\虹夏MCP-v2.exe` | `<用户目录>\.dsh\profiles\desktop\cordis.patch.yml` 与 `profiles\web\cordis.patch.yml` | `<用户目录>\.dsh\AGENTS.md` | `<用户目录>\.dsh\skills\nijika-dsh-dialog\SKILL.md` |
-| 其他 MCP 客户端 | `dist\虹夏MCP-v2.exe` | 向导导出的 `nijika-mcp.json` | 向导导出的 `nijika-agent-instructions.txt` | 按客户端规则自行导入 |
+| 其他 MCP 客户端 | `dist\虹夏MCP-v2.exe` | 专属接入目录的 `nijika-mcp.json`；实际客户端目标由接收 AI 核实 | 同目录的 `nijika-agent-instructions.txt` | 同目录的 `SKILL.md`，由接收 AI 按客户端规则安装 |
 
 `config.toml` 与 `cordis.patch.yml` 中写入的服务名分别为 `nijika-pet` 和 `mcp-nijika-pet`，`NIJIKA_AGENT_NAME` 决定气泡显示的来源名。路径由向导自动填入，不需要手抄；上述表格用于手动排查。
 
@@ -66,7 +81,7 @@ powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1 -Dsh -NoLaun
 
 ## 从 Git 源码构建
 
-先按 [INSTALL.md](INSTALL.md) 安装 Python 依赖并运行 `build.ps1`，确认 `dist/` 中生成四个 EXE。桌宠仍需单独启动。
+先按 [INSTALL.md](INSTALL.md) 安装 Python 依赖并运行 `build.ps1`，确认 `dist/` 中生成三个 EXE（桌宠与设置共用一个）。桌宠仍需单独启动。
 
 ### Codex
 

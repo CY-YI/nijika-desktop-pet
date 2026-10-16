@@ -2,7 +2,7 @@
 
 2026-10-15：设置中心与桌宠合并为同一个 `dist/虹夏桌宠.exe`。右键角色选择“设置中心 / 添加 Agent”，或双击桌面的“虹夏桌宠设置”快捷方式（等价于 `虹夏桌宠.exe --control-panel`），即可打开设置窗口。设置窗口使用系统 Microsoft Edge WebView2；其他电脑若缺少该运行时，请从 [Microsoft 官方页面](https://developer.microsoft.com/microsoft-edge/webview2/)安装，或用 `虹夏桌宠.exe --control-panel --browser` 在浏览器打开同一管理面板。所有方式都仅绑定本机回环地址，窗口关闭后停止其服务。
 
-控制中心首页点击“添加 Agent”，选择 Codex、ChatGPT 本机 Work 或 DSH，确认自动检测的位置和计划改动后应用。已有文件会保留备份，其他客户端条目不会被清空；通用 MCP 客户端可下载配置与触发说明。面板不收集模型 API 密钥，不会替用户信任审批 hook。具体范围见 `AGENT_SETUP.md`。
+控制中心首页点击“添加 Agent”，选择 Codex、ChatGPT 本机 Work 或 DSH，确认自动检测的位置和计划改动后应用。已有文件会保留备份，其他客户端条目不会被清空。其他客户端选择“其他 MCP 客户端”并生成接入文件，再“复制自动配置提示词”给能操作本机文件的 AI；提示词含完整路径、JSON 与持久提醒规则，无需手动下载或填字段。文件默认保存至 `%USERPROFILE%\.nijika-desktop-pet\integrations\agents\<档案ID>\`，准确位置在“接入步骤”显示。重载及本人权限确认如有必要仍须完成。面板不收集模型 API 密钥，不会替用户信任审批 hook。具体范围见 `AGENT_SETUP.md`。
 
 动作、大小、常驻表情、闲聊开关与所选皮肤保存在同一用户消息库的独立设置表；导入皮肤放在消息库旁的 `skins/`，投喂图片放在 `support/`。默认目录仍为 `%USERPROFILE%\.nijika-desktop-pet`。新表不改变已有通知表协议；旧 Agent 会话继续通过同一队列通信。收款图与真实设置不进入 Git 或试用包。
 

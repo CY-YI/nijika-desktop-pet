@@ -149,6 +149,25 @@ class AgentSetupTests(unittest.TestCase):
         result = self.setup.apply(plan["plan_id"])
         self.assertEqual(result["agent"]["status"], "exported")
         self.assertFalse((self.home / ".dsh").exists())
+        bundle = Path(result["agent"]["bundle_directory"])
+        self.assertTrue(bundle.is_absolute())
+        self.assertTrue(result["agent"]["bundle_ready"])
+        config = json.loads((bundle / "nijika-mcp.json").read_text(encoding="utf-8"))
+        self.assertEqual(config, plan["export"])
+        prompt = (bundle / "nijika-setup-prompt.txt").read_text(encoding="utf-8")
+        self.assertEqual(prompt, result["agent"]["guide"]["prompt"])
+        self.assertIn(str(bundle / "nijika-mcp.json"), prompt)
+        self.assertIn(str(self.setup.mcp), prompt)
+        self.assertIn('"NIJIKA_AGENT_NAME": "自定义助手"', prompt)
+        self.assertIn("修改前备份", prompt)
+        self.assertIn("目标路径未知", prompt)
+        self.assertNotIn("用“下载 MCP 配置”", prompt)
+        for item in result["agent"]["needed_files"]:
+            self.assertTrue(Path(item["path"]).is_absolute())
+            self.assertTrue(item["exists"])
+        times = {path.name: path.stat().st_mtime_ns for path in bundle.iterdir()}
+        self.setup.prepare_files(result["agent"])
+        self.assertEqual(times, {path.name: path.stat().st_mtime_ns for path in bundle.iterdir()})
 
     def test_work_uses_private_staging_and_isolated_cli_home(self):
         with patch("agent_setup.shutil.which", return_value="codex.exe"):
@@ -166,6 +185,9 @@ class AgentSetupTests(unittest.TestCase):
         server = content["mcpServers"]["nijika-work-pet"]
         self.assertEqual(server["args"][-1], str(self.setup.mcp))
         self.assertEqual(server["env"]["NIJIKA_AGENT_NAME"], "Work 助手")
+        work_files = result["agent"]["needed_files"]
+        self.assertTrue(any(item["path"] == str(manifest) and item["exists"] for item in work_files))
+        self.assertFalse(any(item["path"].endswith("AGENTS.md") for item in work_files))
 
 
 class LocalAPITests(unittest.TestCase):
@@ -201,7 +223,7 @@ class LocalAPITests(unittest.TestCase):
     def test_same_pending_test_reused_click_readback_is_not_external_agent_verification(self):
         plan = self.call("/api/agents/plan", {"client":"custom","name":"本机测试"})
         result = self.call("/api/agents/apply", {"plan_id":plan["plan_id"]})
-        self.assertEqual(result["agent"]["guide"]["title"], "接下来请照这 5 步做")
+        self.assertEqual(result["agent"]["guide"]["title"], "复制给 AI，自动完成配置")
         self.assertIn("nijika-pet", result["agent"]["guide"]["prompt"])
         files = result["agent"]["needed_files"]
         self.assertTrue(any(str(ROOT / "dist/虹夏MCP-v2.exe") == item["path"] for item in files))
@@ -214,11 +236,30 @@ class LocalAPITests(unittest.TestCase):
         reply = self.call("/api/notices/" + first["request_id"])
         self.assertEqual(reply["choice"],"收到测试")
         agent = self.call("/api/state")["agents"][0]
-        self.assertEqual(agent["guide"]["title"], "接下来请照这 5 步做")
-        self.assertEqual(len(agent["guide"]["steps"]), 5)
+        self.assertEqual(agent["guide"]["title"], "复制给 AI，自动完成配置")
+        self.assertEqual(len(agent["guide"]["steps"]), 3)
         self.assertTrue(len(agent["needed_files"]) >= 3)
         self.assertEqual(reply["status"],"answered")
         self.assertEqual(self.call("/api/state")["agents"][0]["status"],"exported")
+
+    def test_old_agent_preparation_saves_real_paths_without_writes_on_state_read(self):
+        agent = {"id": "a" * 32, "client": "custom", "name": "旧伙伴", "source_name": "旧伙伴",
+                 "location": str(self.app.setup.home), "status": "exported", "test_request_id": None}
+        self.app.store.save_agent(agent)
+        state = self.call("/api/state")
+        old = state["agents"][0]
+        self.assertFalse(old["bundle_ready"])
+        self.assertFalse(Path(old["bundle_directory"]).exists())
+        with self.assertRaises(HTTPError) as denied:
+            self.call("/api/agents/prepare", {"id": agent["id"]}, token=False)
+        self.assertEqual(denied.exception.code, 403)
+        ready = self.call("/api/agents/prepare", {"id": agent["id"]})["agent"]
+        self.assertTrue(ready["bundle_ready"])
+        self.assertTrue(all(item["exists"] for item in ready["needed_files"]))
+        self.assertTrue(self.call("/api/state")["agents"][0]["bundle_ready"])
+        with self.assertRaises(HTTPError) as missing:
+            self.call("/api/agents/prepare", {"id": "unknown"})
+        self.assertEqual(missing.exception.code, 400)
 
     def test_focus_reminder_and_note_endpoints_drive_the_companion_snapshot(self):
         started = self.call("/api/focus",{"action":"start"})

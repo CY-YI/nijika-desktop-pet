@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from agent_setup import AgentSetup, client_files, client_guide
+from agent_setup import AgentSetup
 from companion_store import CompanionStore
 from control_store import ControlStore, IDENTIFIER, SPRITES
 from notification_store import NotificationStore
@@ -67,9 +67,7 @@ class ControlApplication:
         for agent in agents:
             request_id = agent.get("test_request_id")
             agent["test"] = self.notice(request_id) if request_id else None
-            agent["guide"] = client_guide(agent.get("client", "custom"))
-            agent["needed_files"] = client_files(agent.get("client", "custom"), self.setup.mcp,
-                                                 Path(agent.get("location", "")))
+            agent.update(self.setup.describe(agent))
             # Backups are local recovery artifacts, not useful to every state poll.
             agent.pop("backups", None)
         return {"renderer": self.renderer(), "settings": self.store.settings(), "agents": agents,
@@ -81,6 +79,11 @@ class ControlApplication:
             return self.setup.plan(data.get("client"), data.get("name"), data.get("location", ""))
         if route == "/api/agents/apply":
             return self.setup.apply(data.get("plan_id", ""))
+        if route == "/api/agents/prepare":
+            agent = self.store.agent(data.get("id", ""))
+            if not agent:
+                raise ValueError("请先添加这个 Agent。")
+            return {"agent": {**agent, **self.setup.prepare_files(agent)}}
         if route == "/api/agents/remove":
             self.store.remove_agent(data.get("id", ""))
             return {"removed": True, "message": "已移除面板档案，客户端配置保持不变。"}

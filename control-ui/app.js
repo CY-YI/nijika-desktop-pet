@@ -63,7 +63,7 @@ $$(".nav-item").forEach(item => item.addEventListener("click", () => gotoPage(it
 $(".brand").addEventListener("click", () => gotoPage("agents"));
 
 function testLabel(agent) {
-  if (!agent.test) return agent.status === "exported" ? "待客户端导入" : "已配置 · 待实测";
+  if (!agent.test) return agent.status === "exported" ? "接入资料就绪" : "已配置 · 待实测";
   if (agent.test.status === "answered") return "本机测试已点击";
   if (agent.test.visible) return "测试正在显示";
   return {pending:"测试已排队",dismissed:"测试已关闭",expired:"测试已过期",not_found:"测试待重试"}[agent.test.status] || "等待测试";
@@ -81,14 +81,14 @@ function renderAgents() {
     const title = node("div"); title.append(node("h3","",agent.name),node("small","",clientNames[agent.client]));
     heading.append(title,node("span","agent-status" + (agent.test?.status === "answered" ? " verified" : ""),testLabel(agent)));
     card.append(heading);
-    const description = agent.status === "exported" ? "配置已生成，请在客户端导入，并加入主动提醒规则。" :
+    const description = agent.status === "exported" ? "复制自动配置提示词给能操作本机的 AI，由它完成接入；文件保存在固定目录。" :
       agent.test?.status === "answered" ? "桌面显示与点击回传已验证。请在客户端新任务中确认 Agent 主动调用。" :
       "准备好后，先发一条桌面测试提醒；客户端需重启或新建任务后验证。";
     card.append(node("p","",description));
     const actions = node("div","agent-actions");
     const test = button(agent.test?.status === "pending" ? "等待桌面点击" : "测试提醒","button secondary", () => guarded(() => testAgent(agent.id),test));
-    const guideButton = button("接入步骤","button secondary", () => openGuide(agent));
-    const exportButton = button("导出配置","button secondary", () => guarded(() => exportAgent(agent.id),exportButton));
+    const guideButton = button("接入步骤","button secondary", () => guarded(() => openGuide(agent),guideButton));
+    const exportButton = button("下载配置副本","button secondary", () => guarded(() => exportAgent(agent.id),exportButton));
     const remove = button("移除档案","remove-agent", () => guarded(async () => {
       await api("/api/agents/remove",{id:agent.id}); await refresh();
       toast("已移除面板档案，客户端配置保持不变。");
@@ -96,12 +96,13 @@ function renderAgents() {
     actions.append(test,guideButton,exportButton,remove); card.append(actions); list.append(card);
   }
 }
-function openGuide(agent) {
+async function openGuide(agent) {
+  agent = (await api("/api/agents/prepare",{id:agent.id})).agent;
   wizard = {step:3,client:agent.client,plan:{guide:agent.guide},agent,busy:false,guideOnly:true};
-  $("#wizard-success-title").textContent = "接入 " + agent.name + " · 照做步骤";
-  $("#wizard-success-text").textContent = "按下面的顺序操作；示例提示词可以直接复制粘贴给 AI 客户端。";
+  $("#wizard-success-title").textContent = "接入 " + agent.name + " · 自动配置";
+  $("#wizard-success-text").textContent = "接入文件已保存。复制提示词发给有本机操作能力的 AI，由它配置并验证。";
   $("#success-notes").replaceChildren();
-  renderGuide(agent.guide, agent.needed_files);
+  renderGuide(agent.guide, agent.needed_files, agent.bundle_directory);
   renderWizard();
   $("#agent-dialog").showModal();
 }
@@ -260,13 +261,14 @@ function chooseClient(client) {
   $("#agent-location").value = state.clients.find(item => item.id === client)?.location || "";
   $("#advanced-location").hidden = client === "custom";
 }
-function renderGuide(guide, neededFiles) {
+function renderGuide(guide, neededFiles, bundleDirectory="") {
   if (!guide) return;
   $("#guide-title").textContent = guide.title;
   const steps = $("#guide-steps"); steps.replaceChildren();
   for (const text of guide.steps) steps.append(node("li", "", text));
   $("#guide-prompt").textContent = guide.prompt;
   $("#guide-tip").textContent = guide.tip;
+  $("#bundle-location").textContent = bundleDirectory;
   wizard.neededFiles = neededFiles || [];
   renderNeededFiles(wizard.neededFiles);
 }
@@ -277,11 +279,11 @@ function renderNeededFiles(files) {
     const head = node("div","file-head");
     head.append(node("span","file-kind " + (file.exists ? "ok" : "missing"), file.kind +
       (file.required ? "" : " · 可选") + (file.exists ? " · 已有" : file.required ? " · 待写入" : "")));
-    head.append(node("span","file-label","",file.label));
+    head.append(node("span","file-label",file.label));
     item.append(head);
     const path = node("div","file-path-row");
-    const code = node("code","file-path","",file.path);
-    path.append(code, button("复制","file-copy",() => copyText(file.path, null, "路径已复制")));
+    const code = node("code","file-path",file.path);
+    path.append(code, button("复制","file-copy",() => guarded(() => copyText(file.path, null, "路径已复制"))));
     item.append(path);
     list.append(item);
   }
@@ -293,8 +295,9 @@ async function copyText(text, control, message="提示词已复制，可直接�
   } catch (error) {
     const area = node("textarea"); area.value = text;
     area.style.position = "fixed"; area.style.opacity = "0";
-    document.body.append(area); area.select();
-    document.execCommand("copy"); area.remove();
+    ($("#agent-dialog").open ? $("#agent-dialog") : document.body).append(area); area.select();
+    const copied = document.execCommand("copy"); area.remove();
+    if (!copied) throw new Error("未能写入剪贴板，请手动选中下方提示词复制。");
   }
   if (control) {const label = control.textContent; control.textContent = "已复制 ✓"; setTimeout(() => control.textContent = label, 1800);}
   toast(message);
@@ -304,8 +307,8 @@ function renderWizard() {
   $$(".stepper li").forEach((item,index) => {item.classList.toggle("current",index+1 === wizard.step); item.classList.toggle("done",index+1 < wizard.step);});
   $("#wizard-back").textContent = wizard.step === 1 ? "取消" : wizard.step === 2 ? "← 上一步" : "完成";
   $("#wizard-next").textContent = wizard.step === 1 ? "检测并继续 →" : wizard.step === 2 ?
-    wizard.client === "custom" ? "保存配置档案" : "应用并添加" : wizard.guideOnly ? "知道了，关闭" :
-    wizard.client === "custom" ? "下载 MCP 配置" : "发送测试提醒";
+    wizard.client === "custom" ? "生成并保存接入文件" : "应用并添加" : wizard.guideOnly ? "复制自动配置提示词" :
+    wizard.client === "custom" ? "复制自动配置提示词" : "发送测试提醒";
   $("#wizard-next").disabled = wizard.busy; $("#wizard-back").disabled = wizard.busy; $("#close-wizard").disabled = wizard.busy;
   $("#wizard-error").hidden = true;
 }
@@ -317,17 +320,17 @@ function openWizard() {
     const label = node("label","client-option");
     const input = node("input"); input.type = "radio"; input.name = "client"; input.value = client.id; input.checked = client.id === "codex";
     input.addEventListener("change",() => chooseClient(client.id));
-    const text = node("span"); text.append(node("strong","",client.label),node("small","",client.id === "custom" ? "生成配置，手动导入" : client.detected ? "检测到本机入口" : "选择后检查配置"));
+    const text = node("span"); text.append(node("strong","",client.label),node("small","",client.id === "custom" ? "复制提示词，让 AI 配置" : client.detected ? "检测到本机入口" : "选择后检查配置"));
     label.append(input,text); choices.append(label);
   }
   chooseClient("codex"); renderWizard(); $("#agent-dialog").showModal();
 }
 $$("[data-add-agent]").forEach(item => item.addEventListener("click",openWizard));
 $("#close-wizard").addEventListener("click",() => $("#agent-dialog").close());
-$("#copy-guide-prompt").addEventListener("click",() => copyText($("#guide-prompt").textContent,$("#copy-guide-prompt")));
+$("#copy-guide-prompt").addEventListener("click",() => guarded(() => copyText($("#guide-prompt").textContent,$("#copy-guide-prompt")),$("#copy-guide-prompt")));
 $("#copy-guide-files").addEventListener("click",() => {
   const lines = (wizard.neededFiles || []).map(file => file.label + "\n" + file.path);
-  copyText(lines.join("\n\n"), $("#copy-guide-files"), "已复制全部文件路径。");
+  guarded(() => copyText(lines.join("\n\n"), $("#copy-guide-files"), "已复制全部文件路径。"), $("#copy-guide-files"));
 });
 $("#agent-dialog").addEventListener("cancel",event => {if (wizard.busy) event.preventDefault();});
 $("#wizard-back").addEventListener("click",() => {
@@ -344,25 +347,27 @@ $("#agent-form").addEventListener("submit",async event => {
       for (const file of wizard.plan.files) {
         const item = node("li"); item.append(node("strong","",file.action + " · " + file.purpose),node("code","",file.path)); $("#plan-files").append(item);
       }
-      if (!wizard.plan.files.length) $("#plan-files").append(node("li","field-help",wizard.client === "custom" ? "生成通用 MCP 配置，不修改客户端文件。" : "已有配置无需改动，将保存管理面板档案。"));
+      if (!wizard.plan.files.length) $("#plan-files").append(node("li","field-help",wizard.client === "custom" ? "将自动保存接入文件到：" + wizard.plan.bundle_directory : "已有配置无需改动，将保存管理面板档案。"));
       $("#plan-notes").replaceChildren(...wizard.plan.notes.map(text => node("p","",text)));
       $("#plan-export").textContent = JSON.stringify(wizard.plan.export,null,2) + "\n\n" + wizard.plan.instructions;
-      renderGuide(wizard.plan.guide, wizard.plan.needed_files);
+      renderGuide(wizard.plan.guide, wizard.plan.needed_files, wizard.plan.bundle_directory);
       wizard.step = 2;
     } else if (wizard.step === 2) {
       const result = await api("/api/agents/apply",{plan_id:wizard.plan.plan_id}); wizard.agent = result.agent;
       $("#wizard-success-title").textContent = wizard.client === "custom" ? "配置已准备好" : "伙伴已添加";
-      $("#wizard-success-text").textContent = wizard.client === "custom" ? "下载 MCP 配置，并把触发说明加入客户端规则。" :
+      $("#wizard-success-text").textContent = wizard.client === "custom" ? "MCP 配置、规则和提示词已保存到下方目录，无需手动下载。复制提示词给 AI 即可开始自动配置。" :
         "已保存配置；" + (result.backup_count ? result.backup_count + " 个原文件已备份。" : "原有配置均已保留。");
       $("#success-notes").replaceChildren(...result.notes.map(text => node("p","",text)));
-      renderGuide(wizard.plan.guide, wizard.plan.needed_files);
+      renderGuide(result.agent.guide, result.agent.needed_files, result.agent.bundle_directory);
       wizard.step = 3; await refresh();
     } else {
       if (wizard.guideOnly) {
-        $("#agent-dialog").close();
+        await copyText($("#guide-prompt").textContent, $("#wizard-next"));
+        wizard.busy = false; renderWizard(); return;
       } else if (wizard.client === "custom") {
-        download(JSON.stringify(wizard.plan.export,null,2),"nijika-mcp.json");
-        download(wizard.plan.instructions,"nijika-agent-instructions.txt","text/plain;charset=utf-8");
+        await copyText($("#guide-prompt").textContent, $("#wizard-next"));
+        wizard.guideOnly = true;
+        wizard.busy = false; renderWizard(); return;
       } else await testAgent(wizard.agent.id);
       $("#agent-dialog").close();
     }

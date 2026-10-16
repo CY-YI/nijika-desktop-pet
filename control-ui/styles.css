@@ -35,3 +35,11 @@
 .file-path{flex:1;min-width:0;margin:0;font-size:9px;color:#9b93a6;background:#fafafc;border:1px solid #f0eff4;border-radius:7px;padding:7px 9px;word-break:break-all}
 .file-copy{border:1px solid #e8e5ee;background:#fff;border-radius:6px;font-size:9px;color:#8b8497;padding:5px 9px;flex-shrink:0}
 .file-copy:hover{background:#f8f7fb}
+.bundle-summary{font-size:12px;color:#6d6472;margin:0 0 16px}
+.bundle-summary code{font-size:11px;color:#4e5668;background:#fff6df;border-radius:7px;padding:9px 12px;overflow-wrap:anywhere;user-select:all}
+.prompt-box pre{max-height:240px;overflow:auto;font-size:12px;user-select:text}
+.guide-steps li,.file-label{font-size:12px}
+.file-path{font-size:11px;color:#545066}
+.file-kind,.file-copy{font-size:10px}
+.prompt-heading{flex-wrap:wrap}
+.agent-actions{flex-wrap:wrap}
