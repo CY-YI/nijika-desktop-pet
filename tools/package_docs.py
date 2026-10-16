@@ -23,6 +23,7 @@ FILES = (
     "art/bubble-preview.png",
     "art/motion-preview.gif",
     "art/control-panel-preview.jpg",
+    "art/wardrobe-creator-preview.png",
     "skills/nijika-desktop-dialog/SKILL.md",
     "plugins/nijika-work-local/skills/nijika-work-dialog/SKILL.md",
     "integrations/dsh/README.md",
