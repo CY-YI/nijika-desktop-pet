@@ -24,6 +24,8 @@ Windows 桌面上的 Q 版坐姿虹夏：完整双腿、透明背景、八种表
 
 **Agent 接入配置集中见 [AGENT_SETUP.md](AGENT_SETUP.md)**：分别说明私下试用包、Codex、桌面客户端 Work、DSH，以及其他支持 stdio MCP 的本机客户端如何配置和验证。设置中心的“接入步骤”可直接复制自动配置提示词，内含本机 MCP 程序路径、完整 JSON 和提醒规则；发给有本机文件操作能力的 AI，由它配置与验证。接入文件自动保存至用户数据目录下 `integrations/agents/<档案ID>/`，界面显示准确路径，无需手动下载。客户端重载或本人权限确认仍按实际要求完成。
 
+互动功能开发前的稳定存档为 `stable/pre-interactions-20261016`（`a876e18`）；源码与本机运行备份的恢复步骤见 [ROLLBACK.md](ROLLBACK.md)。本机私人备份不随源码或试用包分发。
+
 桌面客户端 Work 的本机接入包在 `plugins/nijika-work-local/`，本机已通过 `.agents/plugins/marketplace.json` 安装并启用。它把同一 `虹夏MCP-v2.exe` 作为插件工具提供，并附带 Work 对话用的简短决策 skill。独立 Codex 会话关闭原有直连后仍通过插件实际调用成功；这证明插件工具链可用，但不等于 Work 会话已经连接。首次使用需重启桌面客户端、在**本机运行的 Work 新任务**中确认工具可见并完成一次桌面点击回传。云端 Work 对话不能直接运行这个 Windows 本机 stdio 程序；那种接入需要另行设计可安全访问的远程 MCP 服务。详见 `INSTALL.md`。
 
 Codex 全局技能和本机 Work 插件 0.1.5 均已加入“同一请求连续等待、恢复会话先读旧回复”的规则。较晚的点击会保存，但一旦 Agent 任务结束，现有 stdio MCP 无法单靠桌面点击重新唤醒任务；在原会话发送“继续”可触发读取。当前打开的会话不保证热更新，新的 Work 插件还需重启 ChatGPT 桌面客户端后在新任务中验收。

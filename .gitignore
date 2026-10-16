@@ -6,6 +6,7 @@ build/
 dist/
 dist-next/
 diagnostics/
+backups/
 /虹夏桌宠-项目文档与预览-*.zip
 /虹夏桌宠-Windows私下试用-*.zip
 .pyinstaller-cache/
