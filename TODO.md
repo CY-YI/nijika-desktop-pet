@@ -1,5 +1,15 @@
 # 当前待办
 
+## 当前任务：验证前端设置 UI 与各 Agent 接入步骤（2026-10-17）
+
+- 用户原话：“把这个未完成的任务记录下来就行然后你验证一下是否会影响你做的那个前端ui的各个功能然后还有我如果部署各个agent揭露作虫的步骤有没有改变”。三件事：记录“Codex 结束事件接入虹夏”未完成项、实测设置中心各页、核对各客户端接入步骤是否变化。
+- [ ] 未完成任务：把 Codex 系统级 `turn-ended` 通知接入虹夏消息库。当前 `~/.codex/config.toml` 的 `notify` 仍指向 `codex-computer-use.exe`，任务结束提醒完全依赖 Agent 遵守规则主动调用 `show_completion`；Agent 漏调用时桌面不会兜底提醒（2026-10-17 用户已遇到一次漏发）。实现要点：桥接程序读 turn-ended 负载写 NotificationStore，需过滤纯问答不打扰、避免与 Agent 主动提醒重复；按 SOP Full 通道先预览再替换，未开始。
+- [x] 前端 UI 实测（`codex/interaction-preview` 分支的 `control-ui/` 与 `main` 逐字节相同，判断不受影响，仍按用户要求实测）：`GET /` 注入令牌、无令牌 `GET /api/state` 返回 403（鉴权按预期拒绝）；`GET /api/state` 返回 renderer/agents/clients/skins/support/companion 全部字段；agents plan→apply→prepare→test 完整闭环通过（Codex 档案建立、接入目录与自动配置提示词生成、测试提醒入队）；focus configure/start/pause/reset 通过；notes add 通过；settings 更新通过；support 更新（name/message/url）通过；reminders 通过；skins 导入（非全透明 PNG）通过；support 收款图上传通过；未知路由按预期报错。
+- 边界：本轮浏览器内核在当前沙箱下无法启动（`windows sandbox failed: helper_unknown_error`），因此 UI 验收走 API 级实测，未做页面像素级回归；接口与数据通路全部覆盖。
+- [x] 接入步骤核对：Codex、Work、DSH 的向导/文档流程与 10-16 统一安装路径后一致，均指向 `%LOCALAPPDATA%\NijikaDesktopPet\app`，用户侧步骤（重载客户端、新任务验证、本人信任 hook）未变。Claude Code 为源码向导暂未覆盖的新客户端：`agent_setup.py` 的 `CLIENTS` 仍只有 codex/work/dsh/custom，设置中心不提供 Claude Code 选项，接入需按 `AGENT_SETUP.md` 手动执行 `claude mcp add` + `integrations\claude-code\install-hooks.ps1`；文档第 125 行误称“向导可为 Claude Code 档案生成配置”，与实际不符，待修正或补向导。
+- [ ] 待用户参与：Codex 应用关闭后运行 `codex plugin add nijika-work-local@nijika-local` 刷新插件运行缓存；重启桌宠以使用安装版；如需 Claude Code 出现在设置中心向导，先补 `agent_setup.py` 客户端定义。
+- 工作区清点：本轮只读核对 + 隔离临时环境（已清理 `%TEMP%\nijika-iso-*`、`nijika-ui-test-*` 与失效 `panel-status.json`）；一次性清理脚本用后即删；未改动真实消息库、皮肤、支持配置（写入测试均在隔离库）。
+
 ## 当前任务：统一安装路径并改指全部本机客户端（2026-10-16）
 
 - 用户原话：“不要让他们只在这一个工作区生效让他们跟正常的那些嗯路径都统一不然的话以后我想找都找不到”。目标：桌宠与各客户端不再依赖开发目录 `D:\deepseekharnes work\提示功能作用的桌宠`，统一到标准安装位置 `%LOCALAPPDATA%\NijikaDesktopPet\app`（安装根目录下的 `notifications.sqlite3` 只是旧版迁移候选，运行时数据仍统一在 `%USERPROFILE%\.nijika-desktop-pet\`）。
