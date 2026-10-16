@@ -1,5 +1,18 @@
 # 当前待办
 
+## 当前任务：统一安装路径并改指全部本机客户端（2026-10-16）
+
+- 用户原话：“不要让他们只在这一个工作区生效让他们跟正常的那些嗯路径都统一不然的话以后我想找都找不到”。目标：桌宠与各客户端不再依赖开发目录 `D:\deepseekharnes work\提示功能作用的桌宠`，统一到标准安装位置 `%LOCALAPPDATA%\NijikaDesktopPet\app`（安装根目录下的 `notifications.sqlite3` 只是旧版迁移候选，运行时数据仍统一在 `%USERPROFILE%\.nijika-desktop-pet\`）。
+- [x] 重建 `dist\虹夏审批提醒.exe`（含去重修复与 `--source claude-code` 支持），经 `tools\package_release.py` 生成试用包并运行 `distribution\install.ps1 -Dsh -CodexHooks -AutoStart -NoLaunch` 安装。
+- [x] 快捷方式（桌面“虹夏桌宠”“虹夏桌宠设置”、开机自启）、Work 插件 manifest、DSH desktop/web 配置与技能、Codex 审批钩子全部改指安装目录；DSH 原文件以 `.bak-nijika-*` 备份，聚合快照在 `%USERPROFILE%\.nijika-desktop-pet\backup-before-unify-20261016\`。
+- [x] Claude Code：MCP 用户级注册改指安装版（`claude mcp remove/add -s user`）；审批钩子改用新脚本 `integrations/claude-code/install-hooks.ps1`（exec 形式、合并保留其他钩子、备份到 `.claude\backups\`、重复执行幂等、全新机器可直接建文件），调用安装版 EXE。
+- [x] Codex：`install.ps1 -Codex` 对既有注册只警告不覆盖，改为备份后直接改写 `~/.codex/config.toml` 的 MCP 命令路径（保留四个工具的 approval_mode）；marketplace `nijika-local` 经 Codex CLI 移除重加，`plugin list` 显示来源为安装目录且插件 installed+enabled。
+- [x] 新增 `distribution\install.ps1` 的 `-ClaudeHooks` 开关与两个正式冒烟测试 `tools\smoke_claude_hooks.py`、`tools\smoke_dsh_installer.py`；修复 `integrations/dsh/install.ps1` 缺 UTF-8 BOM 的隐患。
+- [x] 验证：三款 EXE 与仓库 `dist/` 哈希逐一相同；安装版 MCP 冒烟（stdio 握手、四工具、隔离消息库气泡回执）通过；DSH web 配置解析、desktop 配置文件、快捷方式目标、CC 与 Codex 钩子命令均为安装路径；39 项回归通过。
+- [ ] 待用户参与的三步：关闭 Codex 应用后运行 `codex plugin add nijika-work-local@nijika-local` 刷新插件运行缓存（缓存仍锁定旧路径；官方 CLI 刷新尝试被本机权限策略拦下，未代跑）；在 Codex `/hooks` 重新审阅信任两条虹夏钩子（路径已变）；重启桌宠以使用安装版（当前运行的仍是旧目录进程）。
+- 验收边界：不宣称客户端重新信任后的自然触发已现场复验；钩子自本轮起调用冻结的安装版 EXE，改造 `approval_hook.py` 后需重建+重装；`~/.claude.json` 与 `~/.codex/config.toml` 中残留的开发目录字样只是项目历史/信任记录，不是运行依赖；旧的接入快照（`%USERPROFILE%\.nijika-desktop-pet\integrations\agents\<档案ID>\`）为过期导出，重启桌宠后新导出会使用安装路径。
+- 工作区清点：一次性探针 `diagnostics/check_cc_hooks_install.py`、`check_dsh_installer_encoding.py` 已提升为 `tools/smoke_claude_hooks.py`、`tools/smoke_dsh_installer.py`，`diagnostics/patch_codex_config.py` 为一次性机器改动脚本。
+
 ## 当前任务：Claude Code 审批提醒接入（2026-10-16）
 
 - 用户在气泡选择“现在接上”后实施 Claude Code 侧审批提醒；随后追问“我想确认的是为什么codex里面可以有这个功能……DSH里面也要再次添加……但是它能够实现”，并要求“请按照我的SOP落盘并提交吧”。已核实三条链路：Codex 走 `hooks.json` 权限钩子（10-11 已真实验收）；Claude Code 走用户级 `settings.json` 钩子（本轮接入）；DSH 目前只有 MCP 工具通道，主机侧权限事件桥接未实现（见 `integrations/dsh/README.md` 与 N19 边界），现有 DSH 效果不需要重复添加。
@@ -7,7 +20,7 @@
 - [x] `notification_store.py`：已完成的旧通知不再吞掉同 key 的新提醒；审批优先级 100 与“resolve 只作用于 pending、不伪造点击”保持不变。
 - [x] `%USERPROFILE%\.claude\settings.json` 注册 `PermissionRequest` + `PostToolUse`（async）两条 exec 钩子（项目 venv 的 python 直接拉起，不经 shell），改动前备份 `settings.json.backup.nijika-20261016-222118`。
 - [x] 验证：来源文案与空输出/退出码 0 的隔离检查、仓库冒烟测试通过；合成 CC 事件端到端气泡 → 用户点击回执 answered、PostToolUse 不覆盖点击、重复请求生成新通知并自动收起；运行中会话热加载生效，预创建通知被一次真实 `PostToolUse` 自动收起 resolved。
-- [x] 用户以气泡选定“新建 claude 分支”；源码与文档已提交到 `claude/cc-approval-reminder`（基于互动分支顶端）并推送，`main` 与 `codex/interaction-30-32-34` 保持原样。（审批钩子运行的是工作树源码：切回互动分支后 CC 侧会回到旧行为——署名 Codex、同命令重复请求不重发；把两处源码改动带入该分支或合入 main 后恢复。）
+- [x] 用户以气泡选定“新建 claude 分支”；源码与文档已提交到 `claude/cc-approval-reminder`（基于互动分支顶端）并推送，`main` 与 `codex/interaction-30-32-34` 保持原样。（2026-10-16 深夜更新：审批钩子已改指安装版 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏审批提醒.exe`，不再依赖工作树所在分支；详见上方“统一安装路径”任务。）
 - 验收边界：真实 `PermissionRequest` 自然触发（低提示权限模式下几乎不弹）尚未验收；气泡只提醒，不授予或绕过任何权限；Claude Code 侧当前运行源码，`dist\虹夏审批提醒.exe` 未重建，Codex 打包路径仍为旧代码。
 - 工作区清点：临时测试脚本 `_tmp_cc_hook_test.py` 已删除；本轮改动为 `approval_hook.py`、`notification_store.py` 与 CHANGELOG/README/AGENT_SETUP/REQUIREMENTS/TODO 文档；上一任务“并行写入提示”所指的未核实改动即本工作，归属已明确。
 - 后续可选：核实 DSH 是否提供等价的权限事件钩子；若有，可照 Codex / Claude Code 的模式再接审批自动气泡（未开始，等用户确认）。

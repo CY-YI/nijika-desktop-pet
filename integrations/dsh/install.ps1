@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('desktop', 'web')]
     [string[]]$Profiles = @('desktop', 'web'),
     [string]$DshRoot = (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.dsh')

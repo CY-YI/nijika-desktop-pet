@@ -18,6 +18,7 @@ FILES = (
     "dist/虹夏审批提醒.exe",
     "integrations/codex/hooks.example.json",
     "integrations/codex/install-hooks.ps1",
+    "integrations/claude-code/install-hooks.ps1",
     "assets/icons/nijika-shortcut.ico",
     "skills/nijika-desktop-dialog/SKILL.md",
     "plugins/nijika-work-local/plugin.json",

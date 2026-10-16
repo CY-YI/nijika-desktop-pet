@@ -10,7 +10,7 @@
 
 2026-10-11 提醒可靠性更新：统一桌面快捷方式与客户端启动程序的消息库，兼容旧会话的点击回传，独立轮询并恢复隐藏或位置错误的气泡。普通提醒现场点击已通过；本机两项 Codex hook 完成信任后，真实 Codex CLI 审批已自动触发虹夏提醒并保存“知道了”回执。安装到其他电脑仍需本人在 `/hooks` 审阅并信任，授权仍在 Codex 审批卡完成。步骤和验收边界见 [AGENT_SETUP.md](AGENT_SETUP.md)。
 
-2026-10-16 Claude Code 审批提醒接入：Claude Code 用户级 `%USERPROFILE%\.claude\settings.json` 已注册与 Codex 同构的 PermissionRequest / PostToolUse 仅通知钩子，采用 exec 形式直接调用项目 venv 的 Python，不经 shell；改动前备份原文件。气泡“知道了”只记录回执，授权仍在 Claude Code 自己的权限提示完成。实测已覆盖合成事件端到端、运行中热加载与真实 PostToolUse 自动收起；真实权限提示的自然触发尚未验收。步骤见 [AGENT_SETUP.md](AGENT_SETUP.md)。
+2026-10-16 Claude Code 审批提醒接入：Claude Code 用户级 `%USERPROFILE%\.claude\settings.json` 已注册与 Codex 同构的 PermissionRequest / PostToolUse 仅通知钩子，采用 exec 形式直接调用安装目录中的 `虹夏审批提醒.exe`，不经 shell；改动前自动备份原文件，注册由 `integrations\claude-code\install-hooks.ps1` 脚本维护（试用包安装带 `-ClaudeHooks` 开关）。气泡“知道了”只记录回执，授权仍在 Claude Code 自己的权限提示完成。实测已覆盖合成事件端到端、运行中热加载与真实 PostToolUse 自动收起；真实权限提示的自然触发尚未验收。步骤见 [AGENT_SETUP.md](AGENT_SETUP.md)。
 
 桌面决策现在可为一个有明确理由的选项显示“推荐”。Agent 收到桌面点击后，应在原 Codex/Work 聊天中写明所选项，再按选择继续。这条聊天记录是 Agent 的确认消息，不会伪装成用户发送的新消息。如果 Agent 已结束等待，桌宠不会独立唤醒该任务，需要继续该聊天才能读取已保存的点击结果。
 
@@ -22,7 +22,7 @@ Windows 桌面上的 Q 版坐姿虹夏：完整双腿、透明背景、八种表
 
 对外分享文档可运行 `.\.venv\Scripts\python.exe tools\package_docs.py` 从当前源码生成压缩包；旧压缩包不作为最新工程状态的依据。
 
-给熟人私下试用可运行 `.\.venv\Scripts\python.exe tools\package_release.py` 生成 Windows 安装 ZIP；收件人按包内 `distribution/README.md` 安装。该包包含可执行程序和可选的 Codex、Work、DSH 接入文件，不包含个人消息库。公开发布的素材权利仍需另行确认。
+给熟人私下试用可运行 `.\.venv\Scripts\python.exe tools\package_release.py` 生成 Windows 安装 ZIP；收件人按包内 `distribution/README.md` 安装。该包包含可执行程序和可选的 Codex、Work、DSH 与 Claude Code 接入文件（`-Codex -Work -CodexHooks -ClaudeHooks -Dsh -AutoStart` 开关），安装目标为 `%LOCALAPPDATA%\NijikaDesktopPet\app`，不包含个人消息库。公开发布的素材权利仍需另行确认。
 
 **Agent 接入配置集中见 [AGENT_SETUP.md](AGENT_SETUP.md)**：分别说明私下试用包、Codex、桌面客户端 Work、DSH、Claude Code，以及其他支持 stdio MCP 的本机客户端如何配置和验证。设置中心的“接入步骤”可直接复制自动配置提示词，内含本机 MCP 程序路径、完整 JSON 和提醒规则；发给有本机文件操作能力的 AI，由它配置与验证。接入文件自动保存至用户数据目录下 `integrations/agents/<档案ID>/`，界面显示准确路径，无需手动下载。客户端重载或本人权限确认仍按实际要求完成。
 

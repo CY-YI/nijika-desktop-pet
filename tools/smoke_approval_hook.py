@@ -75,7 +75,33 @@ def main() -> None:
         assert store.next_pending() is None
         assert b"TEST_PRIVATE_COMMAND" not in store.path.read_bytes()
         assert len(event_key(event)) == 64
-    print("Packaged approval hook, safe stdin, installer preservation and deduplication: OK")
+        # Claude Code source: exec form with arguments, no turn id, a finished
+        # reminder must not swallow the next request, completion auto-resolves.
+        cc_event = {"hook_event_name": "PermissionRequest", "session_id": "claude-code-smoke",
+                    "tool_name": "Bash", "cwd": "C:/isolated-test",
+                    "tool_input": {"command": "TEST_PRIVATE_COMMAND"}}
+
+        def run_cc(name: str) -> None:
+            cc_event["hook_event_name"] = name
+            result = subprocess.run([str(executable), "--source", "claude-code"],
+                                    input=json.dumps(cc_event).encode("utf-8"),
+                                    capture_output=True, env=environment, check=True, timeout=20)
+            assert result.stdout == b"", "Hook must not grant or deny permission"
+            assert result.stderr == b"", result.stderr
+
+        run_cc("PermissionRequest")
+        reminder = store.next_pending()
+        assert reminder is not None and reminder.agent == "Claude code"
+        assert "Claude Code 的权限提示" in reminder.message
+        store.answer(reminder.id, 0)
+        run_cc("PermissionRequest")
+        repeated = store.next_pending()
+        assert repeated is not None and repeated.id != reminder.id
+        run_cc("PostToolUse")
+        assert store.get(repeated.id).status == "resolved"
+        assert store.next_pending() is None
+    print("Packaged approval hook, safe stdin, installer preservation, deduplication "
+          "and Claude Code source: OK")
 
 
 if __name__ == "__main__":

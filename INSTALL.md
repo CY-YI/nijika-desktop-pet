@@ -8,9 +8,9 @@
 
 第一版四项功能的操作位置：设置中心左侧“专注与提醒”页开始/暂停/继续番茄钟、修改专注与休息分钟数、开启三类健康提醒或设置免打扰；“今日便签与陪伴”页添加当天便签、打勾完成并查看好感度、陪伴天数与当前阶段。桌宠右键也能“开始专注 / 暂停专注”和“结束这一轮”，倒计时显示在角色头顶。数据表 `companion_*` 与通知队列共用同一个 SQLite 文件，删除该文件会同时重置提醒历史与陪伴数据。可复用验收脚本为 `.\.venv\Scripts\python.exe tools\accept_companion.py`（需要设置中心正在运行）。
 
-本机 2026-10-09 核对：桌面和开机自启的“虹夏桌宠”快捷方式都指向本项目 `dist/虹夏桌宠.exe`；该文件已重新打包，包含气泡隐藏后重显及窗口重建修复。Codex 全局入口和 Work 插件 0.1.5 都指向 `dist/虹夏MCP-v2.exe`。修改 `pet.py` 后必须重新运行 `build.ps1` 并重新启动桌宠，Git 中的源码变化不会自动更新 `dist/` 的 EXE。
+本机 2026-10-16 核对：桌宠已按标准流程统一安装到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，桌面与开机自启快捷方式、Codex 审批钩子、Work 插件清单、DSH desktop/web 配置、Claude Code 的 MCP 注册与审批钩子均指向安装目录中的程序；三款 EXE 与仓库 `dist/` 逐字节相同。修改 `pet.py` 等源码后必须重新运行 `build.ps1` 重建，再按 `distribution/install.ps1` 重新安装到上述目录并重启桌宠；Git 中的源码变化不会自动更新运行中的程序，各客户端配置里的开发目录字样只属历史记录。
 
-给其他 Windows 用户私下试用时，运行 `.\.venv\Scripts\python.exe tools\package_release.py` 生成不含个人配置和消息库的安装 ZIP。收件人解压后按 `distribution/README.md` 运行安装脚本；脚本复制程序到其本机用户目录，并可选接入 Codex、Work 或 DSH。试用包内的 Work MCP 路径由安装脚本按收件人路径写入，不直接复制本机硬编码路径。角色素材没有公开再分发许可证，不应将此试用包公开发布。
+给其他 Windows 用户私下试用时，运行 `.\.venv\Scripts\python.exe tools\package_release.py` 生成不含个人配置和消息库的安装 ZIP。收件人解压后按 `distribution/README.md` 运行安装脚本；脚本复制程序到其本机用户目录（默认 `%LOCALAPPDATA%\NijikaDesktopPet\app`），并可选接入 Codex、Work、DSH 或 Claude Code（`-Codex -Work -CodexHooks -ClaudeHooks -Dsh -AutoStart` 开关）。试用包内的 Work MCP 路径由安装脚本按收件人路径写入，不直接复制本机硬编码路径。角色素材没有公开再分发许可证，不应将此试用包公开发布。
 
 更新触发：2026-10-07 增加 Codex 本机 MCP 服务和带简介的选择题。
 
@@ -48,7 +48,7 @@ Codex 的审批策略可能要求先确认 MCP 工具调用。经用户明确授
 
 单文件版首次启动需要解包资源，可能比源码运行略慢。`dist/`、`.venv/` 与构建缓存不入 Git；源码包必须保留 `assets/sprites/`。通知数据库默认在 `%USERPROFILE%\.nijika-desktop-pet\notifications.sqlite3`，避免桌面客户端的 AppData 重定向造成两份队列；旧运行中会话的待处理消息与回复由桌宠桥接。可用 `env.example` 中的可选变量在隔离测试时改路径。消息含任务摘要，请只在受信任的本机用户会话中使用。本项目不要求真实 API 密钥或联网。
 
-维护者可运行 `.\.venv\Scripts\python.exe tools\smoke_packaged_mcp.py` 测试打包服务，或运行 `.\.venv\Scripts\python.exe tools\smoke_pet_ipc.py` 在隔离消息库下测试真实桌面气泡与点击回传。`tools/benchmark_motion.py`、`tools/probe_window_fps.py` 和 `tools/make_bubble_preview.py` 分别用于动画性能及气泡预览；这些工具不会进入打包版。
+维护者可运行 `.\.venv\Scripts\python.exe tools\smoke_packaged_mcp.py` 测试打包服务，或运行 `.\.venv\Scripts\python.exe tools\smoke_pet_ipc.py` 在隔离消息库下测试真实桌面气泡与点击回传；`tools\smoke_claude_hooks.py` 与 `tools\smoke_dsh_installer.py` 分别隔离验证 Claude Code 钩子安装器与 DSH 安装脚本。`tools/benchmark_motion.py`、`tools/probe_window_fps.py` 和 `tools/make_bubble_preview.py` 分别用于动画性能及气泡预览；这些工具不会进入打包版。
 
 ## 桌面客户端 Work 本机接入
 

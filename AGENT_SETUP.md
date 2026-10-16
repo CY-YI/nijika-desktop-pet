@@ -122,51 +122,21 @@ powershell -ExecutionPolicy Bypass -File .\integrations\codex\install-hooks.ps1
 
 ### Claude Code
 
-Claude Code 的用户级接入由三部分组成；设置中心向导可为 Claude Code 档案生成 MCP 配置与提示词，审批钩子需按本节手动注册。
+Claude Code 的用户级接入由三部分组成；设置中心向导可为 Claude Code 档案生成 MCP 配置与提示词，审批钩子用本节的一次性脚本注册。
 
-1. 注册 MCP：`claude mcp add -s user nijika-pet -- "<项目>\dist\虹夏MCP-v2.exe"`，用户级配置写入 `%USERPROFILE%\.claude.json`（改动前先备份原文件）。注册后可用 `claude mcp list` 核对已连接，并在新会话中确认 `nijika-pet` 的四个工具可见：`show_completion`、`request_decision`、`wait_for_reply`、`get_reply`。
+1. 注册 MCP：`claude mcp add -s user nijika-pet -e NIJIKA_AGENT_NAME="Claude code" -- "%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏MCP-v2.exe"`（源码方式则改用项目 `dist\虹夏MCP-v2.exe`），用户级配置写入 `%USERPROFILE%\.claude.json`（改动前先备份原文件）。注册后可用 `claude mcp list` 核对已连接，并在新会话中确认 `nijika-pet` 的四个工具可见：`show_completion`、`request_decision`、`wait_for_reply`、`get_reply`。
 2. 提醒规则：把何时提醒、同一请求连续等待、恢复会话先 `get_reply` 的规则合并进 `%USERPROFILE%\.claude\CLAUDE.md`；仓库级 `AGENTS.md` 只覆盖本仓库。
 3. 可选技能：把 `skills\nijika-desktop-dialog\SKILL.md` 复制到 `%USERPROFILE%\.claude\skills\nijika-desktop-dialog\`。
 
-**Claude Code 命令审批提醒（可选）**：普通决策由 Agent 调 MCP，权限提示出现时的自动气泡则由 Claude Code 自己的权限事件钩子触发，两者是不同入口。编辑用户级 `%USERPROFILE%\.claude\settings.json` 前先备份，然后只新增顶层 `hooks` 键（保留文件其余内容）：
+**Claude Code 命令审批提醒（可选）**：普通决策由 Agent 调 MCP，权限提示出现时的自动气泡则由 Claude Code 自己的权限事件钩子触发，两者是不同入口。运行仓库内的一次性脚本即可把两条 exec 形式钩子合并进用户级 `%USERPROFILE%\.claude\settings.json`（直接拉起打包程序、不经 shell，路径含空格或中文也安全）：
 
-```json
-{
-  "hooks": {
-    "PermissionRequest": [
-      {
-        "matcher": ".*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\path\\to\\提示功能作用的桌宠\\.venv\\Scripts\\python.exe",
-            "args": ["C:\\path\\to\\提示功能作用的桌宠\\approval_hook.py", "--source", "claude-code"],
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": ".*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\path\\to\\提示功能作用的桌宠\\.venv\\Scripts\\python.exe",
-            "args": ["C:\\path\\to\\提示功能作用的桌宠\\approval_hook.py", "--source", "claude-code"],
-            "timeout": 10,
-            "async": true
-          }
-        ]
-      }
-    ]
-  }
-}
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\integrations\claude-code\install-hooks.ps1
 ```
 
-把两处 `command` 与 `args` 换成该电脑上项目 venv 的 `python.exe` 与 `approval_hook.py` 的真实绝对路径。示例采用 exec 形式直接拉起程序、不经 shell，路径含空格或中文也安全；`PostToolUse` 的 `async: true` 不阻塞任务。JSON 必须合法，否则整个设置文件会被忽略。与 Codex 不同，Claude Code 自有 hook 没有单独的信任步骤，请自行核对上述路径；会话运行中也会热加载新配置。测试时应在产生权限提示的任务中同时看到 Claude Code 权限提示与“命令需要授权”气泡；气泡“知道了”只记录收到提醒，**不授予权限**，授权仍在 Claude Code 权限提示中完成；命令完成后，尚未点击的匹配提醒由 `PostToolUse` 收起。
+脚本默认写入 `%USERPROFILE%\.claude\settings.json`、调用同一目录树中的 `dist\虹夏审批提醒.exe`，写入前备份到 `.claude\backups\settings.json.backup.nijika-<时间戳>`，只替换虹夏自己的条目并保留其他钩子，可重复执行；`-UserSettings` 与 `-ApprovalExe` 可覆盖这两处默认值。注册结果为 `PermissionRequest`（同步）与 `PostToolUse`（`async: true`，不阻塞任务）两个 `matcher: ".*"` 条目，`args` 为 `["--source", "claude-code"]`；JSON 必须合法，否则整个设置文件会被忽略。试用包安装脚本 `distribution\install.ps1` 带 `-ClaudeHooks` 开关，会在安装时调用同一脚本。与 Codex 不同，Claude Code 自有 hook 没有单独的信任步骤；会话运行中也会热加载新配置。测试时应在产生权限提示的任务中同时看到 Claude Code 权限提示与“命令需要授权”气泡；气泡“知道了”只记录收到提醒，**不授予权限**，授权仍在 Claude Code 权限提示中完成；命令完成后，尚未点击的匹配提醒由 `PostToolUse` 收起。
 
-与 Codex 一样，源码侧 `approval_hook.py` 用 `--source claude-code` 区分署名与文案，Codex 行为不受影响。2026-10-16 本机实测：合成事件经注册命令全链路通过、运行中会话热加载生效，预创建的匹配通知被一次真实 `PostToolUse` 自动收起；真实 `PermissionRequest` 的自然触发在低提示权限模式下仍待验收。回退：删除上述 `hooks` 键或恢复编辑前的备份；源码侧 `git revert` 对应提交。分享包暂不含 Claude Code 钩子的注册脚本，需按本节手动注册；重建 `虹夏审批提醒.exe` 后，同款去重修复才适用于 Codex 打包路径。
+与 Codex 一样，`approval_hook.py` 用 `--source claude-code` 区分署名与文案，Codex 行为不受影响。2026-10-16 本机实测：合成事件经注册命令全链路通过、运行中会话热加载生效，预创建的匹配通知被一次真实 `PostToolUse` 自动收起；真实 `PermissionRequest` 的自然触发在低提示权限模式下仍待验收。钩子自 2026-10-16 深夜起调用安装目录中的 `虹夏审批提醒.exe`（冻结程序：改造 `approval_hook.py` 后需按构建步骤重建并重装才生效）。回退：删除上述两条 `hooks` 条目，或恢复 `.claude\backups\settings.json.backup.nijika-*` 备份。维护者可运行 `.\.venv\Scripts\python.exe tools\smoke_claude_hooks.py` 隔离检查合并、替换、备份、幂等与全新机器写入。
 
 ### ChatGPT 桌面客户端 Work（本机任务）
 
