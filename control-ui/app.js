@@ -8,6 +8,40 @@ let state = null, settingsDirty = false, supportDirty = false, toastTimer;
 let agentsSignature = "", skinsSignature = "", supportSignature = "";
 let wizard = {step:1, client:"codex", plan:null, agent:null, busy:false};
 
+const SKIN_AI_PROMPT = [
+"请帮我制作一张可以用在 Windows 桌宠上的角色图。请先按下面的要求出图，成品请直接保存为 PNG 文件。",
+"",
+"【角色设定】（把下一行括号里的内容换成你想要的角色，例如“金发双马尾的动漫少女，绿色马甲，红色蝴蝶结，Q 版比例”）",
+"（角色描述：）",
+"",
+"【画面要求】",
+"1. Q 版可爱比例，全身入画，人物完整（头发、双手、双脚都不能被裁切）。",
+"2. 姿态端正、正面朝向观众，人物水平居中，四周留出一点空白边距。",
+"3. 人物占画面高度约 85%~90%，底部对齐，方便放在桌面上。",
+"4. 线条干净、色彩明快，适合缩小到 320 像素宽时仍然看得清。",
+"5. 背景必须完全透明（不是白色、不是棋盘格），除角色外不要任何装饰元素。",
+"",
+"【文件要求·非常重要，请严格遵守】",
+"1. 格式：PNG，且必须带透明通道（RGBA）。",
+"2. 画布比例：宽 : 高 ≈ 2 : 3，推荐尺寸 1024×1536 像素。",
+"3. 图片四角必须是透明的，人物以外区域全部透明。",
+"4. 总像素不超过 800 万，最小边不小于 32 像素。",
+"5. 如果能一次输出多张，请再画 9 张同一个角色的表情版本，画布尺寸完全相同，只有表情不同，文件名分别是：",
+"   curious.png（好奇/平静）、happy.png（开心微笑）、worried.png（担心求助）、sleepy.png（困倦）、",
+"   wink.png（眨眼俏皮）、thinking.png（思考）、pout.png（小生气）、excited.png（兴奋加油）、blink.png（闭眼眨眼）。",
+"   请把这 9 张打包成一个 ZIP，文件名与上面完全一致，不要改名、不要多加文件。",
+"",
+"【最后请告诉我】",
+"1. 每张图的尺寸和格式；",
+"2. 背景是否已经是真正的透明（请在导出后自检）；",
+"3. 如果只能生成白色背景，请明确说明，我会自己抠图。"
+].join("\n");
+
+function renderSkinPrompt() {
+  const box = $("#skin-prompt");
+  if (box) box.textContent = SKIN_AI_PROMPT;
+}
+
 function node(tag, className, text) {
   const item = document.createElement(tag);
   if (className) item.className = className;
@@ -386,6 +420,8 @@ $("#settings-form").addEventListener("submit",event => {
   },form.querySelector('[type="submit"]'));
 });
 $("#import-skin").addEventListener("click",() => $("#skin-file").click());
+$("#copy-skin-prompt").addEventListener("click",event => guarded(() => copyText(SKIN_AI_PROMPT,$("#copy-skin-prompt"),"提示词已复制，粘贴给会画图的 AI 即可。"),event.currentTarget));
+$("#copy-skin-prompt-2").addEventListener("click",event => guarded(() => copyText(SKIN_AI_PROMPT,$("#copy-skin-prompt-2"),"提示词已复制，粘贴给会画图的 AI 即可。"),event.currentTarget));
 $("#skin-file").addEventListener("change",event => {
   const file = event.target.files[0]; if (!file) return;
   guarded(async () => {
@@ -459,5 +495,6 @@ $("#note-text").addEventListener("keydown",event => {
   if (event.key === "Enter") { event.preventDefault(); $("#add-note").click(); }
 });
 gotoPage(location.hash.slice(1));
+renderSkinPrompt();
 refresh();
 setInterval(() => refresh(),3000);

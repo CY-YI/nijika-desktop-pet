@@ -103,6 +103,14 @@
         <section id="page-skins" class="page" hidden>
           <div class="page-heading"><div><p class="eyebrow">A NEW LOOK, THE SAME COMPANION</p><h1>角色衣橱</h1><p>换一个喜欢的外观，陪你继续做事。</p></div><button id="import-skin" class="button primary">＋ 导入皮肤</button><input id="skin-file" type="file" accept=".png,.zip" hidden></div>
           <div class="wardrobe-layout"><div class="preview-stage"><span class="stage-label">桌宠外观预览</span><img id="skin-preview" src="/skin/default/curious.png" alt="所选角色皮肤的完整预览"><span class="stage-floor"></span><strong id="skin-preview-name">虹夏 · 经典制服</strong></div><div><div class="section-title"><h2>我的皮肤</h2><span id="skin-count"></span></div><div id="skins-list" class="skin-grid"></div><div class="help-card"><h3>把你喜欢的形象带进来</h3><p>透明 PNG 可作为单图皮肤，动作保留，表情固定。表情皮肤 ZIP 需包含九张同尺寸、透明背景的 PNG。</p><details><summary>查看表情包格式</summary><p>画布比例约为 2:3，总文件不超过 32 MB。</p><code>curious.png · happy.png · worried.png · sleepy.png · wink.png · thinking.png · pout.png · excited.png · blink.png</code><p>可附带 manifest.json，用 name 字段命名。图片包不支持运行脚本。</p></details></div></div></div>
+          <div class="creator-card"><div class="creator-heading"><div><h3>自制角色 · 让 AI 帮你画</h3><p>想换成自己的角色、原创形象或别的动漫人物？把下面的提示词复制给你常用的 AI 绘图工具（或能画图的 AI 助手），它会按桌宠需要的格式出图；拿到图片后回到本页点“导入皮肤”即可。</p></div><button id="copy-skin-prompt" class="button dark" type="button">复制 AI 生成提示词</button></div>
+            <div class="format-grid">
+              <div class="format-block"><h4>方案一：单张 PNG（最省事）</h4><span class="format-tag">推荐先用这个</span><ul><li>格式：<code>PNG</code>，必须有透明背景（四角透明）</li><li>画布比例：<b>宽 : 高 ≈ 2 : 3</b>（如 1024×1536、683×1024）</li><li>尺寸：最小边 ≥ 32 像素，总像素 ≤ 800 万（1024×1536 刚好合适）</li><li>内容：完整角色入画，人物居中、留少量边距</li><li>效果：动作会保留（呼吸/摇摆），表情固定不变</li><li>文件名随意，例如 <code>my-character.png</code></li></ul></div>
+              <div class="format-block"><h4>方案二：ZIP 表情包（九种表情）</h4><span class="format-tag">效果更完整</span><ul><li>格式：<code>ZIP</code>，内含 <b>9 张同尺寸透明 PNG</b></li><li>文件名必须完全一致：<code>curious</code> <code>happy</code> <code>worried</code> <code>sleepy</code> <code>wink</code> <code>thinking</code> <code>pout</code> <code>excited</code> <code>blink</code>（各自 <code>.png</code>）</li><li>九张画布尺寸必须完全相同，角色位置对齐（只有表情不同）</li><li>可放一个 <code>manifest.json</code>，用 <code>name</code> 字段给皮肤命名</li><li>限制：不超过 10 个文件、压缩包 ≤ 32 MB、解压后 ≤ 64 MB</li><li>不支持任何脚本文件（.py/.js/.exe 等一律拒绝）</li></ul></div>
+            </div>
+            <div class="prompt-box skin-prompt-box"><div class="prompt-heading"><strong>AI 生成提示词 · 复制后按需替换角色描述</strong><button id="copy-skin-prompt-2" class="button small secondary" type="button">复制</button></div><pre id="skin-prompt"></pre></div>
+            <p class="creator-tip">小提示：AI 出图常把背景画成白色或格子，导入前需要用抠图工具换成真正的透明背景；九张表情要保持同一角色、同一姿势、同一画布尺寸，只有表情变化。</p>
+          </div>
         </section>
 
         <section id="page-settings" class="page" hidden>
