@@ -160,11 +160,16 @@ class NotificationStore:
             connection.execute("BEGIN IMMEDIATE")
             if event_key:
                 existing = connection.execute(
-                    "SELECT notification_id FROM notice_tags WHERE event_key=?", (event_key,)
+                    "SELECT t.notification_id, n.status FROM notice_tags t "
+                    "JOIN notifications n ON n.id = t.notification_id WHERE t.event_key=?",
+                    (event_key,),
                 ).fetchone()
+                if existing and existing[1] == "pending":
+                    return self.get(existing[0])
                 if existing:
-                    notice_id = existing[0]
-                    return self.get(notice_id)
+                    # A finished notice must not swallow a later request for the same
+                    # event: clients without a turn id repeat commands within a session.
+                    connection.execute("DELETE FROM notice_tags WHERE event_key=?", (event_key,))
             connection.execute(
                 "INSERT INTO notifications VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?)",
                 (notice_id, agent, title, message, json.dumps(normalized, ensure_ascii=False), now, now),

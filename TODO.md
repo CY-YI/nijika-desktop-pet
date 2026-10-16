@@ -1,5 +1,17 @@
 # 当前待办
 
+## 当前任务：Claude Code 审批提醒接入（2026-10-16）
+
+- 用户在气泡选择“现在接上”后实施 Claude Code 侧审批提醒；随后追问“我想确认的是为什么codex里面可以有这个功能……DSH里面也要再次添加……但是它能够实现”，并要求“请按照我的SOP落盘并提交吧”。已核实三条链路：Codex 走 `hooks.json` 权限钩子（10-11 已真实验收）；Claude Code 走用户级 `settings.json` 钩子（本轮接入）；DSH 目前只有 MCP 工具通道，主机侧权限事件桥接未实现（见 `integrations/dsh/README.md` 与 N19 边界），现有 DSH 效果不需要重复添加。
+- [x] `approval_hook.py` 增加 `--source claude-code`：气泡署名“Claude code”、文案指向 Claude Code 权限提示；Codex 默认路径逐字保持。
+- [x] `notification_store.py`：已完成的旧通知不再吞掉同 key 的新提醒；审批优先级 100 与“resolve 只作用于 pending、不伪造点击”保持不变。
+- [x] `%USERPROFILE%\.claude\settings.json` 注册 `PermissionRequest` + `PostToolUse`（async）两条 exec 钩子（项目 venv 的 python 直接拉起，不经 shell），改动前备份 `settings.json.backup.nijika-20261016-222118`。
+- [x] 验证：来源文案与空输出/退出码 0 的隔离检查、仓库冒烟测试通过；合成 CC 事件端到端气泡 → 用户点击回执 answered、PostToolUse 不覆盖点击、重复请求生成新通知并自动收起；运行中会话热加载生效，预创建通知被一次真实 `PostToolUse` 自动收起 resolved。
+- [x] 用户以气泡选定“新建 claude 分支”；源码与文档已提交到 `claude/cc-approval-reminder`（基于互动分支顶端）并推送，`main` 与 `codex/interaction-30-32-34` 保持原样。（审批钩子运行的是工作树源码：切回互动分支后 CC 侧会回到旧行为——署名 Codex、同命令重复请求不重发；把两处源码改动带入该分支或合入 main 后恢复。）
+- 验收边界：真实 `PermissionRequest` 自然触发（低提示权限模式下几乎不弹）尚未验收；气泡只提醒，不授予或绕过任何权限；Claude Code 侧当前运行源码，`dist\虹夏审批提醒.exe` 未重建，Codex 打包路径仍为旧代码。
+- 工作区清点：临时测试脚本 `_tmp_cc_hook_test.py` 已删除；本轮改动为 `approval_hook.py`、`notification_store.py` 与 CHANGELOG/README/AGENT_SETUP/REQUIREMENTS/TODO 文档；上一任务“并行写入提示”所指的未核实改动即本工作，归属已明确。
+- 后续可选：核实 DSH 是否提供等价的权限事件钩子；若有，可照 Codex / Claude Code 的模式再接审批自动气泡（未开始，等用户确认）。
+
 ## 当前任务：互动功能前建立可恢复存档（2026-10-16）
 
 - 用户选定 N30 分区触摸互动、N32 数值养成与投喂、N34 彩蛋动作，要求“在此之前先做好git存档”，担心 2D 动画效果不满意时需要恢复。
@@ -13,7 +25,7 @@
 - [ ] 下一阶段先制作小范围互动预览并验收动画效果，再递增实现 N30/N32/N34；不得以整张图片的简单晃动冒充完整新动作。
 - 验证边界：本轮为存档与范围记录，没有改动生产 Python/前端代码，也没有重建、替换或启动任何 EXE；沿用之前验收结果，不宣称新互动已实现。
 - 工作区清点：仅生成上述正式恢复资料，无一次性探针或测试目录；本机私人备份不推送、不打入分享包。运行程序与用户数据库未修改，SQLite 使用只读源连接及 backup API 获取一致性快照。
-- 并行写入提示：完成基线标签和本地备份后，工作区出现非本轮产生的审批/通知模块修改与临时测试文件（已观察到 `approval_hook.py`、`notification_store.py`、`_tmp_cc_hook_test.py`）；所有者未核实，原样保留、不执行、不加入本次提交。当前工作区因此不以干净作结；后续动画开发前须再次核对全部差异，必要时在隔离工作区继续，避免混入存档或误覆盖。
+- 并行写入提示：完成基线标签和本地备份后，工作区出现非本轮产生的审批/通知模块修改与临时测试文件（已观察到 `approval_hook.py`、`notification_store.py`、`_tmp_cc_hook_test.py`）；所有者未核实，原样保留、不执行、不加入本次提交。当前工作区因此不以干净作结；后续动画开发前须再次核对全部差异，必要时在隔离工作区继续，避免混入存档或误覆盖。（2026-10-16 晚核实：上述改动与临时文件属 Claude Code 审批提醒接入工作，已由上方任务记录并提交 `claude/cc-approval-reminder`；临时测试文件已删除，改动归属已明确；互动开发继续前先切回 `codex/interaction-30-32-34`。）
 
 ## 当前任务：第二版范围收敛（2026-10-16）
 

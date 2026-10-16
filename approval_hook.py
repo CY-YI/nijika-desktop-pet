@@ -1,4 +1,4 @@
-"""Notice-only Codex approval hooks. Never returns permission decisions."""
+"""Notice-only approval hooks for Codex and Claude Code. Never returns permission decisions."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def event_key(event: dict) -> str:
     return hashlib.sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
-def handle_event(event: dict, store: NotificationStore) -> str | None:
+def handle_event(event: dict, store: NotificationStore, source: str = "codex") -> str | None:
     name = event.get("hook_event_name")
     if name not in ("PermissionRequest", "PostToolUse"):
         return None
@@ -28,17 +28,25 @@ def handle_event(event: dict, store: NotificationStore) -> str | None:
     if name == "PostToolUse":
         store.resolve_approval(key)
         return None
+    if source == "claude-code":
+        agent, where = "Claude code", "Claude Code 的权限提示"
+    else:
+        agent, where = "Codex", "Codex 命令审批卡"
     folder = PureWindowsPath(str(event.get("cwd") or "当前任务")).name
     folder = "".join(c for c in folder if ord(c) >= 32)[:20] or "当前任务"
     notice = store.create(
-        "Codex", "命令需要授权",
-        f"{folder}的工具操作需要授权。请在 Codex 命令审批卡中处理；此气泡只提醒，不授予权限。",
+        agent, "命令需要授权",
+        f"{folder}的工具操作需要授权。请在 {where}中处理；此气泡只提醒，不授予权限。",
         ("知道了",), event_key=key, kind="approval",
     )
     return notice.id
 
 
 def main() -> None:
+    arguments = sys.argv[1:]
+    source = ("claude-code"
+              if "claude-code" in arguments or "--source=claude-code" in arguments
+              else "codex")
     try:
         payload = sys.stdin.buffer.read(1024 * 1024 + 1)
         if len(payload) > 1024 * 1024:
@@ -46,10 +54,11 @@ def main() -> None:
         event = json.loads(payload.decode("utf-8-sig"))
         if not isinstance(event, dict):
             raise ValueError("hook input must be an object")
-        handle_event(event, NotificationStore())
+        handle_event(event, NotificationStore(), source)
     except Exception:
-        # Fail open for the notification only; Codex still asks for approval.
-        print("虹夏审批提醒未发送；请处理 Codex 原有审批卡。", file=sys.stderr)
+        # Fail open for the notification only; the platform still asks for approval.
+        where = "Claude Code 原有权限提示" if source == "claude-code" else "Codex 原有审批卡"
+        print(f"虹夏审批提醒未发送；请处理 {where}。", file=sys.stderr)
     # Empty stdout / exit 0 leaves the platform's approval flow unchanged.
 
 

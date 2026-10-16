@@ -37,7 +37,7 @@
 | N16 | Must | 选择题显示每个方案的最小简介 | MCP 必填 `label` 和 `description`，气泡纵向选项卡，预览及点击回传 | 已通过源码、打包版与独立 Codex CLI 自主决策测试 |
 | N17 | Must | 简单决策与短成果审阅直接在桌宠完成 | 气泡显示完整短正文、接受/修改等具体选项；Agent 等待并读取点击结果 | 打包版已实测；新桌面应用任务的自主短成果审阅待复核 |
 | N18 | Must | 普通提醒在新版实际启动程序中可见，点击可回传 | 统一消息库、旧会话桥接、独立通知轮询及窗口恢复；2026-10-11 用户两次选择“显示正常” | 现场已通过；不同桌面环境需分别复测 |
-| N19 | Must | 命令权限申请能发桌面提示 | Codex PermissionRequest/PostToolUse hook 与仅通知气泡；两项已信任、启用，真实 Codex CLI 审批自动触发并收到用户“知道了”回执 | 本机 Codex CLI 已通过；气泡不代替审批卡，Work/DSH 权限事件未验收 |
+| N19 | Must | 命令权限申请能发桌面提示 | Codex PermissionRequest/PostToolUse hook 与仅通知气泡；两项已信任、启用，真实 Codex CLI 审批自动触发并收到用户“知道了”回执；2026-10-16 增加 Claude Code 用户级 `settings.json` 同名钩子并通过合成事件与真实 PostToolUse 验收 | 本机 Codex CLI 已通过；Claude Code 真实权限提示未自然触发；气泡不代替审批卡，Work/DSH 权限事件未验收 |
 | N20 | Must | 图形化快捷添加 Agent，以此作为管理界面核心 | `agent_setup.py`、`control_panel.py`、`control-ui/`；Codex/DSH 隔离配置与本机测试点击闭环通过 | 初版已实现；最终打包与外部客户端新任务验收未完成 |
 | N21 | Should | 角色皮肤与时装外壳替换 | `control_store.py` 与衣橱页面；PNG / 九帧 ZIP、切换及默认恢复，实际浏览器导入通过 | 初版已实现；本轮未提供新时装素材，最后桌宠源码需重建 |
 | N22 | Should | 可视化动作与日常互动设置 | `pet.py`、`control_store.py` 与设置页面；持久化、预览与独立轮询，浏览器刷新保留选择 | 初版已实现；最终 EXE 同步与正式入口待复验 |
