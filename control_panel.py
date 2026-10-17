@@ -12,17 +12,33 @@ import sys
 import threading
 import time
 import webbrowser
+from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
+
+from PIL import Image
 
 from agent_setup import AgentSetup
 from companion_store import CompanionStore
 from control_store import ControlStore, IDENTIFIER, SPRITES
 from notification_store import NotificationStore
+from interaction_store import InteractionStore
+from interaction_motion import ACTIONS, preview_webp
 
 
 WINDOW_TITLE = "虹夏桌宠 · 设置中心"
+_preview_lock = threading.Lock()
+
+
+@lru_cache(maxsize=8)
+def interaction_preview(directory: str, action: str, strength: str, effects: bool) -> bytes:
+    with Image.open(Path(directory) / (ACTIONS[action][2] + ".png")) as image:
+        art = image.convert("RGBA")
+        art.thumbnail((236, 354), Image.Resampling.LANCZOS)
+    source = Image.new("RGBA", (256, 384))
+    source.alpha_composite(art, ((256 - art.width) // 2, (384 - art.height) // 2))
+    return preview_webp(source, action, 0.5 if strength == "gentle" else 1.0, effects)
 
 
 def resource_root() -> Path:
@@ -38,6 +54,7 @@ class ControlApplication:
         self.store = ControlStore(database)
         self.notifications = NotificationStore(self.store.database)
         self.companion = CompanionStore(self.store.database)
+        self.interaction = InteractionStore(self.store.database)
         self.root = root or application_root()
         self.setup = AgentSetup(self.root, self.store, home)
 
@@ -72,7 +89,8 @@ class ControlApplication:
             agent.pop("backups", None)
         return {"renderer": self.renderer(), "settings": self.store.settings(), "agents": agents,
                 "clients": self.setup.clients(), "skins": self.store.skins(), "support": self.store.support(),
-                "companion": self.companion.snapshot()}
+                "companion": self.companion.snapshot(),
+                "interaction": {**self.interaction.snapshot(), "desktop_playback": False}}
 
     def post(self, route: str, data: dict) -> dict:
         if route == "/api/agents/plan":
@@ -101,6 +119,12 @@ class ControlApplication:
             return self.notice(notice.id)
         if route == "/api/settings":
             return self.store.update_settings(data)
+        if route == "/api/interaction":
+            if "action" in data:
+                if set(data) != {"action"} or not isinstance(data["action"], str):
+                    raise ValueError("投喂操作只接受一个点心或喝水动作。")
+                return self.interaction.feed(data["action"])
+            return self.interaction.configure(data)
         if route == "/api/support":
             return self.store.update_support(data)
         if route == "/api/focus":
@@ -194,6 +218,22 @@ class ControlHandler(BaseHTTPRequestHandler):
         try:
             if route == "/api/state":
                 self.send_json(self.server.app.state())
+            elif route.startswith("/api/interaction-preview/"):
+                action = route.rsplit("/", 1)[-1].removesuffix(".webp")
+                query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                if action not in ACTIONS or route != f"/api/interaction-preview/{action}.webp":
+                    raise ValueError("不支持这个互动动作。")
+                if set(query) - {"strength", "effects", "skin"} or any(len(value) != 1 for value in query.values()):
+                    raise ValueError("动作预览参数无效。")
+                strength, effects = query.get("strength", ["lively"])[0], query.get("effects", ["1"])[0]
+                if strength not in ("gentle", "lively") or effects not in ("0", "1"):
+                    raise ValueError("请选择轻柔或活泼幅度，以及是否显示特效。")
+                skin = query.get("skin", [self.server.app.store.settings()["skin"]])[0]
+                directory = self.server.app.store.skin_directory(skin) or resource_root() / "assets" / "sprites"
+                # Serialize only expensive preview generation; other API requests stay responsive.
+                with _preview_lock:
+                    data = interaction_preview(str(directory), action, strength, effects == "1")
+                self.send_bytes(data, "image/webp")
             elif route.startswith("/api/notices/"):
                 self.send_json(self.server.app.notice(route.rsplit("/", 1)[1]))
             elif route.startswith("/api/agents/export/"):
@@ -202,12 +242,12 @@ class ControlHandler(BaseHTTPRequestHandler):
                     raise ValueError("找不到 Agent 档案。")
                 self.send_json({"config": self.server.app.setup.export(agent["source_name"]),
                                 "instructions": (self.server.app.root / "distribution/codex-global-instructions.txt").read_text(encoding="utf-8-sig")})
-            elif route in ("/", "/app.js", "/styles.css"):
+            elif route in ("/", "/app.js", "/interaction.js", "/styles.css"):
                 filename = "index.html" if route == "/" else route[1:]
                 data = (resource_root() / "control-ui" / filename).read_bytes()
                 if filename == "index.html":
                     data = data.replace(b"NIJIKA_SESSION_TOKEN", self.server.token.encode("ascii"))
-                content_type = {"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8", "styles.css": "text/css; charset=utf-8"}[filename]
+                content_type = "text/javascript; charset=utf-8" if filename.endswith(".js") else {"index.html": "text/html; charset=utf-8", "styles.css": "text/css; charset=utf-8"}[filename]
                 self.send_bytes(data, content_type)
             elif route.startswith("/skin/"):
                 parts = route.strip("/").split("/")

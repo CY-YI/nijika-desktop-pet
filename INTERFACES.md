@@ -1,5 +1,19 @@
 # 内部接口
 
+## 互动设置与动作试映（2026-10-17，预览阶段）
+
+继续使用下方会话鉴权与同源规则；此增量不修改 MCP 协议，也不发送桌面动作。
+
+| 接口 | 输入 | 输出或效果 |
+| --- | --- | --- |
+| `GET /api/state` 新增 `interaction` | 会话头 | 养成与触摸/特效开关、satiety/hydration/mood、feed_wait/drink_wait 秒数；`desktop_playback=false` 明确表示此版尚未接入桌面动作 |
+| `POST /api/interaction` | 非空开关对象：`enabled`、`touch_enabled`、`effects_enabled`，值必须为布尔 | 事务保存偏好，其他字段拒绝；开启后数值随本机状态快照更新，关闭暂停数值 |
+| `POST /api/interaction` | 仅 `{action: "feed"}` 或 `{action: "drink"}` | 返回 `{status:"applied", action, care}`；实际改变对应数值，需开启养成，各自冷却 30 秒。其他动作不能排队或假装播放 |
+| `GET /api/interaction-preview/<action>.webp` | 会话头；可选 `skin`、`strength=gentle/lively`、`effects=0/1`，重复/未知参数拒绝 | 返回单次循环的透明 WebP；动作只允许 pet/poke/nod/shake/dance/lift/feed/drink；只生成预览，不改养成、不发通知 |
+| `GET /interaction.js` | 现有静态页面同源校验 | 独立互动页面控制逻辑，使用 Blob URL 播放鉴权取得的动画，不把会话令牌放到 URL |
+
+`pet_care` 与原通知表独立，没有新增 `pet_actions` 队列。新触摸与特效偏好目前作用于本页面试映；正式桌宠设置仍由原 `/api/settings` 控制。试映幅度是临时选项，不改正式桌面动作强度。接口非法输入返回 400，无令牌或异站 Origin 返回 403。
+
 ## 本机管理接口（2026-10-15 设计）
 
 所有 `/api/` 请求须携带 `X-Nijika-Token`；令牌只在管理服务运行期间有效，未知 Host、其他 Origin 与跨域预检均拒绝。JSON 错误使用 `{error: 可读原因}`，不返回堆栈或完整客户端配置。路径均为同源相对地址。

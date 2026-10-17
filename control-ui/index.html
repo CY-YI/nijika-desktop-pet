@@ -9,6 +9,7 @@
   <link rel="icon" href="/skin/default/happy.png">
   <link rel="stylesheet" href="/styles.css">
   <script src="/app.js" defer></script>
+  <script src="/interaction.js" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -19,6 +20,7 @@
         <button class="nav-item active" data-page="agents" aria-current="page"><span>⌘</span>Agent 接入<span class="nav-dot"></span></button>
         <button class="nav-item" data-page="focus"><span>◷</span>专注与提醒</button>
         <button class="nav-item" data-page="notes"><span>✎</span>今日便签与陪伴</button>
+        <button class="nav-item" data-page="interaction"><span>☺</span>互动与养成</button>
         <button class="nav-item" data-page="skins"><span>♧</span>角色衣橱</button>
         <button class="nav-item" data-page="settings"><span>☷</span>动作与陪伴</button>
         <button class="nav-item" data-page="support"><span>♡</span>投喂支持</button>
@@ -97,6 +99,54 @@
               <p class="bond-note" id="bond-next">下一次亲密阶段会在 30 点默契值。</p>
               <small>摸头、完成专注、打勾便签都会慢慢累积。</small>
             </div>
+          </div>
+        </section>
+
+        <section id="page-interaction" class="page" hidden>
+          <div class="page-heading"><div><p class="eyebrow">A LITTLE CLOSER</p><h1>互动与养成 <span class="interaction-edition">先试试看</span></h1><p>摸摸头，晃晃脚。工作以外，也一起放松一下。</p></div></div>
+          <div class="interaction-scope"><span aria-hidden="true">✦</span><p><strong>这一版，先在这里体验。</strong> 动作在右侧试映，养成数值保存在本机；桌面触摸与彩蛋动作将在效果确认后接入。</p></div>
+          <div class="interaction-layout">
+            <div class="interaction-panels">
+              <article class="interaction-card">
+                <div class="interaction-card-heading"><div><span class="interaction-kicker">01 · 小小的回应</span><h2>今天想怎么互动？</h2></div><span class="interaction-note">只预览，不改数值</span></div>
+                <div class="interaction-action-grid" role="group" aria-label="动作预览">
+                  <button class="action-tile" data-preview="pet" type="button" aria-pressed="false"><span class="action-mark peach" aria-hidden="true">♡</span><span><strong>摸摸头</strong><small>轻轻低头，冒一点爱心</small></span><b aria-hidden="true">↗</b></button>
+                  <button class="action-tile" data-preview="poke" type="button" aria-pressed="false"><span class="action-mark lilac" aria-hidden="true">·ᴗ·</span><span><strong>戳戳脸</strong><small>脸颊轻弹，歪头看你</small></span><b aria-hidden="true">↗</b></button>
+                  <button class="action-tile" data-preview="nod" type="button" aria-pressed="false"><span class="action-mark mint" aria-hidden="true">✓</span><span><strong>点点头</strong><small>嗯嗯，有在认真听</small></span><b aria-hidden="true">↗</b></button>
+                  <button class="action-tile" data-preview="shake" type="button" aria-pressed="false"><span class="action-mark lilac" aria-hidden="true">～</span><span><strong>摇摇头</strong><small>发梢也跟着轻轻摇</small></span><b aria-hidden="true">↗</b></button>
+                  <button class="action-tile" data-preview="dance" type="button" aria-pressed="false"><span class="action-mark peach" aria-hidden="true">♫</span><span><strong>坐姿小舞</strong><small>跟着节奏晃一晃脚</small></span><b aria-hidden="true">↗</b></button>
+                  <button class="action-tile" data-preview="lift" type="button" aria-pressed="false"><span class="action-mark mint" aria-hidden="true">⌁</span><span><strong>提起晃晃</strong><small>头发和双脚慢半拍</small></span><b aria-hidden="true">↗</b></button>
+                </div>
+                <p class="interaction-footnote">保留完整坐姿，用局部连续变形表现动作；这一版不含站立舞或背面转身。</p>
+              </article>
+              <article class="interaction-card" id="care-card">
+                <div class="interaction-card-heading"><div><span class="interaction-kicker">02 · 慢慢照顾</span><h2>吃点心，也别忘喝水</h2></div><span id="care-state" class="care-state">养成未开启</span></div>
+                <div class="care-row"><label for="care-satiety">饱食</label><meter id="care-satiety" min="0" max="100" value="80"></meter><span id="care-satiety-text">80 / 100</span></div>
+                <div class="care-row water"><label for="care-hydration">水分</label><meter id="care-hydration" min="0" max="100" value="80"></meter><span id="care-hydration-text">80 / 100</span></div>
+                <div class="care-row mood"><label for="care-mood">心情</label><meter id="care-mood" min="0" max="100" value="80"></meter><span id="care-mood-text">80 / 100</span></div>
+                <div class="interaction-actions"><button id="feed-pet" class="button primary" type="button" data-care="feed" disabled>喂一块点心</button><button id="water-pet" class="button secondary" type="button" data-care="drink" disabled>递一杯水</button></div>
+                <p id="care-help" class="field-help">在下方开启并保存养成，即可投喂；也可以先只看动画。</p>
+                <div class="care-preview-links"><span>只想看看？</span><button class="text-button" type="button" data-preview="feed" aria-pressed="false">试映吃点心 ↗</button><button class="text-button" type="button" data-preview="drink" aria-pressed="false">试映喝水 ↗</button></div>
+                <p id="care-result" class="interaction-footnote" role="status">不用买道具。数值为 0 也没有死亡或惩罚。</p>
+              </article>
+              <form id="interaction-form" class="interaction-card">
+                <div class="interaction-card-heading"><div><span class="interaction-kicker">03 · 按你的习惯</span><h2>陪伴有自己的节奏</h2></div></div>
+                <label class="interaction-toggle"><span><strong>开启轻养成</strong><small>饱食、水分与心情缓慢变化；关闭后暂停数值。</small></span><input type="checkbox" role="switch" name="enabled"></label>
+                <label class="interaction-toggle"><span><strong>允许分区触摸</strong><small>先在右侧试用：头顶摸头、脸颊轻戳。</small></span><input type="checkbox" role="switch" name="touch_enabled" checked></label>
+                <label class="interaction-toggle"><span><strong>显示互动小特效</strong><small>摸头的爱心、投喂的点心和水杯。</small></span><input type="checkbox" role="switch" name="effects_enabled" checked></label>
+                <p class="interaction-footnote">离线变化最多计算 8 小时；每次点心或喝水间隔 30 秒。这些设置不改变 Agent 提醒和命令审批。</p>
+                <div class="interaction-save-row"><span id="interaction-save-status" role="status">设置保存在这台电脑</span><button id="save-interaction" type="submit" class="button primary" disabled>保存互动设置</button></div>
+              </form>
+            </div>
+            <aside class="interaction-card interaction-stage">
+              <div class="interaction-stage-heading"><span class="hero-tag">动作试映室</span><span class="preview-local">面板预览</span></div>
+              <div class="interaction-scene"><span class="scene-sparkle" aria-hidden="true">✧</span><span class="scene-floor" aria-hidden="true"></span><button id="interaction-character" class="interaction-character" type="button" aria-label="试摸角色，头顶摸头、脸颊轻戳"><img id="interaction-preview" class="preview-still" src="/skin/default/curious.png" width="256" height="384" alt="完整坐姿的角色互动预览"></button><span class="scene-hint">点点头顶，或戳戳脸颊</span></div>
+              <strong id="interaction-preview-status" role="status">选一个动作，看看她的回应</strong>
+              <p id="interaction-preview-detail">双腿完整入画，动作结束会回到原来的坐姿。</p>
+              <div class="preview-transport"><button id="preview-replay" class="button small secondary" type="button" disabled>再看一次</button><button id="preview-pause" class="button small secondary" type="button" disabled>停止预览</button></div>
+              <fieldset class="preview-intensity"><legend>试映幅度</legend><div class="segmented"><label><input type="radio" name="preview_strength" value="gentle"><span>轻柔自然</span></label><label><input type="radio" name="preview_strength" value="lively" checked><span>活泼明显</span></label></div></fieldset>
+              <p class="interaction-footnote">这里只调整试映，不会改动桌面的动作强度。</p>
+            </aside>
           </div>
         </section>
 

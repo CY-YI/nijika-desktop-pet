@@ -83,15 +83,16 @@ function download(data, filename, type="application/json") {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 function gotoPage(page) {
-  if (!["agents","focus","notes","skins","settings","support"].includes(page)) page = "agents";
+  if (!["agents","focus","notes","interaction","skins","settings","support"].includes(page)) page = "agents";
   $$(".page").forEach(item => item.hidden = item.id !== "page-" + page);
   $$(".nav-item").forEach(item => {
     item.classList.toggle("active", item.dataset.page === page);
     if (item.dataset.page === page) item.setAttribute("aria-current", "page");
     else item.removeAttribute("aria-current");
   });
-  $("#page-name").textContent = {agents:"Agent 接入",focus:"专注与提醒",notes:"今日便签与陪伴",skins:"角色衣橱",settings:"动作与陪伴",support:"投喂支持"}[page];
+  $("#page-name").textContent = {agents:"Agent 接入",focus:"专注与提醒",notes:"今日便签与陪伴",interaction:"互动与养成",skins:"角色衣橱",settings:"动作与陪伴",support:"投喂支持"}[page];
   history.replaceState(null,"", "#" + page);
+  document.dispatchEvent(new CustomEvent("nijika:page", {detail: page}));
 }
 $$(".nav-item").forEach(item => item.addEventListener("click", () => gotoPage(item.dataset.page)));
 $(".brand").addEventListener("click", () => gotoPage("agents"));
@@ -279,6 +280,7 @@ async function refresh(force=false) {
     const nextSupport = JSON.stringify(state.support);
     if (force || nextSupport !== supportSignature) {supportSignature = nextSupport; renderSupport();}
     renderCompanion();
+    if (typeof renderInteraction === "function") renderInteraction(state.interaction);
     $("#settings-status").textContent = settingsDirty ? "有未保存的修改" : !online ? "已保存；桌宠启动后应用" :
       !state.renderer.supports_control ? "当前桌宠需更新后重启，才能应用面板设置" :
       state.renderer.applied_revision >= state.settings.revision ? "已同步到桌面上的虹夏" : "已保存，等待桌宠应用…";
