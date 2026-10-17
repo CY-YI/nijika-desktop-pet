@@ -31,6 +31,10 @@
 
 可选 `approval_hook.py` 接收 Codex `PermissionRequest` 与 `PostToolUse` 事件。审批通知优先显示、按事件去重；操作完成后收起尚未点击的对应提醒。程序不存储原始命令，不输出允许/拒绝决定；“知道了”仅是提醒回执，实际授权始终留在 Codex 审批卡。全局 hook 定义必须由用户审阅并信任后才会执行，配置和验收步骤见 `AGENT_SETUP.md`。
 
+2026-10-17 Codex 完成兜底：同一冻结 Hook 扩展处理 `UserPromptSubmit` 与 `Stop`。`codex_completion.py` 仅在内存分析 prompt、工具名/结果和最后回复，输出分类与布尔值；`NotificationStore` 的 `codex_turn_state` 只保存 SHA256 会话/轮次标识、分类、工具计数、通知标记与时间。Stop 必须有有效 prompt 状态与工作/成果证据，排除内部标题、简短问答、空结果和等待选择。成功的虹夏 show_completion/request_decision（含 Work 插件命名变体）会抑制兜底；invalid 或只查询回复不抑制。通知插入与已发送标记在同一 `BEGIN IMMEDIATE` 事务中，点击、关闭及通知保留期清理后仍凭无正文标记去重。未发任何通知的旧状态 30 天后清理（新 Hook 在开轮时也清理，兼容尚未重建的桌宠）；已发主动或兜底通知的哈希去重行保留至消息库删除/重置。
+
+固定气泡为“Codex · 任务完成 / Codex 任务已完成，请查看结果。/ 知道了”，不转发任务全文。分类采用保守启发式，不能覆盖任意语言和所有表达；事件缺失或数据库异常时静默失败且退出 0，不阻断正常工作。Stop 在所有路径返回 `{}`，不续跑模型；不读取不稳定的 transcript。原 Computer Use `notify` 不改，Claude Code 来源仍只处理审批两事件。此次数据库只新增表，保留原九列通知结构，现有桌宠/MCP EXE 仍能读取新通知；无需为此重建前端或修改各 Agent 的 MCP 配置。
+
 2026-10-07 Work 本机插件层：`.agents/plugins/marketplace.json` 暴露 `plugins/nijika-work-local/`，其 `mcp.json` 以 `nijika-work-pet` 名称通过插件内的 Python 启动脚本运行同一个本机 EXE，避免与已有 Codex 直接配置的 `nijika-pet` 同名；插件 skill 约束简短决策、等待回执与回退行为。这层只在可启动本机 stdio MCP 的本地执行环境有效；托管 Work 需另有远程 HTTPS MCP 与身份验证。当前验证边界是插件安装、清单启用、插件启动入口及本机 MCP 协议，Work 会话端到端检查仍单列为待办。
 
 Windows 本机负责绘制和消息循环；图像生成只负责制作静态素材，不进入运行时。`build.ps1` 用 PyInstaller 分别打包桌宠窗口版、MCP 标准输入输出服务版与可选审批提醒程序，图像作为桌宠只读资源嵌入。通知记录位于用户本机目录；角色位置和动态偏好仍未持久化。

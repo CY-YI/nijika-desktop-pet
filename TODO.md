@@ -1,5 +1,23 @@
 # 当前待办
 
+## 当前任务：Codex 完成提醒兜底（2026-10-17）
+
+- 用户决定：“可以先做codex的”。本轮仅增加 Codex 完成提醒兜底，按 SOP Full 通道局部修复；Work、DSH、Claude Code 的完成事件接入仍在本轮范围外。
+- 接手基线：`55e7096`，分支 `codex/codex-stop-reminder`；另一个互动工作树不参与修改。已有 39 项回归基线通过。
+- 选型：采用官方 `UserPromptSubmit` / `PostToolUse` / `Stop` 生命周期 hook，复用安装版 `虹夏审批提醒.exe` 与消息库；保留现有 Computer Use 的 `notify` 原文。官方协议依据：<https://learn.chatgpt.com/docs/hooks>（2026-10-17 已检索并打开）。`Stop` 固定输出 `{}`，不输出续跑或授权决定。
+- 验收目标：实质任务漏调用提醒时补发一次；成功调用过虹夏完成/选择工具则不补发；简短事实问答、内部标题和缺失轮次状态不提醒；关闭/点击后的重复 Stop 仍不重复；正文、命令与回复不存入轮次状态。
+- [x] MVU1：`codex_completion.py` 在内存分类，轮次元数据仅存会话/轮次 SHA256、类别、计数、通知标记与时间；完成通知与标记同事务提交。已发送的无正文去重行保留，其他旧状态 30 天清理。隔离测试覆盖并发、关闭/回答后重放、消息保留期后重放、失败回滚、输入容错及无原文落盘。
+- [x] MVU2：四事件安装器保留其他组与同组 handler、写前备份、重复安装不叠加；新增事件固定 --event 参数，畸形 Stop 仍返回 `{}`。新增 UserPromptSubmit / Stop 超时 15 秒，原审批两项定义（含 5 秒超时）保持原样。
+- [x] 56 项完整回归通过；打包 `tools/smoke_approval_hook.py` 通过（实际 EXE、特殊字符路径、四事件、stdin、notify 不变、幂等、Claude Code 原审批来源与去重）。
+- [x] `tools/smoke_codex_completion.py` 真实 CLI 验收：work 创建并读取临时文件后 1 条兜底；question 简短问答 0 条；notice 主动 MCP 1 条且兜底 0 条。均使用隔离队列，逐字节核对用户配置/notify/信任未变。并发首测曾漏掉 UserPromptSubmit 状态（原因未定位）；顺序复测通过，增加新增事件启动余量后并发两场景复测通过。分类为启发式，不把测试范围外的表达保证为绝无误判。
+- [x] 最终 Hook 已重建并复制到 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏审批提醒.exe`，SHA256 `288489dcd5a7325fcbf367a0f99df927cbc68937234b8ae38a94bb89c7af1e30`，与源码 dist 相同；用确切安装路径启动、stdin→隔离完成队列验证通过。仅同步 Hook EXE 与 Codex 安装器/模板，桌宠/MCP 及前端未替换。
+- [x] 正式 hooks.json 已合并；PermissionRequest / PostToolUse 原定义和 config.toml 原字节均未变，没有代写信任。原 Hook/脚本/模板/用户 hooks 备份在 `backups/20261017-codex-stop-183410/`，清单与回退见 ROLLBACK.md。
+- [x] 需求、架构、接口、安装、接入、回退及变更记录已同步；新版试用包与文档包单独命名为 `2026-10-17-codex-stop.zip`，保留原分享包。20 项试用包白名单、SHA256 清单与三个 EXE 核对通过；Work 路径为 AUTO_LOCAL_MCP，占位配置不含本机队列/私人备份/真实客户端配置。文档包新增 ROLLBACK.md；19 个本轮修改文件的凭据特征扫描、打包模块检查与 git diff --check 通过。
+- Git 归档：本轮只提交与推送 `codex/codex-stop-reminder`；`main` 与互动分支未改，提交与远端以该分支的 Git 历史为准。
+- [ ] 需本人后续操作：在 Codex CLI `/hooks` 审阅信任新增 UserPromptSubmit 和 Stop，再开新任务验收正式自然触发；旧审批两项此前已验收，不把隔离运行的临时信任豁免当成正式信任。
+- 验收边界：本轮不改前端或 Agent 配置入口，全部 API/存储回归通过；Work/DSH/Claude Code 的完成兜底仍未实施。当前内置浏览器内核启动失败，不作新的页面目视通过声明。
+- 工作区清点：`tools/smoke_codex_completion.py` 提升为可复用 CLI 验收工具；`build/codex-stop/` 保留为最终 Hook 的构建分析与 spec，`diagnostics/build-codex-stop.log` 为构建日志，`diagnostics/codex-stop-install.json` 为安装哈希及备份位置。均忽略入 Git、分享包不含这些目录。首次新测试因测试连接未关闭产生清理失败，现已修复并回归通过；清理其 10 个已知 `%TEMP%/tmp*` 目录的请求被自动审批审查拒绝，仅返回 blocked by policy，未给具体原因，未执行删除，待后续允许时处理；不清理来源不明目录。
+
 ## 当前任务：角色衣橱·自制角色引导（2026-10-17）
 
 - 用户原话：“前端不是有一个导入皮肤的功能吗我希望这个皮肤可以由人家去制定一角色啊之类的这些东西但是你最好是给他一个比如说发给ai的提示词然后再在那边标注这个文件是什么样的类型格式的”。目标：让用户能拿一段提示词交给会画图的 AI，得到符合桌宠导入校验的角色素材，并在界面上直接看到两种文件格式的要求。
@@ -15,7 +33,7 @@
 ## 当前任务：验证前端设置 UI 与各 Agent 接入步骤（2026-10-17）
 
 - 用户原话：“把这个未完成的任务记录下来就行然后你验证一下是否会影响你做的那个前端ui的各个功能然后还有我如果部署各个agent揭露作虫的步骤有没有改变”。三件事：记录“Codex 结束事件接入虹夏”未完成项、实测设置中心各页、核对各客户端接入步骤是否变化。
-- [ ] 未完成任务：把 Codex 系统级 `turn-ended` 通知接入虹夏消息库。当前 `~/.codex/config.toml` 的 `notify` 仍指向 `codex-computer-use.exe`，任务结束提醒完全依赖 Agent 遵守规则主动调用 `show_completion`；Agent 漏调用时桌面不会兜底提醒（2026-10-17 用户已遇到一次漏发）。实现要点：桥接程序读 turn-ended 负载写 NotificationStore，需过滤纯问答不打扰、避免与 Agent 主动提醒重复；按 SOP Full 通道先预览再替换，未开始。
+- [x] 原待办“Codex 系统级结束通知兜底”已进入上方 N51 任务：改用官方 Stop 生命周期 Hook 接入，原 Computer Use notify 保留。代码、隔离测试与真实 CLI 已完成；正式安装和本人信任状态以本文件最上方任务为准，不再按未开始的 turn-ended 方案续作。
 - [x] 前端 UI 实测（`codex/interaction-preview` 分支的 `control-ui/` 与 `main` 逐字节相同，判断不受影响，仍按用户要求实测）：`GET /` 注入令牌、无令牌 `GET /api/state` 返回 403（鉴权按预期拒绝）；`GET /api/state` 返回 renderer/agents/clients/skins/support/companion 全部字段；agents plan→apply→prepare→test 完整闭环通过（Codex 档案建立、接入目录与自动配置提示词生成、测试提醒入队）；focus configure/start/pause/reset 通过；notes add 通过；settings 更新通过；support 更新（name/message/url）通过；reminders 通过；skins 导入（非全透明 PNG）通过；support 收款图上传通过；未知路由按预期报错。
 - 边界：本轮浏览器内核在当前沙箱下无法启动（`windows sandbox failed: helper_unknown_error`），因此 UI 验收走 API 级实测，未做页面像素级回归；接口与数据通路全部覆盖。
 - [x] 接入步骤核对：Codex、Work、DSH 的向导/文档流程与 10-16 统一安装路径后一致，均指向 `%LOCALAPPDATA%\NijikaDesktopPet\app`，用户侧步骤（重载客户端、新任务验证、本人信任 hook）未变。Claude Code 为源码向导暂未覆盖的新客户端：`agent_setup.py` 的 `CLIENTS` 仍只有 codex/work/dsh/custom，设置中心不提供 Claude Code 选项，接入需按 `AGENT_SETUP.md` 手动执行 `claude mcp add` + `integrations\claude-code\install-hooks.ps1`；文档第 125 行误称“向导可为 Claude Code 档案生成配置”，与实际不符，待修正或补向导。

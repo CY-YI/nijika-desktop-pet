@@ -18,6 +18,7 @@ FILES = (
     "INTERFACES.md",
     "CHANGELOG.md",
     "TODO.md",
+    "ROLLBACK.md",
     "AGENTS.md",
     "art/PROMPTS.md",
     "art/bubble-preview.png",

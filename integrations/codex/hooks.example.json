@@ -1,6 +1,15 @@
 {
-  "description": "虹夏命令审批提醒：只通知，不决定授权",
+  "description": "虹夏 Codex 完成兜底与命令审批提醒：只通知，不决定授权",
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [{
+          "type": "command",
+          "command": "YOUR_NIJIKA_APPROVAL_EXE_HERE --event UserPromptSubmit",
+          "timeout": 15
+        }]
+      }
+    ],
     "PermissionRequest": [
       {
         "matcher": ".*",
@@ -19,6 +28,15 @@
           "type": "command",
           "command": "YOUR_NIJIKA_APPROVAL_EXE_HERE",
           "timeout": 5
+        }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{
+          "type": "command",
+          "command": "YOUR_NIJIKA_APPROVAL_EXE_HERE --event Stop",
+          "timeout": 15
         }]
       }
     ]

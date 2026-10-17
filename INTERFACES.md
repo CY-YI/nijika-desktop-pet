@@ -62,6 +62,16 @@ Agent 配置预览具有有效期；文件在预览后发生变化时拒绝覆�
 - `LegacyQueueBridge.sync()`：旧库待处理请求复制到新库并保留 ID；新库的点击或关闭结果写回对应旧库。桥接记录单独存在 `legacy_origins` 表，不改变原通知的九列表结构。
 - `renderer-status.json`：桌宠每约三秒原子更新进程 ID、时间、实际数据库路径/文件标识、当前通知 ID、气泡可见性和矩形。供本机诊断使用，不是 MCP 显示回执或用户确认。
 - 审批程序 stdin：Codex JSON 事件，最多 1 MiB；`PermissionRequest` 创建 `kind=approval` 的优先通知，`PostToolUse` 收起匹配的未处理通知并标记 `resolved`。`notice_tags` 保存事件摘要哈希、种类和优先级，不存储原始命令。
-- 审批程序 stdout：始终为空，退出码 0，不输出授权决定。格式错误仅在 stderr 写固定错误提示，不阻断 Codex 原审批流程。“知道了”只产生通知回执。
+- 审批程序 stdout：PermissionRequest / PostToolUse 始终为空，退出码 0，不输出授权决定。审批输入格式错误只在 stderr 写固定错误提示，不阻断 Codex 原审批流程。“知道了”只产生通知回执。
+
+2026-10-17 Codex 完成事件扩展（同一 `虹夏审批提醒.exe`，不变更 MCP 四工具）：
+
+| 事件 | 必要输入 | 效果与输出 |
+| --- | --- | --- |
+| `UserPromptSubmit` | 非空且不超过 512 字的 `session_id` / `turn_id`，`prompt` | 在内存分类，保存哈希轮次状态；stdout 空 |
+| `PostToolUse` | 同轮标识，`tool_name`、`tool_response` | 累加工作工具计数；只有成功创建虹夏通知的响应才标记已通知；保留审批收起行为；stdout 空 |
+| `Stop` | 同轮标识，非空 `last_assistant_message` | 通过分类与去重后写一条固定文案完成提醒；无论写入/跳过/异常均输出 `{}`、退出 0 |
+
+所有事件通过 stdin 单个 JSON 对象传输，上限 1 MiB。安装器只为新增事件增加固定 `--event UserPromptSubmit` / `--event Stop` 参数，便于畸形输入也能保持 Stop 协议。原审批调用命令保持原样，仍需核对客户端实际信任状态。`codex_turn_state` 不含原始 prompt、命令、工具输出、回复、工作路径或 transcript；完成去重标记不随通知清理。内部标题、子任务显式标识、无有效 UserPromptSubmit 的 Stop 不创建通知。启发式过滤有误判可能，不承诺所有 Agent 或宿主均提供相同事件；来源为 claude-code 时忽略新增生命周期事件。
 
 审批 hook 要求本人审阅并信任；当前任务不请求审批时不会有该事件。真实平台审批验收与模拟输入测试分开记录，配置步骤见 `AGENT_SETUP.md`。

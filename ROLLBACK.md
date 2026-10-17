@@ -26,3 +26,11 @@
 7. 重启恢复的正式程序，复验角色显示、原动画、气泡和一次 MCP 点击回传，再标记恢复完成。
 
 本文件是恢复说明，本轮没有执行回退、替换正式程序或修改本机数据。
+
+## Codex 完成兜底的独立回退点（2026-10-17）
+
+完成兜底开发基线为 `55e7096`，新实现位于 `codex/codex-stop-reminder`。正式安装前的备份在本机 `backups/20261017-codex-stop-183410/`：包括原 `dist/虹夏审批提醒.exe`、原 Codex 安装器/模板、`hooks.before.json` 与 `MANIFEST.json`。这些资料用于本次增量的恢复，不含 config.toml 或模型凭据；不上传。
+
+仅关闭完成兜底时，在 Codex `/hooks` 停用本项目的 UserPromptSubmit 与 Stop；保留原审批两项和 Computer Use notify。需回退程序时，核对清单哈希，待没有正在执行的 Hook 后把备份 EXE 及脚本/模板恢复至 `%LOCALAPPDATA%\NijikaDesktopPet\app`。若 hooks.json 自备份后未新增其他内容，可先备份当前文件再恢复 hooks.before.json；有其他新改动时仅移除本项目新增两事件 handler，保留它们和既有审批。不要回写信任记录。
+
+本次只新增 `codex_turn_state` 表，没有改原通知结构。回退旧 Hook 后该表可留在库中，旧桌宠/MCP 会忽略它；不需还原或删除消息库，也不影响设置、皮肤、便签与其他 Agent。仅切换 Git 分支不会回退安装目录中的 EXE。

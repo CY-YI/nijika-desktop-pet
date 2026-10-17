@@ -100,7 +100,7 @@ Copy-Item -LiteralPath '.\skills\nijika-desktop-dialog\SKILL.md' -Destination $s
 
 把 [Codex 全局触发规则](distribution/codex-global-instructions.txt) 合并到 `%USERPROFILE%\.codex\AGENTS.md`，可使其他工程的新 Codex 任务也知道何时使用桌宠；本仓库的 `AGENTS.md` 只覆盖本仓库。若已存在同名 `nijika-pet` 服务，先用 `codex mcp get nijika-pet` 核对旧路径，不要重复添加。新开 Codex 任务后再测试；旧任务不保证热加载工具和技能。
 
-### Codex 命令审批提醒（可选）
+### Codex 完成兜底与命令审批提醒（可选）
 
 普通决策由 Agent 调用 MCP，命令权限申请则由 Codex 的审批事件触发，两者是不同入口。源码构建完成后运行：
 
@@ -108,17 +108,21 @@ Copy-Item -LiteralPath '.\skills\nijika-desktop-dialog\SKILL.md' -Destination $s
 powershell -ExecutionPolicy Bypass -File .\integrations\codex\install-hooks.ps1
 ```
 
-试用包安装时可改用 `distribution/install.ps1 -Codex -CodexHooks -NoLaunch`。脚本向 `%USERPROFILE%\.codex\hooks.json` 添加 `PermissionRequest` 和 `PostToolUse` 定义，保留其他 hook 并备份已有文件；重复安装替换本项目条目，不重复叠加。
+试用包安装时可改用 `distribution/install.ps1 -Codex -CodexHooks -NoLaunch`。脚本向 `%USERPROFILE%\.codex\hooks.json` 添加 `UserPromptSubmit`、`PermissionRequest`、`PostToolUse` 和 `Stop` 四类定义，保留其他 hook（含同组 handler）并备份已有文件；重复安装替换本项目条目，不重复叠加。既有 Computer Use 的 `notify` 保持原文。
 
-**安装定义后还须本人审阅并信任这两个 hook。** 在 Codex CLI 交互会话输入 `/hooks`，核对它们调用的是本机 `虹夏审批提醒.exe`，按界面完成审阅，再开新任务。[Codex 官方 hooks 文档](https://learn.chatgpt.com/docs/hooks)要求非托管 hook 在审阅并信任前跳过执行；本脚本不会替你写入信任或修改审批策略。
+**安装定义后还须本人审阅并信任 hook。** 在 Codex CLI 交互会话输入 `/hooks`，核对它们调用的是本机 `虹夏审批提醒.exe`，按界面完成审阅，再开新任务。旧版已信任审批两项的用户，至少还需审阅新增的 **UserPromptSubmit 与 Stop**。[Codex 官方 hooks 文档](https://learn.chatgpt.com/docs/hooks)要求非托管 hook 在审阅并信任前跳过执行；本脚本不会替你写入信任或修改审批策略。
 
-当前 CLI 的 `/hooks` 页分别显示 `Installed / Active / Review`：仅安装时两项均为 `1 / 0 / 1`，不能视为已启用执行。回车可审阅选中的事件；页面底部的 `t trust all` 用于保存信任（仅在核对所有列出的 hook 都愿意信任时使用）。确认本项目两项的 `Active` 变为 `1`、`Review` 变为 `0`。在桌宠选择“已设置信任”只是状态回传，不会修改 Codex 的信任配置；若仍显示 `untrusted`，请核对该 CLI 使用的配置目录与来源路径。
+当前 CLI 的 `/hooks` 页分别显示 `Installed / Active / Review`：仅安装而未信任时会有 `Active=0` / `Review=1`，不能视为已启用执行。回车可审阅选中的事件；若界面提供 `t trust all`，仅在核对所有列出的 hook 都愿意信任时使用。确认虹夏各事件 `Active` 为 `1`、`Review` 为 `0`。在桌宠选择“已设置信任”只是状态回传，不会修改 Codex 的信任配置；若仍显示 `untrusted`，请核对该 CLI 使用的配置目录与来源路径。
+
+完成兜底用于 Agent 漏调工具的情形：新一轮存在真实工作或多步骤成果时，Stop 写一条“Codex · 任务完成”固定文案气泡；简短事实问答、内部标题、无有效轮次状态及仍在等待选择的回复尽量保持安静。成功调用过虹夏 show_completion 或 request_decision 的同轮不再补发，点击/关闭后重放 Stop 也不重复。过滤采用启发式，少见表述可能误判；它不补造决策选项、不自动执行审批、不唤醒结束的会话。桌宠未运行时仍只是排队，pending 不表示桌面可见。Work/DSH/Claude Code 的完成事件桥接不在本次范围。
+
+信任后在一个新 Codex 任务中验收：让它在临时目录创建并读取一个测试文件，明确这一次不要主动调用桌宠工具；完成时应收到一条“任务完成”。再问一次“1+1等于几，只回答数字”，应不补发。最后让它主动调用一次 show_completion，应只收到一条带任务名的通知。正式会话的自然触发仍须在本机按此验证，隔离 CLI 测试不代替本人信任。
 
 在会产生审批卡的任务中测试：保持虹夏运行，执行一个由当前审批策略要求授权的实际操作，应同时看到 Codex 审批卡和“命令需要授权”气泡。气泡“知道了”只记录收到提醒，**不会授予权限**；仍在 Codex 审批卡批准或拒绝。操作完成后，尚未点击的匹配提醒由 `PostToolUse` 收起。使用“不请求审批”的任务不会产生 `PermissionRequest` 事件。当前集成只覆盖本机 Codex 的受支持事件；不能据此声称 Work、DSH 或云端执行的系统权限也已接通。
 
 2026-10-11 本机实测：用户完成信任后，运行时确认两项 hook 均已信任、启用。独立 Codex CLI 在 `on-request` / `read-only` 下弹出真实审批卡，虹夏自动显示提醒，用户点击“知道了”的回执已保存；原审批继续等待授权，随后取消测试申请，未执行申请中的写入操作。这项验收覆盖本机 Codex CLI。安装到其他电脑仍须由该电脑的用户自行审阅并信任，不分发本机的信任记录。
 
-维护者可运行 `.\.venv\Scripts\python.exe tools\smoke_approval_hook.py` 隔离检查安装幂等性、打包 hook 的 stdin 输入、去重与操作完成后的收起。模拟事件不执行其中的命令，也不等同于真实平台审批验收。
+维护者可运行 `.\.venv\Scripts\python.exe tools\smoke_approval_hook.py` 隔离检查安装幂等性、打包 hook 的 stdin 输入、完成去重、保留 notify 与操作完成后的收起。模拟事件不执行其中的命令，也不等同于真实平台审批验收。`tools\smoke_codex_completion.py --case work|question|notice` 额外运行真实 Codex CLI，使用当前登录与模型端点，在临时队列验收补发、静默和主动工具去重；它仅在该次已审阅测试调用中跳过 hook 信任，不保存信任、不触碰正式消息库，且校验用户 config.toml 原字节不变。
 
 ### Claude Code
 

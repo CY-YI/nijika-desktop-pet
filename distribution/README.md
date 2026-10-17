@@ -16,7 +16,7 @@ Agent 接入是可选的。完整配置、源码安装方式和验证步骤见�
 # Codex：安装 MCP 与自动触发技能
 powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1 -Codex -NoLaunch
 
-# 可选：同时准备 Codex 命令审批提醒（随后本人在 /hooks 审阅并信任）
+# 可选：同时准备 Codex 完成兜底与命令审批提醒（随后本人在 /hooks 审阅并信任）
 powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1 -Codex -CodexHooks -NoLaunch
 
 # ChatGPT 桌面客户端的本机 Work：安装本地插件
@@ -30,7 +30,7 @@ Codex 和 Work 接入需要 `codex` 命令可从 PowerShell 找到；**现有 Wo
 
 默认安装到固定用户目录，因此解压出来的文件夹以后可以移走。搬动或更新正式安装目录后需重跑 Agent 接入步骤。消息记录保存在本机 `%USERPROFILE%\.nijika-desktop-pet\notifications.sqlite3`，避免 AppData 被打包客户端重定向成另一份队列；新版桌宠兼容旧会话的待处理消息。此试用包不含发送者的消息库或聊天历史。
 
-`-CodexHooks` 只安装事件定义，必须在 Codex CLI 的 `/hooks` 中本人审阅并信任，再开新任务才会执行。气泡只是提醒，点击“知道了”不等于命令授权；请在 Codex 原审批卡处理。若任务采用不请求审批的策略，就不会有审批事件。完整验收步骤见 `AGENT_SETUP.md`。
+`-CodexHooks` 安装 UserPromptSubmit、PermissionRequest、PostToolUse、Stop 四类定义，必须在 Codex CLI 的 `/hooks` 中本人审阅并信任，再开新任务才会执行；升级用户尤其需审阅新增的 UserPromptSubmit 与 Stop。实质任务漏调用桌宠时会补发完成提醒，同轮已有有效桌宠通知则不重复，简短问答尽量保持安静。既有 Computer Use notify 原样保留。气泡只是提醒，点击“知道了”不等于命令授权；请在 Codex 原审批卡处理。若任务采用不请求审批的策略，就不会有审批事件。完整验收步骤见 `AGENT_SETUP.md`。
 
 桌宠收到选择但 Agent 任务已经结束时，点击结果会保存，**不会自动唤醒已结束的任务**。回原会话发送“继续”，Agent 应先读取此前的回复。`pending` 只表示消息进入本机队列，不代表气泡已显示或用户已同意。
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sqlite3
@@ -88,6 +89,20 @@ class NotificationStore:
                     event_key TEXT UNIQUE,
                     kind TEXT NOT NULL,
                     priority INTEGER NOT NULL DEFAULT 0
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS codex_turn_state (
+                    session_hash TEXT NOT NULL,
+                    turn_hash TEXT NOT NULL,
+                    has_user_prompt INTEGER NOT NULL DEFAULT 0,
+                    user_prompt_class TEXT NOT NULL DEFAULT 'unknown',
+                    substantive_tool_count INTEGER NOT NULL DEFAULT 0,
+                    nijika_notice_sent INTEGER NOT NULL DEFAULT 0,
+                    completion_notice_sent INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY (session_hash, turn_hash)
                 )
             """)
 
@@ -251,3 +266,103 @@ class NotificationStore:
             connection.execute(
                 "DELETE FROM notice_tags WHERE notification_id NOT IN (SELECT id FROM notifications)"
             )
+            connection.execute(
+                "DELETE FROM codex_turn_state WHERE completion_notice_sent=0 "
+                "AND nijika_notice_sent=0 AND updated_at < ?",
+                (now - 30 * 86400,),
+            )
+
+    @staticmethod
+    def _turn_identity(session_id: object, turn_id: object) -> tuple[str, str]:
+        if not isinstance(session_id, str) or not session_id.strip() or len(session_id) > 512:
+            raise ValueError("session_id must be non-empty text")
+        if not isinstance(turn_id, str) or not turn_id.strip() or len(turn_id) > 512:
+            raise ValueError("turn_id must be non-empty text")
+        # Hook payloads can contain private prompts and commands. Persist only
+        # bounded opaque identities so repeated lifecycle events can be joined.
+        session_hash = hashlib.sha256(session_id.encode("utf-8")).hexdigest()
+        turn_hash = hashlib.sha256(turn_id.encode("utf-8")).hexdigest()
+        return session_hash, turn_hash
+
+    def begin_codex_turn(self, session_id: str, turn_id: str,
+                         prompt_class: str) -> None:
+        session_hash, turn_hash = self._turn_identity(session_id, turn_id)
+        if prompt_class not in {"question", "substantive", "unknown", "internal"}:
+            raise ValueError("invalid prompt class")
+        now = int(time.time())
+        with self._connect() as connection:
+            # Hooks may be upgraded before the long-running pet binary. Prune
+            # inactive state here too, rather than depending on its prune loop.
+            connection.execute(
+                "DELETE FROM codex_turn_state WHERE completion_notice_sent=0 "
+                "AND nijika_notice_sent=0 AND updated_at < ?",
+                (now - 30 * 86400,),
+            )
+            connection.execute(
+                "INSERT INTO codex_turn_state "
+                "(session_hash, turn_hash, has_user_prompt, user_prompt_class, "
+                "substantive_tool_count, nijika_notice_sent, completion_notice_sent, "
+                "created_at, updated_at) VALUES (?, ?, 1, ?, 0, 0, 0, ?, ?) "
+                "ON CONFLICT(session_hash, turn_hash) DO UPDATE SET "
+                "has_user_prompt=1, user_prompt_class=CASE "
+                "WHEN user_prompt_class='internal' OR excluded.user_prompt_class='internal' "
+                "THEN 'internal' ELSE excluded.user_prompt_class END, "
+                "updated_at=excluded.updated_at",
+                (session_hash, turn_hash, prompt_class, now, now),
+            )
+
+    def record_codex_tool(self, session_id: str, turn_id: str,
+                          *, substantive: bool, notice_sent: bool) -> None:
+        session_hash, turn_hash = self._turn_identity(session_id, turn_id)
+        now = int(time.time())
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE codex_turn_state SET "
+                "substantive_tool_count=substantive_tool_count+?, "
+                "nijika_notice_sent=MAX(nijika_notice_sent, ?), "
+                "updated_at=? WHERE session_hash=? AND turn_hash=?",
+                (1 if substantive else 0, 1 if notice_sent else 0,
+                 now, session_hash, turn_hash),
+            )
+
+    def create_codex_completion_notice(self, session_id: str,
+                                       turn_id: str,
+                                       *, result_class: str) -> Notification | None:
+        """Atomically create at most one generic completion notice for a turn."""
+        if result_class not in {"empty", "brief", "deliverable", "waiting"}:
+            raise ValueError("invalid result class")
+        session_hash, turn_hash = self._turn_identity(session_id, turn_id)
+        now = int(time.time())
+        notice_id = uuid.uuid4().hex
+        choices = json.dumps([{
+            "label": "知道了", "description": "", "recommended": False,
+        }], ensure_ascii=False)
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT has_user_prompt, user_prompt_class, substantive_tool_count, "
+                "nijika_notice_sent, completion_notice_sent "
+                "FROM codex_turn_state WHERE session_hash=? AND turn_hash=?",
+                (session_hash, turn_hash),
+            ).fetchone()
+            if (row is None or not row["has_user_prompt"]
+                    or row["user_prompt_class"] == "internal"
+                    or result_class in {"empty", "waiting"}
+                    or row["nijika_notice_sent"]
+                    or row["completion_notice_sent"]):
+                return None
+            if row["user_prompt_class"] == "question" and result_class == "brief":
+                return None
+            if row["substantive_tool_count"] < 1 and result_class != "deliverable":
+                return None
+            connection.execute(
+                "INSERT INTO notifications VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?)",
+                (notice_id, "Codex", "任务完成", "Codex 任务已完成，请查看结果。",
+                 choices, now, now),
+            )
+            connection.execute(
+                "UPDATE codex_turn_state SET completion_notice_sent=1, updated_at=? "
+                "WHERE session_hash=? AND turn_hash=?",
+                (now, session_hash, turn_hash),
+            )
+        return self.get(notice_id)

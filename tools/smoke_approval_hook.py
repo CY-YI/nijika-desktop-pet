@@ -27,7 +27,15 @@ def main() -> None:
         home.mkdir()
         unrelated = {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo preserved"}]}
         config_path = home / "hooks.json"
-        config_path.write_text(json.dumps({"hooks": {"PermissionRequest": [unrelated]}}), encoding="utf-8")
+        mixed = {"matcher": ".*", "hooks": [
+            {"type": "command", "command": "OLD/虹夏审批提醒.exe"},
+            {"type": "command", "command": "echo mixed-preserved"},
+        ]}
+        config_path.write_text(json.dumps({"hooks": {
+            "PermissionRequest": [unrelated], "PostToolUse": [mixed], "Stop": [unrelated],
+        }}), encoding="utf-8")
+        original_notify = b'notify = ["existing-computer-use", "turn-ended"]\n'
+        (home / "config.toml").write_bytes(original_notify)
         install = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
                    "-File", str(ROOT / "integrations/codex/install-hooks.ps1"),
                    "-CodexHome", str(home), "-ApprovalExe", str(executable)]
@@ -38,10 +46,14 @@ def main() -> None:
         config = json.loads(config_path.read_text(encoding="utf-8-sig"))
         assert config["hooks"]["PermissionRequest"][0] == unrelated
         assert len(config["hooks"]["PermissionRequest"]) == 2
-        assert len(config["hooks"]["PostToolUse"]) == 1
+        assert len(config["hooks"]["PostToolUse"]) == 2
+        assert config["hooks"]["PostToolUse"][0]["hooks"] == [mixed["hooks"][1]]
+        assert len(config["hooks"]["UserPromptSubmit"]) == 1
+        assert len(config["hooks"]["Stop"]) == 2
+        assert (home / "config.toml").read_bytes() == original_notify
         assert len(list(home.glob("hooks.json.bak-nijika-*"))) == 2
         assert set(p.name for p in home.iterdir()) == {
-            "hooks.json", *(p.name for p in home.glob("hooks.json.bak-nijika-*"))
+            "hooks.json", "config.toml", *(p.name for p in home.glob("hooks.json.bak-nijika-*"))
         }, "Installer must not create trust or permission state"
         store = NotificationStore(root / "queue.sqlite3")
         environment = os.environ.copy()
@@ -59,7 +71,10 @@ def main() -> None:
                 input=json.dumps(event).encode("utf-8"), capture_output=True,
                 env=environment, check=True, timeout=20,
             )
-            assert result.stdout == b"", "Hook must not grant or deny permission"
+            if name == "Stop":
+                assert json.loads(result.stdout) == {}, "Stop must only return no-op JSON"
+            else:
+                assert result.stdout == b"", "Hook must not grant or deny permission"
             assert result.stderr == b"", result.stderr
 
         run_hook("PermissionRequest")
@@ -75,6 +90,39 @@ def main() -> None:
         assert store.next_pending() is None
         assert b"TEST_PRIVATE_COMMAND" not in store.path.read_bytes()
         assert len(event_key(event)) == 64
+
+        event["turn_id"] = "completion-turn"
+        event["prompt"] = "检查 TEST_PRIVATE_PROMPT 的功能并修复"
+        run_hook("UserPromptSubmit")
+        run_hook("PostToolUse")
+        event["last_assistant_message"] = "已完成修复。TEST_PRIVATE_RESPONSE"
+        run_hook("Stop")
+        completion = store.next_pending()
+        assert completion is not None and completion.title == "任务完成"
+        store.dismiss(completion.id)
+        run_hook("Stop")
+        assert store.next_pending() is None
+
+        # A successful direct tool notice suppresses the generic fallback.
+        event["turn_id"] = "explicit-notice-turn"
+        run_hook("UserPromptSubmit")
+        event["tool_name"] = "mcp__nijika-pet__show_completion"
+        event["tool_response"] = {"structuredContent": {
+            "request_id": "already-sent", "status": "pending",
+        }}
+        run_hook("PostToolUse")
+        run_hook("Stop")
+        assert store.next_pending() is None
+        for path in store.path.parent.glob("queue.sqlite3*"):
+            assert b"TEST_PRIVATE_" not in path.read_bytes()
+
+        # Invalid stdin still returns harmless JSON on the installed Stop command.
+        stop_command = config["hooks"]["Stop"][-1]["hooks"][0]["command"]
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", stop_command],
+            input=b"bad JSON", capture_output=True, env=environment, check=True, timeout=20,
+        )
+        assert json.loads(result.stdout) == {} and not result.stderr
         # Claude Code source: exec form with arguments, no turn id, a finished
         # reminder must not swallow the next request, completion auto-resolves.
         cc_event = {"hook_event_name": "PermissionRequest", "session_id": "claude-code-smoke",
@@ -100,8 +148,8 @@ def main() -> None:
         run_cc("PostToolUse")
         assert store.get(repeated.id).status == "resolved"
         assert store.next_pending() is None
-    print("Packaged approval hook, safe stdin, installer preservation, deduplication "
-          "and Claude Code source: OK")
+    print("Packaged approval/completion hook, safe stdin, installer/notify preservation, "
+          "durable deduplication and Claude Code source: OK")
 
 
 if __name__ == "__main__":

@@ -28,13 +28,13 @@ python -m venv .venv
 
 源码开发还可运行 `.\.venv\Scripts\python.exe control_panel.py` 打开独立窗口，或附加 `--browser` / `--serve-only` 进行浏览器验证。`requirements.txt` 固定直接依赖，`requirements-lock.txt` 保存本轮 Python 3.12 Windows 环境的完整版本，可用后者复现已测环境。没有前端 npm 或 CDN 依赖。
 
-生成四个单文件程序（更新前先退出对应的运行中程序）：
+生成三个单文件程序（更新前先退出对应的运行中程序）：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-输出在 `dist/虹夏桌宠.exe`（桌宠与设置中心）、`dist/虹夏MCP-v2.exe` 和 `dist/虹夏审批提醒.exe`。第三个程序供可选的 Codex 命令审批提醒使用，安装与审阅步骤见 `AGENT_SETUP.md`。当前电脑已配置 Codex；其他电脑也可使用设置中心向导，或在项目根目录运行：
+输出在 `dist/虹夏桌宠.exe`（桌宠与设置中心）、`dist/虹夏MCP-v2.exe` 和 `dist/虹夏审批提醒.exe`。第三个程序供可选的 Codex 命令审批与完成兜底提醒使用，安装与审阅步骤见 `AGENT_SETUP.md`。当前电脑已配置 Codex；其他电脑也可使用设置中心向导，或在项目根目录运行：
 
 ```powershell
 $mcpExe = (Resolve-Path -LiteralPath 'dist\虹夏MCP-v2.exe').Path
@@ -45,6 +45,8 @@ codex mcp get nijika-pet
 把 `skills/nijika-desktop-dialog/SKILL.md` 安装到 Codex 用户技能目录，并在 Codex 的全局 `AGENTS.md` 中引用它，可让新任务把简单决策和短成果审阅整理成“完整短正文＋有简介的选择”。工程根目录也带有 `AGENTS.md`，说明成果待审阅和需要选择时的桌面提醒规则。当前电脑已完成安装；独立 Codex CLI 会话已在普通审阅与选择任务中自主发出提醒。安装或配置变化通常由新开的 Codex 任务读取；已经打开的任务不保证即时刷新工具列表。桌宠程序仍需打开以便立即看见提醒。
 
 Codex 的审批策略可能要求先确认 MCP 工具调用。经用户明确授权，当前电脑只对 `nijika-pet` 的 `show_completion`、`request_decision`、`get_reply`、`wait_for_reply` 设置了逐工具 `approval_mode = "approve"`；服务器默认规则和其他工具未改。独立 Codex CLI 会话在未附加临时放行参数时已成功发送提醒。其他电脑沿用自身审批策略，遇到提示时应核对要发送的内容。桌宠上的选择仍由用户亲自点击，`pending` 或关闭不算同意。
+
+Codex 完成兜底（2026-10-17）：重建 Hook 后运行 `integrations\codex\install-hooks.ps1`，或安装试用包时加 `-CodexHooks`；本人在 Codex `/hooks` 审阅新增 UserPromptSubmit / Stop，保留原 PermissionRequest / PostToolUse，然后新开任务。该功能不需要改变 Agent 的 MCP JSON、全局技能或前端设置；现有 Computer Use notify 保持原样。只有成功调用过桌宠通知的同轮会抑制兜底，输入无效不算已发送。消息库仅新增无正文的轮次表，旧桌宠/MCP 能直接显示它生成的普通完成通知。
 
 单文件版首次启动需要解包资源，可能比源码运行略慢。`dist/`、`.venv/` 与构建缓存不入 Git；源码包必须保留 `assets/sprites/`。通知数据库默认在 `%USERPROFILE%\.nijika-desktop-pet\notifications.sqlite3`，避免桌面客户端的 AppData 重定向造成两份队列；旧运行中会话的待处理消息与回复由桌宠桥接。可用 `env.example` 中的可选变量在隔离测试时改路径。消息含任务摘要，请只在受信任的本机用户会话中使用。本项目不要求真实 API 密钥或联网。
 
