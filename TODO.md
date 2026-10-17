@@ -14,9 +14,9 @@
 - [x] 正式 hooks.json 已合并；PermissionRequest / PostToolUse 原定义和 config.toml 原字节均未变，没有代写信任。原 Hook/脚本/模板/用户 hooks 备份在 `backups/20261017-codex-stop-183410/`，清单与回退见 ROLLBACK.md。
 - [x] 需求、架构、接口、安装、接入、回退及变更记录已同步；新版试用包与文档包单独命名为 `2026-10-17-codex-stop.zip`，保留原分享包。20 项试用包白名单、SHA256 清单与三个 EXE 核对通过；Work 路径为 AUTO_LOCAL_MCP，占位配置不含本机队列/私人备份/真实客户端配置。文档包新增 ROLLBACK.md；19 个本轮修改文件的凭据特征扫描、打包模块检查与 git diff --check 通过。
 - Git 归档：本轮只提交与推送 `codex/codex-stop-reminder`；`main` 与互动分支未改，提交与远端以该分支的 Git 历史为准。
-- [ ] 需本人后续操作：在 Codex CLI `/hooks` 审阅信任新增 UserPromptSubmit 和 Stop，再开新任务验收正式自然触发；旧审批两项此前已验收，不把隔离运行的临时信任豁免当成正式信任。
+- [x] 2026-10-17 用户明确回传“信任权限给了两个钩子”。只读 `hooks/list` 确认 UserPromptSubmit / Stop 以及原 PermissionRequest / PostToolUse 均为 enabled=true、trustStatus=trusted，无 warnings/errors。随后用真实安装定义启动独立 Codex CLI，不加信任跳过参数、不覆盖 hooks；在隔离目录创建并读回测试文件，正常结束后自动补发 1 条通知，用户配置原字节未变。新增两项的本人信任和正常模式自动触发已验收；本次隔离队列验证不额外向真实桌面发送测试气泡。
 - 验收边界：本轮不改前端或 Agent 配置入口，全部 API/存储回归通过；Work/DSH/Claude Code 的完成兜底仍未实施。当前内置浏览器内核启动失败，不作新的页面目视通过声明。
-- 工作区清点：`tools/smoke_codex_completion.py` 提升为可复用 CLI 验收工具；`build/codex-stop/` 保留为最终 Hook 的构建分析与 spec，`diagnostics/build-codex-stop.log` 为构建日志，`diagnostics/codex-stop-install.json` 为安装哈希及备份位置。均忽略入 Git、分享包不含这些目录。首次新测试因测试连接未关闭产生清理失败，现已修复并回归通过；清理其 10 个已知 `%TEMP%/tmp*` 目录的请求被自动审批审查拒绝，仅返回 blocked by policy，未给具体原因，未执行删除，待后续允许时处理；不清理来源不明目录。
+- 工作区清点：`tools/smoke_codex_completion.py` 提升为可复用 CLI 验收工具；`build/codex-stop/` 保留为最终 Hook 的构建分析与 spec，`diagnostics/build-codex-stop.log` 为构建日志，`diagnostics/codex-stop-install.json` 为安装哈希及备份位置，`diagnostics/codex-trusted-verification.json` 为不含正文的正常信任验收摘要。均忽略入 Git、分享包不含这些目录。首次新测试因测试连接未关闭产生清理失败，现已修复并回归通过；清理其 10 个已知 `%TEMP%/tmp*` 目录的请求被自动审批审查拒绝，仅返回 blocked by policy，未给具体原因，未执行删除，待后续允许时处理；不清理来源不明目录。本次信任复验的临时目录均随验证结束正常清理。
 
 ## 当前任务：角色衣橱·自制角色引导（2026-10-17）
 
