@@ -1,5 +1,20 @@
 # 当前待办
 
+## 当前任务：专业动画流程评估（2026-10-18）
+
+- 最新方向：用户要求借鉴“Deep Sig Highness 的金鱼娘”作品。检索判断可能指 DSH 鲸鱼娘；已通过异步问题索要具体链接/作者，尚未收到，不能认定是哪一个版本。暂不发起 Blender/Live2D 选型投票，先按此参考澄清。
+- [x] 参考源码检查（GitHub 连接只读读取，未安装/执行第三方插件）：`vlln/whale-girl/docs/sprites-spec.md` 明确为 AI 生图 → 切图/配准 → 帧图集 → 状态驱动播放，15 状态、若干 1–3 帧动作，并非 3D 或 Live2D；适合借鉴角色/动作资源契约，但低帧数不等于满足本项目丝滑目标。
+- [x] `Andersen216/dsh-whale-girl-live2d` README/PROVENANCE 明确加载现成 `.moc3` 模型、物理、动作和表情资源，使用 Pixi 与 pixi-live2d-display；模型来自原作者氵六青的 VTube Studio 包。可以借鉴渲染接入、动作优先级及状态分层，不能把“能加载鲸鱼娘”说成“自动会制作同品质虹夏模型”。代码与美术资源许可独立，仅借鉴不等于复制素材进入本项目。来源：https://github.com/vlln/whale-girl/blob/main/docs/sprites-spec.md ，https://github.com/Andersen216/dsh-whale-girl-live2d/blob/main/README.md ，https://github.com/Andersen216/dsh-whale-girl-live2d/blob/main/PROVENANCE.md 。
+- 用户反馈已打开的互动预览“动画效果都不是很好”，愿意由 Agent 直接调用专业工具，也愿意必要时学习配合。N30/N34 的视觉验收未通过；不继续把同一单图变形批量扩成正式桌面动作。
+- 当前分支 `codex/interaction-settings-20261017`，基线 `7c11726`，开工工作区干净；保留已推送预览与稳定版，不改 MCP/提醒流程。继续 SOP Full 的受影响需求/选型阶段，单线实施。
+- [x] 素材核对：工作区正式素材只有九张合成 PNG；未发现 PSD/ORA/CMO3/MOC3/BLEND/VRM/FBX 等分层或绑定源文件（排除私人备份/依赖/构建与诊断目录）。PATH、Windows 卸载注册项及常见安装位置未检测到 Blender/Live2D/Spine 等编辑器；不代表已全盘排除便携版。
+- [x] 工具连接核对：插件目录精确搜索 Blender、Live2D/Cubism/Spine 均未返回匹配。较宽的动画搜索返回 Runway/Higgsfield 等未连接的视频服务，不是模型绑定编辑器，不冒称现成专业建模工具已可调用。
+- [x] 官方资料核对：Live2D 需适配导入的分层 PSD 并建立 ArtMesh/参数；Spine 支持骨骼、权重、IK 与命令行导入/导出，保存和导出需相应许可；Blender 免费开源，提供骨骼/形态键、Python 接口与后台运行。文档依据：Live2D PSD 导入 https://docs.live2d.com/en/cubism-editor-manual/psd-import/ ；Spine https://esotericsoftware.com/spine-purchase 和 https://en.esotericsoftware.com/spine-command-line-interface ；Blender https://www.blender.org/features/animation/ 和 https://www.blender.org/features/ 。
+- 所有路线先拆分并补齐被遮住的头发、脸、肢体等素材，再绑定与调曲线；换工具不等于单张 PNG 自动变为完整高质量模型。当前仅核对自动化接口，尚未安装、运行或证明本机 Blender 出图效果；不承诺与人工精修等同。
+- 浏览器边界：按用户偏好尝试在内置浏览器查看 Live2D 官方 PSD 页面，https://docs.live2d.com 访问被本人权限拒绝，未通过其他浏览器或原始 UI 通道绕过；Live2D 依据为拒绝前已取得的官方检索正文。其他工具依官方来源检索，不改浏览器权限。
+- [ ] 确定首个验证路径：早先 Blender 自动化样片与 Live2D 精修仅为候选；最新先等鲸鱼娘参考版本确认，再根据其真实资源流程建议首个样片。候选未选定，不先购买/上传素材至新服务，不替换正式程序。
+- 下一步：用户提供作品链接/作者或演示后，核对具体仓库/模型与许可，明确可复用的工程机制与虹夏仍需制作的资产；再通过虹夏做真正需要的路线决定。若选择学习，只引导当前一步所需操作，不要求一次学完整套软件。
+
 ## 当前任务：恢复互动设置与动作预览（2026-10-17）
 
 - 用户原话：“那开始继续回归到那个桌面端的那个app设置界面内容优化那一块吧”。桌宠请求 `b7b332ec0e824980a8640e12ec51c902` 已答复“继续互动设置”；已在 Codex 聊天复述。沿用 N30/N32/N34，不加入未选的历史统计或来源筛选。
