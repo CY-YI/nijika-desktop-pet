@@ -37,6 +37,10 @@
 
 Agent 配置预览具有有效期；文件在预览后发生变化时拒绝覆盖并要求重新检测。`plan`、`apply` 的档案及 `state.agents[]` 包含 `guide`、`needed_files`、`bundle_directory`、`bundle_ready`；`guide.prompt` 为自包含安装提示词，`needed_files[].exists` 由实际文件检查得到。GET 状态只读；新档案在 apply、旧档案在明确调用 prepare 后生成接入文件。文件保留供后续接入，移除档案不清除外部配置或这些文件。新增字段与最终路由以实现和测试为准，未实现项不能记为已交付。
 
+2026-10-18 教程复验：`plan.instructions` 改为各客户端通用的虹夏规则，不再对 Work/DSH 展示 Codex 专属规则。`needed_files` 新列出接入手册，Codex 另有三个 `required=false` 的原生钩子目标/脚本/程序路径；缺失不阻断 MCP 接入，`apply` 不因教程中列出这些路径就自动安装或信任钩子。生成提示词分别说明四事件、Work 插件服务器名、DSH 的原生桥接边界和晚到回执处理；接口名、请求结构与原有 MCP 配置格式不变。
+
+桌面程序 `--control-panel` 将后续参数交给管理入口，因此已文档化的 `--browser`，以及隔离验收用 `--serve-only --agent-home <目录> --port <端口>` 可用于同一 EXE；普通桌宠模式仍拒绝未知参数。`tools/smoke_agent_guidance.py <实际EXE>` 使用临时目录验证冻结程序的 Agent 接入 API，不启动可视窗口、不接触真实客户端配置，不作为浏览器或外部 Agent 自主调用的验收。
+
 决策选项可为其中一项设置 recommended: true，并在简介中说明推荐理由。pending 只表示消息已进入本机队列，不能证明气泡可见；等待时复用原 request_id，避免重复问题。Agent 收到 answered 后应在原聊天中确认所选项，再继续任务。桌宠只保存点击结果，不会自行向 Codex 聊天发送一条新的用户消息。
 
 更新触发：2026-09-26 改为 Win32 本地桌宠。

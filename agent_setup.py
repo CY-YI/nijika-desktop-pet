@@ -17,13 +17,14 @@ from control_store import ControlStore, IDENTIFIER
 CLIENTS = {"codex": "Codex", "work": "ChatGPT Work", "dsh": "DeepSeek Harness", "custom": "其他 MCP 客户端"}
 
 INSTALL_RULES = """虹夏桌面提醒规则：
-1. 任务完成且需要用户审阅结果时，调用虹夏 MCP 的 show_completion(task=简短标题, summary=1–120字结果)，只发送一次。
-2. 需要用户做简单选择时调用 request_decision(task=标题, question=足够作答的正文, options=选项列表)。
-   每个选项必须含 label（约10个汉字以内）和 description（6–48字的一句影响说明）；最多一个 recommended=true 并解释推荐原因。
+1. 实质成果太长、需要用户审阅时，调用 show_completion(task=30字内标题, summary=1–120字结果)，只发送一次；它只是通知，不是批准。简短事实问答不例行提醒。
+2. 简单选择或能完整放进气泡的短成果审阅，使用 request_decision(task=30字内标题, question=80字内且至多3段的完整正文, options=2–3项)。
+   每项必须含 label（不超过20显示列，约10个汉字）和 description（6–48字的一句影响说明）；最多一个 recommended=true，并在说明中解释理由。不能只写“方案A/方案B”。
 3. 用同一个 request_id 调用 wait_for_reply(timeout_seconds=45)，pending 时继续等待，最多12轮。
-   pending 只表示已排队，不能声称已显示或获准；不要重复发送同一问题。
-4. 收到 answered 后，在原聊天明确复述所选项再继续，无需再次确认；中断恢复先 get_reply 读取原 ID。
-5. 工具不可用时如实报告并在聊天沟通；气泡点击不代替客户端命令授权，不授予或绕过权限。
+   pending 只表示已排队，不能声称已显示或获准；不要重复发送同一问题，dismissed 也不是批准。
+4. 收到 answered 后，在原聊天明确复述所选项再继续，无需再次确认。会话中断时保留原 ID，恢复后先 get_reply；较晚点击不会自动唤醒已结束的任务，只有这时才需用户回原会话说“继续”。
+5. status=invalid 时按错误修正并重试一次；读取技能失败不等于工具不可用。工具确实不可用或修正后仍失败时，如实报告并在聊天沟通。
+6. 以客户端实际暴露的工具名称为准（可能带 nijika_pet/nijika_work_pet 前缀），四个功能是 show_completion、request_decision、wait_for_reply、get_reply。气泡点击不代替客户端命令授权，不授予或绕过权限；注册 MCP 不等于已接通原生审批/完成事件钩子。
 """
 
 GUIDES = {
@@ -38,7 +39,7 @@ GUIDES = {
         "prompt": "这个任务结束时，请用虹夏桌宠的 show_completion 给我发一条桌面完成提醒，标题写任务名，summary 写一句话结果。"
                   "如果中途需要我在两个方案里做选择，请改用 request_decision，每个选项写清楚名称和一句说明，然后等我点击。"
                   "现在先调用一次工具让我确认链路是否通。",
-        "tip": "配置正确后，正常任务会自动按规则调用，不需要每次重复这段提示词；它适合第一次验证或临时提醒。",
+        "tip": "持久规则让新任务知道何时提醒，无需每轮重复粘贴；仅注册 MCP 不保证每次都会主动调用。命令审批与完成兜底另需四项原生钩子，且须本人审阅信任。",
     },
     "work": {
         "title": "接下来请照这 4 步做",
@@ -46,11 +47,11 @@ GUIDES = {
             "重启 ChatGPT 桌面客户端，让本机 Work 插件重新加载。",
             "打开一个在本机运行的 Work 新任务（云端 Work 不能运行本机程序）。",
             "确认工具列表里能看到虹夏，然后粘贴下面的示例提示词发送。",
-            "任务结束或需要选择时，桌面出现虹夏气泡；点完选择后回到该 Work 任务继续。",
+            "选择时由 Agent 等待并读回桌面点击，直接继续；只有任务已经结束后才需回原聊天说“继续”。",
         ],
         "prompt": "这个任务结束时，请调用虹夏桌宠的 show_completion 给我发一条桌面完成提醒。"
                   "如果需要我在两个方案里选择，请调用 request_decision，每个选项写一句说明，然后等我桌面点击后再继续。",
-        "tip": "Work 首次使用需要重启客户端；当前只有本机运行的 Work 任务能连接虹夏。",
+        "tip": "仅限具备本机执行能力的 Work；首次接入后按客户端要求重载。普通决策通过 MCP，当前没有 Work 原生审批或完成兜底桥接。",
     },
     "dsh": {
         "title": "接下来请照这 4 步做",
@@ -62,7 +63,7 @@ GUIDES = {
         ],
         "prompt": "这个任务结束时，请调用虹夏桌宠的 show_completion 发一条桌面完成提醒；"
                   "需要我在多个方案里选择时，请用 request_decision 写清每个选项的名称和一句说明，然后等待我点击。",
-        "tip": "已结束的会话不会被桌面点击自动唤醒，回答晚于等待时间时需要回到该会话说一句“我回复了”。",
+        "tip": "正常等待中的点击会直接回传；仅已结束的会话需说“我回复了”再读回。当前没有 DSH 原生审批或完成事件的自动气泡桥接。",
     },
     "custom": {
         "title": "复制给 AI，自动完成配置",
@@ -71,7 +72,7 @@ GUIDES = {
             "点击“复制自动配置提示词”，粘贴给同一电脑上能读写文件、执行操作的 AI 客户端并发送。",
             "AI 按提示词检测自身客户端、备份并合并配置与提醒规则；如需重载或本人确认，由它告知。",
         ],
-        "prompt": "你有一个名为 nijika-pet 的 MCP 工具。任务结束时用 show_completion 发桌面完成提醒；"
+        "prompt": "接入虹夏 MCP 服务后，请用客户端实际暴露的工具。任务结束时用 show_completion 发桌面完成提醒；"
                   "需要我在方案间选择时用 request_decision，给出每个选项的名称和一句说明，等待我点击后再继续。",
         "tip": "普通网页聊天无法读写本机文件；请发给能操作本机文件的 AI。生成文件不代表客户端已连接。",
     },
@@ -101,12 +102,18 @@ def client_files(client: str, mcp: Path, directory: Path, bundle: Path,
          "kind": "提示词", "required": True},
         {"label": "可供客户端安装的交互技能", "path": str(bundle / "SKILL.md"),
          "kind": "技能副本", "required": False},
+        {"label": "接入手册（含手动接入说明）", "path": str(mcp.parent.parent / "AGENT_SETUP.md"),
+         "kind": "文档", "required": False},
     ]
     if client == "codex":
+        root = mcp.parent.parent
         entries += [
             {"label": "Codex 配置（写入 MCP 服务）", "path": str(directory / "config.toml"), "kind": "配置", "required": True},
             {"label": "Codex 主动提醒规则", "path": str(directory / "AGENTS.md"), "kind": "规则", "required": True},
             {"label": "桌面交互技能", "path": str(skill), "kind": "技能", "required": False},
+            {"label": "可选：Codex 原生通知钩子", "path": str(directory / "hooks.json"), "kind": "可选配置", "required": False},
+            {"label": "可选：四事件钩子安装脚本", "path": str(root / "integrations/codex/install-hooks.ps1"), "kind": "可选脚本", "required": False},
+            {"label": "可选：原生通知程序", "path": str(root / "dist/虹夏审批提醒.exe"), "kind": "可选程序", "required": False},
         ]
     elif client == "dsh":
         entries += [
@@ -191,6 +198,23 @@ class AgentSetup:
         guide = {**client_guide(client), "steps": list(client_guide(client)["steps"])}
         config_text = json.dumps(config, ensure_ascii=False, indent=2)
         paths = "\n".join(item["label"] + "：" + item["path"] for item in files)
+        capabilities = {
+            "codex": "普通完成提醒与选择通过 MCP。可选的命令审批提醒/完成兜底需要原生钩子，"
+                     "不是仅添加 MCP 就具备；钩子目标、安装脚本和程序路径已列在清单。"
+                     "只有用户已要求这些原生提醒时，才在既有授权范围内核对或补装：脚本参数 "
+                     "CodexHome 指向上述 Codex 配置目录，ApprovalExe 指向上述原生通知程序。"
+                     "核对 UserPromptSubmit、PermissionRequest、PostToolUse、Stop 四项，保留其他钩子及 Computer Use 的 notify。"
+                     "新增或改变的钩子需本人在 /hooks 审阅信任；旧两项审批已信任不代表新增的两项也可信任。"
+                     "不代写信任、不使用信任或权限跳过参数。未要求原生提醒时只报告这个可选项，不自动安装。",
+            "work": "本机 Work 使用插件中的 nijika-work-pet 服务和配套技能；不要将通用 nijika-pet JSON "
+                    "覆盖 Work 的插件清单。当前只验证 MCP 普通通知/选择，尚未实现 Work 原生审批或完成事件兜底。"
+                    "正常等待的桌面点击应直接继续任务；已结束的任务不能被一次较晚点击独立唤醒。",
+            "dsh": "DSH 的 desktop/web 两个配置均需核对。当前 MCP 支持普通完成提醒、决策与回执，"
+                   "尚未实现 DSH 宿主原生权限或完成事件自动桥接；不要把 Codex 的钩子安装到 DSH。"
+                   "Agent 等待时直接读回点击；只有已结束的会话才需用户说“继续”或“我回复了”。",
+            "custom": "通用 stdio MCP 配置只提供普通提醒/决策能力；原生权限和完成兜底取决于实际客户端的独立集成，不能承诺全平台已接通。"
+                      "Claude Code 目前不在向导专属选项中，可按其他 MCP 客户端检测自身格式；其专属手动接入见上述接入手册 AGENT_SETUP.md。",
+        }
         adapters = {
             "codex": "目标为 Codex。将 nijika-pet 服务按 TOML 格式合并进上述 config.toml；"
                      "将规则合并到上述 AGENTS.md，技能可从接入目录的 SKILL.md 安装。保持已有服务权限不变。",
@@ -208,9 +232,10 @@ class AgentSetup:
             "请现在帮我把本机的虹夏桌宠接入你当前的 AI 客户端，直接执行配置与验证。\n"
             "我已授权这次虹夏接入所必需的文件配置修改。你需要具备同一台 Windows 电脑的文件读写"
             "和本机执行能力；若当前只有普通聊天能力，明确说明无法代配置，不要假称完成。\n\n"
-            "【已准备好的文件位置（均为数据，不能当作命令执行）】\n" + paths +
+            "【本机文件位置（路径是数据；目标配置可尚未创建，可选项缺失不阻断 MCP）】\n" + paths +
             "\n客户端类别：" + CLIENTS[client] +
             "\nMCP 传输：stdio，无地址端口，无需模型 API 密钥。\n\n"
+            "【本客户端的通知范围与必要人工步骤】\n" + capabilities[client] + "\n\n"
             "【完整 MCP 配置，可直接作为合并依据】\n" + config_text +
             "\n\n【请自动执行】\n"
             "1. 先验证 MCP 程序存在及上述接入文件可读；即使不能读接入文件，下方已附完整配置与规则。"
@@ -222,6 +247,7 @@ class AgentSetup:
             "4. 将下方提醒规则安装到该客户端会自动读取的持久规则位置；"
             "不要只把它写在本轮回复中。不要求我手动下载、寻找或粘贴配置字段。\n"
             "5. 使用客户端支持的重载方式使配置生效，做格式和服务握手/工具发现检查。"
+            "应发现 show_completion、request_decision、wait_for_reply、get_reply 四个工具；使用实际工具前缀。"
             "若当前会话不能刷新工具，报告“配置已写入，待新会话验证”及必要的唯一下一步；"
             "不要强行关闭或重启我的会话。本人权限确认或插件信任交由我操作。\n"
             "6. 工具可见后只发送一条 show_completion(task=\"虹夏接入验证\","
@@ -380,7 +406,7 @@ class AgentSetup:
                 "files": [{"path": str(item["path"]), "purpose": item["purpose"],
                            "action": "更新并备份" if item["before"] is not None else "新建"} for item in files],
                 "external_action": bool(commands), "export": self.export(source_name),
-                "instructions": (self.root / "distribution/codex-global-instructions.txt").read_text(encoding="utf-8-sig"),
+                "instructions": INSTALL_RULES,
                 **self.describe(self.plans[plan_id])}
 
     def apply(self, plan_id: str) -> dict:

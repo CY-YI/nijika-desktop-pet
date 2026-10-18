@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import contextlib
 import json
 import tempfile
 import threading
@@ -14,11 +15,35 @@ from urllib.request import Request, urlopen
 from zipfile import ZipFile
 
 from PIL import Image, ImageDraw
-from agent_setup import AgentSetup
+from agent_setup import AgentSetup, CLIENTS, INSTALL_RULES
 from control_panel import ControlApplication, ControlServer
 from control_store import ControlStore, SPRITES
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class PanelEntryTests(unittest.TestCase):
+    def test_desktop_entry_forwards_panel_arguments_without_starting_a_pet(self):
+        import pet
+        arguments = ["--serve-only", "--agent-home", str(ROOT / "diagnostics/isolated-user"), "--port", "0"]
+        with patch("sys.argv", ["虹夏桌宠.exe", "--control-panel", *arguments]), \
+                patch("control_panel.run_panel") as panel, patch("pet.PetWindow") as window:
+            pet.main()
+        panel.assert_called_once_with(arguments)
+        window.assert_not_called()
+        with patch("sys.argv", ["虹夏桌宠.exe", "--control-panel", "--browser"]), \
+                patch("control_panel.run_panel") as panel:
+            pet.main()
+        panel.assert_called_once_with(["--browser"])
+
+    def test_unknown_arguments_still_fail_for_desktop_mode(self):
+        import pet
+        with patch("sys.argv", ["虹夏桌宠.exe", "--unknown"]), contextlib.redirect_stderr(io.StringIO()), \
+                patch("pet.PetWindow") as window:
+            with self.assertRaises(SystemExit) as result:
+                pet.main()
+        self.assertEqual(result.exception.code, 2)
+        window.assert_not_called()
 
 
 def transparent_png():
@@ -188,6 +213,82 @@ class AgentSetupTests(unittest.TestCase):
         work_files = result["agent"]["needed_files"]
         self.assertTrue(any(item["path"] == str(manifest) and item["exists"] for item in work_files))
         self.assertFalse(any(item["path"].endswith("AGENTS.md") for item in work_files))
+
+    def test_each_client_prompt_has_its_real_paths_and_no_state_poll_writes(self):
+        for index, client in enumerate(CLIENTS):
+            with self.subTest(client=client):
+                agent = {"id": f"{index:032x}", "client": client, "name": "接入验收",
+                         "source_name": "接入验收", "location": str(self.setup.default_home(client))}
+                info = self.setup.describe(agent)
+                prompt = info["guide"]["prompt"]
+                self.assertFalse(Path(info["bundle_directory"]).exists())
+                for item in info["needed_files"]:
+                    self.assertTrue(Path(item["path"]).is_absolute())
+                    self.assertIn(item["path"], prompt)
+                    self.assertEqual(item["exists"], Path(item["path"]).is_file())
+                embedded = prompt.split("【完整 MCP 配置，可直接作为合并依据】\n", 1)[1].split("\n\n【请自动执行】", 1)[0]
+                self.assertEqual(json.loads(embedded), info["export"])
+                self.assertTrue(prompt.endswith(INSTALL_RULES))
+                self.assertIn("待新会话验证", prompt)
+                self.assertIn("可选项缺失不阻断 MCP", prompt)
+                if client == "codex":
+                    optional = {item["path"]: item for item in info["needed_files"] if not item["required"]}
+                    for path in (self.home / ".codex/hooks.json", ROOT / "integrations/codex/install-hooks.ps1",
+                                 ROOT / "dist/虹夏审批提醒.exe"):
+                        self.assertIn(str(path), optional)
+                    for event in ("UserPromptSubmit", "PermissionRequest", "PostToolUse", "Stop"):
+                        self.assertIn(event, prompt)
+                    self.assertIn("/hooks", prompt)
+                    self.assertIn("不自动安装", prompt)
+                elif client == "work":
+                    self.assertIn("nijika-work-pet", prompt)
+                    self.assertIn("不要将通用 nijika-pet JSON", prompt)
+                    self.assertIn("尚未实现 Work 原生审批", prompt)
+                elif client == "dsh":
+                    self.assertIn("尚未实现 DSH 宿主原生权限", prompt)
+                    self.assertIn("不要把 Codex 的钩子安装到 DSH", prompt)
+
+    def test_codex_guide_does_not_install_or_change_optional_hooks_and_notify(self):
+        directory = self.home / "custom-codex"
+        directory.mkdir()
+        original = ('notify = ["existing-notify.exe"]\n[mcp_servers.nijika-pet]\ncommand = ' +
+                    json.dumps(str(self.setup.mcp), ensure_ascii=False) +
+                    '\n[mcp_servers.nijika-pet.env]\nNIJIKA_AGENT_NAME = "原助手"\n')
+        path = directory / "config.toml"
+        path.write_text(original, encoding="utf-8")
+        hooks = directory / "hooks.json"
+        hook_bytes = b'{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"other-hook.exe"}]}]}}'
+        hooks.write_bytes(hook_bytes)
+        plan = self.setup.plan("codex", "新名字", str(directory))
+        self.assertEqual(plan["instructions"], INSTALL_RULES)
+        self.assertIn(str(hooks), plan["guide"]["prompt"])
+        self.assertNotIn(str(self.home / ".codex/hooks.json"), plan["guide"]["prompt"])
+        self.assertNotIn(hooks, [item["path"] for item in self.setup.plans[plan["plan_id"]]["files"]])
+        result = self.setup.apply(plan["plan_id"])
+        self.assertEqual(path.read_text(encoding="utf-8"), original)
+        self.assertEqual(hooks.read_bytes(), hook_bytes)
+        self.assertEqual(result["agent"]["export"]["mcpServers"]["nijika-pet"]["env"]["NIJIKA_AGENT_NAME"], "原助手")
+
+    def test_refresh_old_handoff_updates_prompt_but_leaves_client_files_untouched(self):
+        agent = {"id": "f" * 32, "client": "custom", "name": "旧伙伴", "source_name": "旧伙伴",
+                 "location": str(self.home), "status": "exported", "test_request_id": "keep-request"}
+        self.store.save_agent(agent)
+        bundle = self.setup.bundle_directory(agent["id"])
+        bundle.mkdir(parents=True)
+        (bundle / "nijika-setup-prompt.txt").write_text("outdated prompt", encoding="utf-8")
+        (bundle / "nijika-mcp.json").write_text('{"command":"missing-old-build.exe"}', encoding="utf-8")
+        protected = self.home / "unknown-client.json"
+        protected.write_bytes(b'{"untouched":true}')
+        ready = self.setup.prepare_files(agent)
+        self.assertTrue(ready["bundle_ready"])
+        self.assertEqual(json.loads((bundle / "nijika-mcp.json").read_text(encoding="utf-8")), ready["export"])
+        self.assertEqual((bundle / "nijika-setup-prompt.txt").read_text(encoding="utf-8"), ready["guide"]["prompt"])
+        self.assertEqual((bundle / "nijika-agent-instructions.txt").read_text(encoding="utf-8"), INSTALL_RULES)
+        self.assertEqual(protected.read_bytes(), b'{"untouched":true}')
+        self.assertEqual(self.store.agents()[0]["test_request_id"], "keep-request")
+        times = {p.name: p.stat().st_mtime_ns for p in bundle.iterdir()}
+        self.setup.prepare_files(agent)
+        self.assertEqual(times, {p.name: p.stat().st_mtime_ns for p in bundle.iterdir()})
 
 
 class LocalAPITests(unittest.TestCase):

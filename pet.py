@@ -1520,13 +1520,15 @@ def main() -> None:
     parser.add_argument("--control-panel", action="store_true",
                         help="run the settings window instead of the desktop companion")
     parser.add_argument("--demo-seconds", type=int, default=0, help=argparse.SUPPRESS)
-    args = parser.parse_args()
+    args, panel_args = parser.parse_known_args()
+    if panel_args and not args.control_panel:
+        parser.error("unrecognized arguments: " + " ".join(panel_args))
     if args.self_test:
         print(sprite_metrics())
         return
     if args.control_panel:
         from control_panel import run_panel
-        run_panel([])
+        run_panel(panel_args)
         return
     try:
         user32.SetProcessDpiAwarenessContext.argtypes = [ctypes.c_void_p]

@@ -4,7 +4,7 @@
 
 双击桌面的“虹夏桌宠设置”，或右键已更新的桌宠选择“设置中心 / 添加 Agent”（等价于 `虹夏桌宠.exe --control-panel`）。选择客户端、给伙伴命名，常用配置路径会自动填入；仅使用其他用户目录时展开高级位置。点击“检测并继续”，核对具体文件、备份和保留行为，再选择“应用并添加”。已有 Codex `nijika-pet` 服务会保留；同名服务路径失效或存在冲突时停止并提示，不盲目覆盖。
 
-Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 desktop/web 配置与专用技能；Work 向导在用户数据目录准备本机插件，再调用 Codex CLI 注册与安装。Work 当前仍需 PATH 中可用的 `codex` 和 `python.exe`，仅限能运行本机程序的 Work。
+Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 desktop/web 配置与专用技能；Work 向导在用户数据目录准备本机插件，再调用 Codex CLI 注册与安装。Work 当前仍需 PATH 中可用的 `codex` 和 `python.exe`，仅限能运行本机程序的 Work。Claude Code 尚无专属向导选项，可使用“其他 MCP 客户端”的完整提示词让接收 AI 核对自身格式，或按下方专节手动接入。
 
 **其他客户端的最短接入流程**：选择“其他 MCP 客户端”并命名 → “检测并继续” → “生成并保存接入文件” → “复制自动配置提示词”，直接发给同一电脑上有文件读写、执行能力的 AI。它会识别自身客户端，核实配置位置，备份、合并 MCP 与持久提醒规则，再验证。无需手动下载 JSON 或逐项填写字段；卡片的“下载配置副本”仅供高级用途。
 
@@ -21,6 +21,12 @@ Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 de
 
 **能力边界**：普通云端聊天不能修改本机文件；未知客户端的目标配置路径必须由接收 AI 检测，无法唯一识别时只询问客户端名称或配置作用域。客户端若必须重载或本人确认权限，仍需完成这一必要步骤；提示词要求如实报告“配置已写入，待新会话验证”，不虚报全部完成。
 
+2026-10-18 教程复验：动画/养成增量没有改变四个 MCP 工具、共享队列或标准安装路径，现有连接无需因动画代码变更重配。自动提示词现已明确短成果可在气泡直接审阅、完整字段限制、实际客户端工具前缀、无效输入修正、连续等待和晚到回执；不承诺每次都主动调用或点击唤醒已结束的会话。Codex 清单另列可选 hooks.json、安装脚本与通知程序的实际路径，说明四事件及本人信任；默认 MCP 向导并不自动安装原生钩子，只有用户要求该能力时才由接收 AI 按既有授权补装。Work/DSH 当前没有同等原生审批/完成桥接，不能照抄 Codex 钩子或将 MCP 测试当成其已接通。
+
+本机已更新正式桌宠与三份旧接入文件；旧文件有本机备份。已配置的 Agent 无需重配或重复信任；需要给其他 AI 配置时，重新打开“设置中心 → Agent 接入 → 接入步骤 → 复制自动配置提示词”即可。桌面快捷方式仍指向同一安装目录。本次正式程序基于已验收版本只补教程及管理参数转发，未包含待定的互动预览。
+
+本轮验证包括 69 项源码回归、5 项前端控制器测试、61 项正式版构建源回归，以及构建版和确切安装版 EXE 的隔离 plan→apply→prepare；安装版与工作区的 MCP 均完成真实 stdio 四工具发现和选择回执。Work 的 CLI 安装通过隔离模拟验证，本轮没有重装真实插件或进行 Work 会话端到端验收。浏览器权限仍拒绝本地地址，本轮没有重复执行页面点击/布局验收；API 结果不当作页面或外部 Agent 自动调用的证明。
+
 配置成功后按说明重启客户端或新建任务。面板“测试提醒”由面板直接发送，点击结果会显示“本机测试已点击”，证明桌宠显示与队列回传可用；这不等于外部 Agent 已发现工具或会主动调用。还需在客户端新任务让 Agent 发出一次选择题。普通通知的状态与命令审批 hook 的本人信任分别处理。移除面板档案不删除客户端原配置。
 
 向导第三步和已有卡片的“接入步骤”均提供上述完整自动配置提示词。以下短提示词仅供**已完成配置、工具已经可见**时单独验证；首次接入请优先复制界面中的完整提示词。
@@ -33,10 +39,10 @@ Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 de
 
 **ChatGPT 桌面客户端 Work**：先重启客户端并打开一个本机运行的 Work 新任务，再粘贴上段提示词；云端 Work 不能运行本机程序。
 
-**其他 MCP 客户端**（工具名统一为 `nijika-pet`）：
+**其他 MCP 客户端**（`nijika-pet` 是服务名，使用客户端实际显示的工具名称）：
 
 ```text
-你有一个名为 nijika-pet 的 MCP 工具。任务结束时用 show_completion 发桌面完成提醒；需要我在方案间选择时用 request_decision，给出每个选项的名称和一句说明，等待我点击后再继续。
+请使用已接入的虹夏 MCP 服务，工具名以当前客户端实际暴露的前缀为准。任务结束时用 show_completion 发桌面完成提醒；需要我在方案间选择时用 request_decision，给出每个选项的名称和一句说明，等待并读取我点击后再继续。
 ```
 
 看不到“接入步骤”时，在“Agent 接入”页对应伙伴卡片上点“接入步骤”，可随时重新查看该客户端的步骤与提示词。
@@ -55,7 +61,7 @@ Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 de
 
 向导不读取或要求填写模型密钥，不替用户信任 hook，不开放云端入口。以下命令说明保留，供高级配置和故障排查。
 
-虹夏的两个核心程序是：`虹夏桌宠.exe` 负责桌面显示，`虹夏MCP-v2.exe` 是 Agent 按需启动的 stdio MCP 服务；另附可选的 `虹夏审批提醒.exe` 用于 Codex 的命令审批事件。它们须在**同一台 Windows 10/11 x64 电脑、同一用户会话**中运行；只需手动启动桌宠，不要手动双击 MCP 或审批程序。MCP 不开放网络端口，普通云端聊天无法直接调用本机 EXE。
+虹夏的两个核心程序是：`虹夏桌宠.exe` 负责桌面显示，`虹夏MCP-v2.exe` 是 Agent 按需启动的 stdio MCP 服务；另附可选的 `虹夏审批提醒.exe`，支持 Codex 审批/完成事件及 Claude Code 审批事件，两者须分别安装。它们须在**同一台 Windows 10/11 x64 电脑、同一用户会话**中运行；只需手动启动桌宠，不要手动双击 MCP 或审批程序。MCP 不开放网络端口，普通云端聊天无法直接调用本机 EXE。
 
 ## 已收到 Windows 私下试用 ZIP
 
@@ -128,9 +134,17 @@ powershell -ExecutionPolicy Bypass -File .\integrations\codex\install-hooks.ps1
 
 ### Claude Code
 
-Claude Code 的用户级接入由三部分组成；设置中心向导可为 Claude Code 档案生成 MCP 配置与提示词，审批钩子用本节的一次性脚本注册。
+Claude Code 的用户级接入由三部分组成；目前设置中心没有专属 Claude Code 档案选项，可选“其他 MCP 客户端”生成自包含提示词，再由 Claude Code 核对配置格式，或按本节手动注册。审批钩子用本节的一次性脚本注册。
 
-1. 注册 MCP：`claude mcp add -s user nijika-pet -e NIJIKA_AGENT_NAME="Claude code" -- "%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏MCP-v2.exe"`（源码方式则改用项目 `dist\虹夏MCP-v2.exe`），用户级配置写入 `%USERPROFILE%\.claude.json`（改动前先备份原文件）。注册后可用 `claude mcp list` 核对已连接，并在新会话中确认 `nijika-pet` 的四个工具可见：`show_completion`、`request_decision`、`wait_for_reply`、`get_reply`。
+1. 注册 MCP：先备份用户级 `%USERPROFILE%\.claude.json`；已有 `nijika-pet` 时先核对旧条目，不重复注册。PowerShell 使用 `$env:LOCALAPPDATA` 展开安装目录，不要照抄 CMD 的 `%LOCALAPPDATA%`：
+
+   ```powershell
+   $mcpExe = Join-Path $env:LOCALAPPDATA 'NijikaDesktopPet\app\dist\虹夏MCP-v2.exe'
+   claude mcp add -s user nijika-pet -e 'NIJIKA_AGENT_NAME=Claude code' -- $mcpExe
+   claude mcp list
+   ```
+
+   源码方式将 `$mcpExe` 改为项目 `dist\虹夏MCP-v2.exe` 的绝对路径。用户级配置写入上述 `.claude.json`；在新会话中确认四个工具可见：`show_completion`、`request_decision`、`wait_for_reply`、`get_reply`，以客户端实际工具前缀为准。
 2. 提醒规则：把何时提醒、同一请求连续等待、恢复会话先 `get_reply` 的规则合并进 `%USERPROFILE%\.claude\CLAUDE.md`；仓库级 `AGENTS.md` 只覆盖本仓库。
 3. 可选技能：把 `skills\nijika-desktop-dialog\SKILL.md` 复制到 `%USERPROFILE%\.claude\skills\nijika-desktop-dialog\`。
 
