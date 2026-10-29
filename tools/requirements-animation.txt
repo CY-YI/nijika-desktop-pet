@@ -1,0 +1,2 @@
+# Optional asset preparation only; not a desktop/MCP runtime dependency.
+imageio-ffmpeg==0.6.0

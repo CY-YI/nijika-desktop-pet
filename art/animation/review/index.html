@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>虹夏 · 待机动画对照</title><link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/review.css"><script defer src="/review.js"></script>
+</head>
+<body>
+<main>
+  <header><div class="eyebrow">NIJIKA / AN01</div><h1>先把待机，变得自然。</h1>
+    <p>左边保留源片蓝底，右边是透明处理结果。两边使用相同的帧顺序和尺寸，方便你判断动作与边缘。</p>
+    <span class="badge">独立样片 · 尚未替换桌面版</span></header>
+  <section class="pair" aria-label="待机动画对照">
+    <article><h2>源片对照 <small>只对齐时序与尺寸</small></h2>
+      <div class="stage source"><video id="source" src="/source.webm" poster="/source-poster.png" muted playsinline preload="auto" aria-label="源片对照视频"></video></div>
+    </article>
+    <article><h2>透明样片 <small>往返循环 / 保留生成标识</small></h2>
+      <div id="background" class="stage checker"><video id="preview" src="/transparent.webm" poster="/transparent-poster.png" muted playsinline preload="auto" aria-label="透明待机视频"></video></div>
+    </article>
+  </section>
+  <section class="transport" aria-label="播放控制">
+    <div class="timeline"><label for="position">播放进度</label><input id="position" type="range" min="0" max="20" step="0.001" value="0" disabled><output id="clock">0.00 / 20.00 秒</output></div>
+    <div class="controls"><button id="play" disabled>一起播放</button><button id="restart" disabled>从头重播</button>
+      <button id="previous" disabled>上一帧</button><button id="next" disabled>下一帧</button>
+      <span class="select-field"><label for="speed">播放速度</label><select id="speed"><option value="0.5">0.5× 慢放</option><option value="1" selected>1× 正常</option></select></span>
+      <span class="select-field"><label for="backdrop">透明背景</label><select id="backdrop"><option value="checker">棋盘格</option><option value="light">浅色</option><option value="dark">深色</option></select></span></div>
+    <div class="controls checkpoints"><span>重点检查</span><button id="turn" disabled>往返转向处</button><button id="seam" disabled>循环衔接处</button></div>
+    <p id="status" role="status" aria-live="polite">正在准备两段视频…</p>
+    <p id="metrics" class="muted"></p>
+  </section>
+  <aside><strong>这次主要看三件事</strong><p>脸型、双腿和发型是否稳定；马尾与眨眼是否自然；转向和循环时有没有停顿。抠像能清理蓝底，源片中的变脸或姿态漂移仍需要重制原片。</p></aside>
+</main>
+</body></html>
