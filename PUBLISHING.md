@@ -3,7 +3,7 @@
 ## 当前交付快照（2026-10-29）
 
 - 历史分享压缩包已按用户授权精简：当前候选和 10 月 28 日 DSH 修复候选保留，其余旧试用/审阅 ZIP 已删除；文末旧路径只作历史记录。详细清单见 TODO.md 压缩包清理检查点及本地 `diagnostics/archive-cleanup-20261029/`。
-- 最新本机候选：`dist-next/setup-fix-20261029/setup-fix-candidate.zip`，SHA256 `ab109fb1a1b0a9ce4b0b8be0aacc36c54e6d6d15d9bcea7280c5896f1bee3cdd`；21 项文件清单通过。其程序与正式安装一致，文档为打包时快照，本次 Git 收尾文档在源码中另有更新。
+- 最新本机候选：`dist-next/setup-fix-20261029/setup-fix-candidate.zip`，补入根目录 `00-解压后先看.txt` 后的 SHA256 为 `15fca73a6e4a9b09b7688106e0fd3147b81fdc831c4b86307669ae1e83df7f94`；22 项文件清单及 ZIP 完整性通过。此次只新增简明说明并更新包内 distribution/README.md，所有程序、脚本和其他旧条目逐字节不变，程序仍与正式安装一致。其余文档为打包时快照。
 - 正式桌宠 EXE SHA256：`075179a005c686831e2d0c9b051b989ec772c4489a56379cd095d9d0b3aa3c2a`。本次只清理和归档源码，不替换已运行的程序或客户端配置。
 - 候选和精确安装程序已通过冻结接口冒烟；最终源码 119 项 Python（118 通过、1 项可选 YAML 跳过）、系统 YAML 组 6 项、20 项 JavaScript 通过。前端接入与来源的详细验收边界见 TODO.md 最新记录。
 - 用户已授权将当前源码分组提交、推送到既有开发分支；不等同于合并 main 或发布可下载 EXE。二进制和用户数据不入 Git。

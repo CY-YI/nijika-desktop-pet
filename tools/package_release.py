@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 from support_bundle import read_bundle
 PREFIX = "虹夏桌宠-Windows私下试用"
 FILES = (
+    "00-解压后先看.txt",
     "dist/虹夏桌宠.exe",
     "dist/虹夏MCP-v2.exe",
     "dist/虹夏审批提醒.exe",
