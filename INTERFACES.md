@@ -1,18 +1,53 @@
 # 内部接口
 
-## 互动设置与动作试映（2026-10-17，预览阶段）
+## 2026-10-29 Agent 来源配置字段
+
+POST /api/agents/plan 新增 agent_identity（可选，默认 Agent，最多20字符）与 software（custom 必填，最多40字符）；单行验证与 MCP 一致。内置 codex/work/dsh 使用规范身份，不接受任意覆盖。生成档案及所有导出、本机测试通过 export_agent 统一解析。旧档案未含字段仍可读取，缺失宿主不能视为外部识别成功。API 认证、回环绑定及决策回执协议不变。
+
+
+## 2026-10-28 来源显示接口
+
+`show_completion(task, summary, agent_name=None, software=None)` 和 `request_decision(task, question, options, agent_name=None, software=None)` 向后兼容原调用；Context 仍由 SDK 注入，不暴露为工具输入。Agent 最多 20 字符、软件最多 40 字符，均为单行显示文本。两种工具共享按请求解析规则，不缓存上一个调用者的来源。
+
+环境变量 `NIJIKA_HOST_NAME` 是明确软件；`NIJIKA_AGENT_NAME` 的旧产品别名 Codex/Work/DSH/Claude code 仍兼容。共享配置建议 auto + 无 HOST，新专属配置使用 Agent/软件两个字段。通知记录新增可选 `software`，回执字段与 ID 不变。旧记录缺少软件时渲染层按旧标签兼容，不覆写历史。
+
+
+## 独立素材审阅（2026-10-26，非正式管理 API）
+
+- `python tools/review_animation.py export <source> <preview.webp> <新目录>`：读取来源侧车并验证摘要，拒绝已有目录及不适用时序，输出两段 WebM、两张经解码校验的 `*-poster.png` 和 `review.json`。报告记录实际帧率/帧数/时长/摘要、alpha、单次 Python RGBA 提交字节及 `visual_acceptance=pending`；不接受借此自动安装。
+- `python tools/review_animation.py serve <导出目录> [--port 端口]`：默认使用系统分配的空闲回环端口，仅暴露 `/`、`/review.js`、`/review.css`、`/review.json`、`/source.webm`、`/transparent.webm`。GET/HEAD 支持单范围 `bytes=`，非法/多范围 416；跨站/错误 Host 403，未知路径 404，POST 不支持。不读取任意本地文件或修改用户状态。
+
+## 来源与预览加载补丁（2026-10-25）
+
+四个 MCP 工具输入/输出保持兼容；请求 Context 由 SDK 注入，不暴露为工具参数。对已有内置环境名称，精确识别 `codex` / `codex-mcp-client`、`claude-code` / `claude code`、`deepseek harness` / `deepseek-harness` / `@deepseek-ai/dsh-mcp-client`；不匹配前缀相似名，未知/缺失信息和自定义助手名称沿用配置。Work + Codex 引擎保留 Work。SQLite 通知表结构与回执协议不变。
+
+互动 HTTP 接口和资源格式不变。`cancelPreviewRequest()` 仅取消异步结果和计时，不清空可见图片；`stopInteractionPreview()` 才恢复 PNG。`previewAnimation()` 解码 detached clone 后，在最后一次请求仍有效且页面可见时替换图片，过期/失败结果释放自己的 URL，成功结果替换后才释放上一张 URL；`.interaction-stage[aria-busy]` 表示资源准备状态，不改变动画素材含义。
+
+## 设置中心草稿控制器（2026-10-25）
+
+`GET /form-state.js` 随原静态文件白名单提供，鉴权/Host/Origin/CSP 边界不变，HTML 在 `app.js` 前加载它。`FormDraft(form, status, onChange)` 提供 `sync(write, idleMessage)`、`save(async write)` 与只读 `dirty`；`save` 向回调传提交时字段快照，成功返回 `true`，无修改/重复提交返回 `false`，失败保留输入并重新抛出错误。不新增设置字段或写接口，仍调用既有 `/api/settings`、`/api/focus`、`/api/reminders`、`/api/support`。
+
+`#draft-notice` 汇总跨页草稿；`#review-drafts` 导航至对应表单，支持页折叠区自动展开。草稿仅在当前页面会话内保留；刷新/关闭保护由原生 `beforeunload` 尽力提示，浏览器是否展示提示取决于宿主，不能承诺自动持久化或关闭窗口后恢复。
+
+## 本地动画素材工具（2026-10-19）
+
+`python tools/prepare_animation.py <source> <new.webp>` 仅处理本地文件；默认 `--width 360 --fps-cap 24 --max-seconds 12 --key-color '#0000FF' --similarity 0.12 --blend 0.06`，可选 `--lossy --quality 85`。尺寸、帧率、时长与键色有上限；蓝底不匹配或无实际动画会报错。已有目标/报告拒绝覆盖。输出 WebP 和同名 `.webp.json`，包含 input/output SHA256、来源/采样 fps、尺寸、帧数、时长、键色/编码参数、`preview_only=true`、`visual_acceptance=pending`。没有自动视觉验收、皮肤安装或通知 API；MCP、设置中心及用户皮肤格式不变。
+
+已实现的可选参数补记（2026-10-25）：`--clean-blue-shadows --shadow-region X0 Y0 X1 Y1` 限定蓝色阴影清理区域，四坐标均为 0–1，缺区域/反序/非有限值拒绝；区域外标识不做该额外清理。`--loop-mode once|ping-pong` 默认 once，往返模式在缩放后缓冲短片，并限制预计前向 RGBA 工作集为 300 MB。往返端点去重后报告 `ping_pong_endpoints=single`，其他模式为 null；不改变既有 JSON 字段含义。端点只访问一次，循环边界为相邻动作帧，已不承诺首尾字节相等。
+
+## 互动设置与桌面 MVP（2026-10-26）
 
 继续使用下方会话鉴权与同源规则；此增量不修改 MCP 协议，也不发送桌面动作。
 
 | 接口 | 输入 | 输出或效果 |
 | --- | --- | --- |
-| `GET /api/state` 新增 `interaction` | 会话头 | 养成与触摸/特效开关、satiety/hydration/mood、feed_wait/drink_wait 秒数；`desktop_playback=false` 明确表示此版尚未接入桌面动作 |
+| `GET /api/state` 新增 `interaction` | 会话头 | 养成与触摸/特效开关、satiety/hydration/mood、feed_wait/drink_wait、action_revision/last_action；`desktop_playback` 反映当前桌宠心跳是否已接入桌面动作 |
 | `POST /api/interaction` | 非空开关对象：`enabled`、`touch_enabled`、`effects_enabled`，值必须为布尔 | 事务保存偏好，其他字段拒绝；开启后数值随本机状态快照更新，关闭暂停数值 |
 | `POST /api/interaction` | 仅 `{action: "feed"}` 或 `{action: "drink"}` | 返回 `{status:"applied", action, care}`；实际改变对应数值，需开启养成，各自冷却 30 秒。其他动作不能排队或假装播放 |
 | `GET /api/interaction-preview/<action>.webp` | 会话头；可选 `skin`、`strength=gentle/lively`、`effects=0/1`，重复/未知参数拒绝 | 返回单次循环的透明 WebP；动作只允许 pet/poke/nod/shake/dance/lift/feed/drink；只生成预览，不改养成、不发通知 |
 | `GET /interaction.js` | 现有静态页面同源校验 | 独立互动页面控制逻辑，使用 Blob URL 播放鉴权取得的动画，不把会话令牌放到 URL |
 
-`pet_care` 与原通知表独立，没有新增 `pet_actions` 队列。新触摸与特效偏好目前作用于本页面试映；正式桌宠设置仍由原 `/api/settings` 控制。试映幅度是临时选项，不改正式桌面动作强度。接口非法输入返回 400，无令牌或异站 Origin 返回 403。
+`pet_care` 与原通知表独立，没有新增 `pet_actions` 表。投喂/喝水成功时递增 `action_revision`、记录 `last_action`，并在内部事件列表追加本次反馈；列表最多 8 项、30 秒有效，对外快照隐藏内部列表。桌宠每 0.8 秒轮询，仅在无动作/拖动/Agent 提醒时事务领取一项，避免快速点心和喝水互相覆盖。领取后不重复，装饰事件过期不回滚已保存的养成数值。`touch_enabled` 独立控制分区点击，`enabled` 只控制养成和投喂，`effects_enabled` 控制特效。接口非法输入返回 400，无令牌或异站 Origin 返回 403。
 
 ## 本机管理接口（2026-10-15 设计）
 
@@ -93,3 +128,10 @@ Agent 配置预览具有有效期；文件在预览后发生变化时拒绝覆�
 所有事件通过 stdin 单个 JSON 对象传输，上限 1 MiB。安装器只为新增事件增加固定 `--event UserPromptSubmit` / `--event Stop` 参数，便于畸形输入也能保持 Stop 协议。原审批调用命令保持原样，仍需核对客户端实际信任状态。`codex_turn_state` 不含原始 prompt、命令、工具输出、回复、工作路径或 transcript；完成去重标记不随通知清理。内部标题、子任务显式标识、无有效 UserPromptSubmit 的 Stop 不创建通知。启发式过滤有误判可能，不承诺所有 Agent 或宿主均提供相同事件；来源为 claude-code 时忽略新增生命周期事件。
 
 审批 hook 要求本人审阅并信任；当前任务不请求审批时不会有该事件。真实平台审批验收与模拟输入测试分开记录，配置步骤见 `AGENT_SETUP.md`。
+# 2026-10-26 发布准备接口增量
+
+- `GET /api/skins/template`：需现有会话令牌；返回可直接导入的示例 ZIP，包含当前平静/闭眼图及两帧清单，不写入用户设置。
+- `POST /api/skins/import`：保留 PNG/九表情 ZIP，增加 `manifest.json.idle`，其字段为 `frames` 和 `durations_ms`；完整格式与容量限制见 `SKIN_FORMAT.md`。响应 `kind=animated` 时附带 `idle`。
+- `GET /skin/<id>/idle.webp`：与已有角色 PNG 同源只读，按皮肤目录白名单读取，生成小尺寸循环试映；不接收任意文件路径。
+- `GET /api/support/export`：需令牌，返回 `distribution/support.json` 和可选 `distribution/support.png`，没有链接/图片时 400；不包含用户库、配置或 Agent 档案。
+- `GET /api/state.clients[].capabilities`：给出 transport、approval、completion、reload 和 note；表示已实现范围，不表示某个外部客户端已经通过现场测试。

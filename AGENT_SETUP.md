@@ -1,5 +1,41 @@
 # 接入 Agent：Codex、ChatGPT Work、DSH、Claude Code 与其他本机客户端
 
+## 2026-10-29 新版向导与旧配置迁移
+
+“其他 MCP 客户端”现在分开填写管理昵称、Agent 名称、所在软件：例如昵称“编程伙伴”、Agent“Claude”、软件“VS Code”，气泡头部为“Claude · VS Code”。软件必填；不知道模型时 Agent 留空即为 Agent。Codex、Work、DSH 的两项来源由专属适配器填写。生成 JSON、自动配置提示词、下载副本与本机测试使用同一来源。
+
+同一份固定软件来源配置只用于对应宿主，不要在共享管理器中分配给全部软件。共享的 auto 握手仍有识别边界，编辑器复用引擎时应逐软件配置。面板显示“气泡来源”是预期来源，不能证明外部客户端已加载；最后仍需新会话实际调用，并对照气泡头部。旧会话须重连，第三方管理器以后再次覆盖配置时需重新核对。
+
+Codex 将当前虹夏程序的已验证别名合并为 nijika-pet，保留权限等设置。有冲突或旧程序无法核实时停止，不覆盖、不新增第二份；只有旧路径程序与当前程序摘要一致才自动迁到当前路径，并在确认页列出前后路径。旧版本摘要不同，需要先人工核实后迁移。内联服务或特殊 TOML 布局不支持时也停止。
+
+DSH 前端和独立安装脚本只移除旧 Magpie 虹夏列表项，同 insert 中其他服务保留；不支持的复杂 YAML 会报错并停止。预览不写文件，应用前备份并检查预览后变化；权限信任仍由用户在宿主内处理。
+
+
+## 2026-10-28：通知头部的 Agent 与软件
+
+DSH 桌面实际使用 `dsh-mcp-client` 握手名；现已覆盖该名称及旧包名别名。更新 MCP 后，现有 stdio 连接仍可能持有旧程序。重连虹夏服务后生效，无需重复安装或重新配置所有 Agent。旧记录缺软件字段时不会根据任务正文猜测或批量改写历史来源。
+
+头部第一行显示 `Agent · 软件`，第二行是任务名。例如 `ChatGPT · Codex`、`ChatGPT · Work`、`Claude · VS Code`、`ChatGPT · Obsidian`。这是显示身份，不代表授权身份，也不保证能得知实际模型版本。
+
+新配置将两个字段分开：
+
+```json
+{"env":{"NIJIKA_AGENT_NAME":"ChatGPT","NIJIKA_HOST_NAME":"Codex"}}
+```
+
+- `NIJIKA_AGENT_NAME`：Agent 名称，20 字符以内；多模型宿主未知时使用 `Agent`。
+- `NIJIKA_HOST_NAME`：实际软件或模式，40 字符以内，例如 Work、Codex、VS Code、Obsidian。共享管理库分发同一服务到多客户端时使用 `NIJIKA_AGENT_NAME=auto` 且不固定 HOST，让每次握手分别识别；不能把写死 DSH 的配置勾选给全部客户端。
+- 单次工具调用也可传可选 `agent_name` 和 `software` 来细化来源。例如 `show_completion(task="接入检查",summary="配置检查已完成。",agent_name="Claude",software="VS Code")`。旧连接没有这两个参数时先按旧 schema 调用，重新连接后才使用新参数。
+- `task` 只写具体任务名。桌宠仅去除任务开头带分隔符的自身重复前缀；正文里正常提及其他 Agent 不受影响，历史数据库不批量重写。
+- 一台客户端、同一配置作用域中，同一虹夏程序只留一个 MCP 服务。`nijika-pet` 和 `nijika_pet` 同时指向同一程序会产生重复工具入口；两条相同正文不能简单按文字去重，因为可能来自不同会话的独立问题。
+- DSH/WorkBuddy 可切换模型，不自动推测为 DeepSeek/Claude。默认显示 `Agent · DSH` 或 `Agent · WorkBuddy`，有可靠身份时由配置/单次调用补充。
+- 编辑器内运行的 Agent 可能仍握手为 Codex/Claude Code/DSH。需要编辑器专用配置或单次 `software="VS Code"`/`"Obsidian"`；引擎握手本身无法证明外层软件。
+
+更新 EXE 和配置不会热更新已连接的 stdio 进程。保存当前工作后，在客户端重新连接虹夏或重开对应任务；共享管理器也应重新打开以读取已修正库。无需重建模型 API 配置。审批气泡仍只提醒，不能授予命令权限。
+
+维护审计：`python tools/repair_nijika_sources.py --output diagnostics/source-audit.json` 默认只读；本机 DSH YAML 审计需 PyYAML（工具依赖，不是桌宠运行依赖）。执行 `--apply --backup <本机目录>` 才修正已识别的虹夏条目；备份只保存虹夏片段，不复制完整账号配置。不要将本机备份或诊断上传。
+
+
 ## 优先使用设置中心（2026-10-16）
 
 双击桌面的“虹夏桌宠设置”，或右键已更新的桌宠选择“设置中心 / 添加 Agent”（等价于 `虹夏桌宠.exe --control-panel`）。选择客户端、给伙伴命名，常用配置路径会自动填入；仅使用其他用户目录时展开高级位置。点击“检测并继续”，核对具体文件、备份和保留行为，再选择“应用并添加”。已有 Codex `nijika-pet` 服务会保留；同名服务路径失效或存在冲突时停止并提示，不盲目覆盖。
@@ -47,7 +83,7 @@ Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 de
 
 看不到“接入步骤”时，在“Agent 接入”页对应伙伴卡片上点“接入步骤”，可随时重新查看该客户端的步骤与提示词。
 
-向导的“接入步骤”里同时列出这次配置用到的每个文件与绝对路径，可逐条复制或点“复制全部路径”。各客户端的文件位置如下（`<用户目录>` 为你的 Windows 用户目录，例如 `C:\Users\CY`）：
+向导的“接入步骤”里同时列出这次配置用到的每个文件与绝对路径，可逐条复制或点“复制全部路径”。各客户端的文件位置如下（`<用户目录>` 为你的 Windows 用户目录，例如 `C:\Users\YourName`；以自己机器上向导生成的实际路径为准）：
 
 | 客户端 | MCP 程序 | 客户端配置 | 主动提醒规则 | 技能（可选） |
 | --- | --- | --- | --- | --- |
@@ -57,7 +93,11 @@ Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 de
 | DSH | `dist\虹夏MCP-v2.exe` | `<用户目录>\.dsh\profiles\desktop\cordis.patch.yml` 与 `profiles\web\cordis.patch.yml` | `<用户目录>\.dsh\AGENTS.md` | `<用户目录>\.dsh\skills\nijika-dsh-dialog\SKILL.md` |
 | 其他 MCP 客户端 | `dist\虹夏MCP-v2.exe` | 专属接入目录的 `nijika-mcp.json`；实际客户端目标由接收 AI 核实 | 同目录的 `nijika-agent-instructions.txt` | 同目录的 `SKILL.md`，由接收 AI 按客户端规则安装 |
 
-`config.toml` 与 `cordis.patch.yml` 中写入的服务名分别为 `nijika-pet` 和 `mcp-nijika-pet`，`NIJIKA_AGENT_NAME` 决定气泡显示的来源名。路径由向导自动填入，不需要手抄；上述表格用于手动排查。
+`config.toml` 与 `cordis.patch.yml` 中写入的服务名分别为 `nijika-pet` 和 `mcp-nijika-pet`，`NIJIKA_AGENT_NAME` 提供气泡的默认来源名。内置客户端使用固定来源名：Codex=`Codex`、Claude Code=`Claude code`、DSH=`DSH`、Work=`Work`；同一个安装版 MCP 可以被多个客户端共用，每个客户端仍应配置正确名称。一个客户端只保留自己的虹夏注册：Codex 用 `nijika-pet`，Claude Code 用 `nijika-pet`，DSH 用 `mcp-nijika-pet`，Work 用 `nijika-work-pet`。旧的 `nijika_pet`、`magpie-mcp-nijika-pet` 重复条目会造成顶部来源错配，接入脚本会清理已识别的旧副本。路径由向导自动填入，不需要手抄；上述表格用于手动排查。
+
+2026-10-25 来源复发修复：新 MCP 在每次完成/选择请求中读取协议的客户端信息。明确识别为 Codex 的调用可纠正遗留的 DSH 内置标签；自定义助手名称保留，Work 使用 Codex 本地引擎时仍保留 Work。未知或未提供客户端信息时沿用已配置名称，不根据任务正文猜来源。来源名仅用于显示，不证明调用者身份或授权。
+
+仅改配置或替换磁盘 EXE 不会改变正在运行的旧 MCP 进程。已打开会话仍误标时，在客户端“设置 → MCP servers → nijika-pet → Restart”重启连接，或按客户端提供的重连方式操作；无需重复配置 Agent、安装技能或重新信任审批钩子。Codex 官方步骤见 [MCP 配置说明](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)。四个 MCP 工具的调用参数保持不变。
 
 向导不读取或要求填写模型密钥，不替用户信任 hook，不开放云端入口。以下命令说明保留，供高级配置和故障排查。
 
@@ -207,3 +247,20 @@ powershell -ExecutionPolicy Bypass -File .\integrations\dsh\install.ps1
 3. 任务完成但内容太长时，Agent 可调用 `show_completion` 提醒你回聊天查看。`pending` 只表示本机排队，不代表气泡已显示或你已批准。
 
 晚到的点击保存在本机消息库，但 Agent 任务若已经结束，当前 stdio MCP **不会自动唤醒该任务**；在原聊天发送“继续”，技能要求先读取旧请求。Codex、Work 和 DSH 的长期等待与晚到回复仍需各自在新任务中现场验收。
+# 2026-10-26 分享前接入差异与冲突检查
+
+接入方式继续沿用设置中心向导；程序路径和接入提示词在收件人电脑上生成，不需要沿用开发机的路径。不要把本机生成的整份接入目录发给别人当作通用配置。
+
+| 客户端 | 普通完成/选择 | 原生权限提示 | 特别之处 |
+| --- | --- | --- | --- |
+| Codex | MCP + 已安装技能/规则 | 可选 PermissionRequest/PostToolUse 钩子；本人审阅信任 | Stop 等完成兜底另行配置；保留其他 MCP、notify 和权限 |
+| 本机 ChatGPT Work | 插件 MCP + 插件技能 | 尚未接宿主原生权限事件 | 当前启动器依赖 Codex CLI 与 python.exe；不是云端 Work 或普通聊天 |
+| DSH | desktop/web stdio MCP + DSH 技能 | 尚未接宿主原生权限事件 | 两个 profile 均需核对，重启后新建会话 |
+| Claude Code | 依手册合并 MCP，使用通用规则 | 存在独立的可选安装脚本；真实 PermissionRequest 仍未完整验收 | 目前没有向导专属按钮，按“其他 MCP 客户端”生成资料；不把 Codex 钩子配置直接复用 |
+| 其他客户端 | 导出 stdio JSON 和完整配置提示词 | 不作通用承诺 | 接收 AI 需识别自己的配置文件/作用域；普通网页聊天不能安装本机进程 |
+
+同一用户下各 Agent 共用桌宠、SQLite 队列和四个 MCP 工具；通知有独立请求 ID，不按题目文字匹配回复。同名问题与同名来源也各自独立。客户端须保存自己创建的 ID，不要读取或操作别人的请求。显示来源不是认证；本机可信客户端之间的逻辑路由不等于不同系统用户之间的安全隔离。
+
+向导检测配置变化后拒绝覆盖；重复接入复用已有档案并保留其他配置。Codex 同名服务若指向未知程序会要求先核对。已有窗口/旧 MCP 连接不保证热加载，文件写入、面板测试和 pending 都不证明外部客户端已经接通。本人 hook 信任仍在客户端完成，气泡绝不代替命令审批。
+
+维护者只读检查：`python tools/audit_agent_integrations.py`；真实协议并发检查：`python tools/smoke_mcp_sources.py <虹夏MCP-v2.exe绝对路径>`。前者比较技能和依赖，不输出客户端配置或密钥；后者使用临时数据库，不向正式桌宠排测试问题。这两项不等于每款宿主的真实权限事件验收。
