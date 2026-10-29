@@ -8,7 +8,11 @@
         "-u",
         "${PLUGIN_ROOT}/scripts/run_mcp.py",
         "AUTO_LOCAL_MCP"
-      ]
+      ],
+      "env": {
+        "NIJIKA_AGENT_NAME": "ChatGPT",
+        "NIJIKA_HOST_NAME": "Work"
+      }
     }
   }
 }

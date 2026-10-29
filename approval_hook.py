@@ -73,15 +73,15 @@ def handle_event(event: dict, store: NotificationStore, source: str = "codex") -
         store.resolve_approval(key)
         return None
     if source == "claude-code":
-        agent, where = "Claude code", "Claude Code 的权限提示"
+        agent, software, where = "Claude", "Claude Code", "Claude Code 的权限提示"
     else:
-        agent, where = "Codex", "Codex 命令审批卡"
+        agent, software, where = "ChatGPT", "Codex", "Codex 命令审批卡"
     folder = PureWindowsPath(str(event.get("cwd") or "当前任务")).name
     folder = "".join(c for c in folder if ord(c) >= 32)[:20] or "当前任务"
     notice = store.create(
         agent, "命令需要授权",
         f"{folder}的工具操作需要授权。请在 {where}中处理；此气泡只提醒，不授予权限。",
-        ("知道了",), event_key=key, kind="approval",
+        ("知道了",), event_key=key, kind="approval", software=software,
     )
     return notice.id
 

@@ -49,8 +49,9 @@ class CodexCompletionTests(unittest.TestCase):
         self.assertIsNotNone(request)
         notice = self.store.get(request)
         self.assertEqual((notice.agent, notice.title, notice.message, notice.choices), (
-            "Codex", "任务完成", "Codex 任务已完成，请查看结果。", ("知道了",),
+            "ChatGPT", "任务完成", "Codex 任务已完成，请查看结果。", ("知道了",),
         ))
+        self.assertEqual(notice.software, "Codex")
         self.assertEqual(notice.kind, "agent")
         self.assertIsNone(self.stop())
         self.assertEqual(self.count(), 1)

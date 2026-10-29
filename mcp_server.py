@@ -7,14 +7,28 @@ import os
 import time
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
 from pydantic import BaseModel, Field
 
 from notification_store import NotificationStore
+from notice_source import resolve_source, NoticeSource
 
 
-AGENT_NAME = os.environ.get("NIJIKA_AGENT_NAME", "Codex")
+AGENT_NAME = os.environ.get("NIJIKA_AGENT_NAME", "auto")
+HOST_NAME = os.environ.get("NIJIKA_HOST_NAME", "")
 mcp = MCPServer("nijika-desktop-pet")
 store = NotificationStore()
+
+
+def request_source(context: Context | None, agent_name=None, software=None) -> NoticeSource:
+    """Resolve each request independently; never share the previous caller."""
+    try:
+        params = context.session.client_params
+        info = getattr(params, "client_info", None) or getattr(params, "clientInfo", None)
+        name = info.name if info else ""
+    except (AttributeError, ValueError):
+        name = ""
+    return resolve_source(AGENT_NAME, HOST_NAME, name, agent_name, software)
 
 
 class CreatedResult(BaseModel):
@@ -46,10 +60,12 @@ def invalid_notice(error: ValueError) -> CreatedResult:
 
 
 @mcp.tool()
-def show_completion(task: str, summary: str) -> CreatedResult:
-    """Send a notice-only completion alert when the result needs fuller review elsewhere; not an approval request."""
+def show_completion(task: str, summary: str, agent_name: str | None = None,
+                    software: str | None = None, context: Context = None) -> CreatedResult:
+    """Send completion, not approval. Optional agent_name is your Agent identity; software is your host (Work/Codex/VS Code/Obsidian). Keep task free of source prefixes."""
     try:
-        notice = store.create(AGENT_NAME, task, summary, ("知道了",))
+        source = request_source(context, agent_name, software)
+        notice = store.create(source.agent, task, summary, ("知道了",), software=source.software)
     except ValueError as error:
         return invalid_notice(error)
     return CreatedResult(
@@ -59,8 +75,10 @@ def show_completion(task: str, summary: str) -> CreatedResult:
 
 
 @mcp.tool()
-def request_decision(task: str, question: str, options: list[DecisionOption]) -> CreatedResult:
-    """Ask a desktop choice; recommend one option when justified, then record the clicked choice in this chat."""
+def request_decision(task: str, question: str, options: list[DecisionOption],
+                     agent_name: str | None = None, software: str | None = None,
+                     context: Context = None) -> CreatedResult:
+    """Ask a choice; record the click in chat. Optional agent_name identifies the Agent; software identifies its host. Keep task free of source prefixes."""
     if not 2 <= len(options) <= 3:
         return invalid_notice(ValueError("request_decision requires 2–3 explained choices"))
     if isinstance(question, str) and (len(question) > 80 or question.count("\n") > 2):
@@ -68,8 +86,9 @@ def request_decision(task: str, question: str, options: list[DecisionOption]) ->
     if sum(option.recommended for option in options) > 1:
         return invalid_notice(ValueError("at most one choice may be recommended"))
     try:
-        notice = store.create(AGENT_NAME, task, question,
-                              [option.model_dump() for option in options])
+        source = request_source(context, agent_name, software)
+        notice = store.create(source.agent, task, question,
+                              [option.model_dump() for option in options], software=source.software)
     except ValueError as error:
         return invalid_notice(error)
     return CreatedResult(

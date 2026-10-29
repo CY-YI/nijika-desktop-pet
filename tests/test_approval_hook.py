@@ -38,6 +38,16 @@ class ApprovalHookTests(unittest.TestCase):
             self.assertEqual(store.get(request).status, "answered")
             self.assertEqual(store.get(request).kind, "approval")
 
+    def test_both_approval_hosts_have_separate_agent_and_software(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = NotificationStore(Path(directory) / "queue.sqlite3")
+            for caller, expected in (("codex", ("ChatGPT", "Codex")),
+                                     ("claude-code", ("Claude", "Claude Code"))):
+                request = handle_event({"hook_event_name": "PermissionRequest",
+                                        "session_id": caller}, store, caller)
+                notice = store.get(request)
+                self.assertEqual((notice.agent, notice.software), expected)
+
     def test_runner_never_outputs_approval_or_raw_input(self):
         output, errors = io.StringIO(), io.StringIO()
         with (patch("approval_hook.sys.stdin", io.TextIOWrapper(io.BytesIO(b'invalid input'))),

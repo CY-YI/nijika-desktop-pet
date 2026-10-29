@@ -51,6 +51,7 @@ class Notification:
     created_at: int
     updated_at: int
     kind: str = "agent"
+    software: str = ""
 
     def result(self) -> dict[str, str | int | None]:
         choice = self.choices[self.selected_index] if self.selected_index is not None else None
@@ -89,6 +90,12 @@ class NotificationStore:
                     event_key TEXT UNIQUE,
                     kind TEXT NOT NULL,
                     priority INTEGER NOT NULL DEFAULT 0
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS notice_sources (
+                    notification_id TEXT PRIMARY KEY,
+                    software TEXT NOT NULL
                 )
             """)
             connection.execute("""
@@ -135,14 +142,20 @@ class NotificationStore:
             status=row["status"], selected_index=row["selected_index"],
             created_at=row["created_at"], updated_at=row["updated_at"],
             kind=row["kind"] if "kind" in row.keys() else "agent",
+            software=row["software"] if "software" in row.keys() else "",
         )
 
     def create(self, agent: str, title: str, message: str,
                choices: tuple[str | dict[str, str], ...] | list[str | dict[str, str]],
-               *, event_key: str | None = None, kind: str = "agent") -> Notification:
+               *, event_key: str | None = None, kind: str = "agent",
+               software: str = "") -> Notification:
         agent = _required_text(agent, "agent", 20)
         title = _required_text(title, "title", 30)
         message = _required_text(message, "message", 120)
+        if software:
+            software = _required_text(software, "software", 40)
+            if "\n" in software:
+                raise ValueError("software must be one line")
         if not isinstance(choices, (tuple, list)) or not 1 <= len(choices) <= 3:
             raise ValueError("choices must contain 1–3 labels")
         normalized: list[dict[str, str]] = []
@@ -193,12 +206,14 @@ class NotificationStore:
                 "INSERT INTO notice_tags VALUES (?, ?, ?, ?)",
                 (notice_id, event_key, kind, 100 if kind == "approval" else 0),
             )
+            connection.execute("INSERT INTO notice_sources VALUES (?, ?)", (notice_id, software))
         return self.get(notice_id)
 
     def get(self, notice_id: str) -> Notification | None:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT n.*, COALESCE(t.kind, 'agent') AS kind FROM notifications n "
+                "SELECT n.*, COALESCE(t.kind, 'agent') AS kind, COALESCE(s.software, '') AS software FROM notifications n "
+                "LEFT JOIN notice_sources s ON s.notification_id=n.id "
                 "LEFT JOIN notice_tags t ON t.notification_id=n.id WHERE n.id = ?", (notice_id,)
             ).fetchone()
         return self._decode(row)
@@ -206,7 +221,8 @@ class NotificationStore:
     def next_pending(self) -> Notification | None:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT n.*, COALESCE(t.kind, 'agent') AS kind FROM notifications n "
+                "SELECT n.*, COALESCE(t.kind, 'agent') AS kind, COALESCE(s.software, '') AS software FROM notifications n "
+                "LEFT JOIN notice_sources s ON s.notification_id=n.id "
                 "LEFT JOIN notice_tags t ON t.notification_id=n.id WHERE n.status = 'pending' "
                 "ORDER BY COALESCE(t.priority, 0) DESC, n.created_at, n.rowid LIMIT 1"
             ).fetchone()
@@ -357,9 +373,10 @@ class NotificationStore:
                 return None
             connection.execute(
                 "INSERT INTO notifications VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?)",
-                (notice_id, "Codex", "任务完成", "Codex 任务已完成，请查看结果。",
+                (notice_id, "ChatGPT", "任务完成", "Codex 任务已完成，请查看结果。",
                  choices, now, now),
             )
+            connection.execute("INSERT INTO notice_sources VALUES (?, ?)", (notice_id, "Codex"))
             connection.execute(
                 "UPDATE codex_turn_state SET completion_notice_sent=1, updated_at=? "
                 "WHERE session_hash=? AND turn_hash=?",

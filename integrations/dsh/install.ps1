@@ -18,6 +18,76 @@ if (-not (Test-Path -LiteralPath $DshRoot -PathType Container)) {
     throw "DSH home does not exist: $DshRoot"
 }
 
+function Remove-LegacyNijika {
+    param([string]$Text)
+    if (-not $Text.Contains('magpie-mcp-nijika-pet')) { return $Text }
+    # Only the old manager's simple block-list layout is supported.
+    # Refuse complex YAML rather than expanding a deletion to sibling services.
+    $lines = [regex]::Matches($Text, '[^\r\n]*(?:\r\n|\n|\r|\z)') |
+        Where-Object { $_.Length -gt 0 } | ForEach-Object { $_.Value }
+    foreach ($value in $lines) {
+        if ($value.TrimStart().StartsWith('#')) { continue }
+        if ($value -match ':\s*[|>]') { throw 'Multiline DSH block; manual review required.' }
+        if ($value.TrimEnd("`r", "`n") -match ':\s*([''"])(.*)$') {
+            $quote = $Matches[1]; $tail = $Matches[2]
+            if ($tail -notmatch ('.*' + $quote + '\s*(?:#.*)?$')) {
+                throw 'Multiline DSH string; manual review required.'
+            }
+        }
+    }
+    $remove = [Collections.Generic.HashSet[int]]::new()
+    $found = 0
+    for ($start = 0; $start -lt $lines.Count; $start++) {
+        if ($lines[$start].TrimEnd("`r", "`n") -notmatch '^- insert:\s*(?:#.*)?$') { continue }
+        $end = $start + 1
+        while ($end -lt $lines.Count) {
+            $line = $lines[$end].TrimEnd("`r", "`n")
+            if ($line -and $line -match '^[^\s#]') { break }
+            $end++
+        }
+        $block = ($lines[($start + 1)..($end - 1)] -join '')
+        if (-not $block.Contains('magpie-mcp-nijika-pet')) { continue }
+        $entries = [Collections.Generic.List[int]]::new()
+        for ($i = $start + 1; $i -lt $end; $i++) {
+            $line = $lines[$i].TrimEnd("`r", "`n")
+            if (-not $line.Trim() -or $line.TrimStart().StartsWith('#')) { continue }
+            if ($line.Contains("`t") -or -not $line.StartsWith('    ') -or
+                $line -match ':\s*(?:[|>&*!]|[{[](?![}\]]\s*(?:#.*)?$))') { throw 'Unsupported legacy DSH YAML; no automatic cleanup.' }
+            if ($line -match ':\s*([''"])(.*)$') {
+                $quote = $Matches[1]
+                $tail = $Matches[2]
+                if ($tail -notmatch ('.*' + $quote + '\s*(?:#.*)?$')) {
+                    throw 'Multiline legacy DSH scalar; no automatic cleanup.'
+                }
+            }
+            if ($line.StartsWith('    - ')) { $entries.Add($i) }
+            elseif ($entries.Count -eq 0) { throw 'Unsupported legacy DSH list; no automatic cleanup.' }
+        }
+        $kept = 0
+        for ($p = 0; $p -lt $entries.Count; $p++) {
+            $first = $entries[$p]
+            $last = if ($p + 1 -lt $entries.Count) { $entries[$p + 1] } else { $end }
+            if ($lines[$first].TrimEnd("`r", "`n") -notmatch '^    - id: [''"]?magpie-mcp-nijika-pet[''"]?\s*(?:#.*)?$') {
+                $kept++; continue
+            }
+            $item = $lines[$first..($last - 1)] -join ''
+            if ($item -notmatch '(?m)^        serverName: [''"]?nijika[-_]pet[''"]?\s*(?:#.*)?$') {
+                throw 'Cannot verify legacy DSH service; no automatic cleanup.'
+            }
+            $found++
+            for ($i = $first; $i -lt $last; $i++) { [void]$remove.Add($i) }
+        }
+        if ($kept -eq 0) {
+            for ($i = $start; $i -lt $end; $i++) { [void]$remove.Add($i) }
+        }
+    }
+    if ($found -eq 0) { throw 'Unsupported legacy DSH entry layout; no automatic cleanup.' }
+    $output = for ($i = 0; $i -lt $lines.Count; $i++) {
+        if (-not $remove.Contains($i) -or $lines[$i].TrimStart().StartsWith('#')) { $lines[$i] }
+    }
+    return ($output -join '')
+}
+
 function Update-MarkedBlock {
     param([string]$Path, [string]$Block, [string]$Start, [string]$End)
 
@@ -26,6 +96,8 @@ function Update-MarkedBlock {
     } else {
         ''
     }
+    $original = $current
+    if ($Start -eq '# BEGIN NIJIKA-DSH-MCP') { $current = Remove-LegacyNijika $current }
     $startIndex = $current.IndexOf($Start, [StringComparison]::Ordinal)
     $endIndex = $current.IndexOf($End, [StringComparison]::Ordinal)
     if (($startIndex -ge 0) -ne ($endIndex -ge 0)) {
@@ -39,7 +111,7 @@ function Update-MarkedBlock {
     } else {
         $updated = $current.TrimEnd("`r", "`n") + "`n`n" + $Block.TrimEnd() + "`n"
     }
-    if ($updated -eq $current) { return }
+    if ($updated -eq $original) { return }
     if (Test-Path -LiteralPath $Path) {
         $backup = "$Path.bak-nijika-$(Get-Date -Format 'yyyyMMdd-HHmmss-fff')"
         Copy-Item -LiteralPath $Path -Destination $backup
@@ -58,10 +130,16 @@ $profileBlock = @"
         transport: stdio
         command: '$quotedExe'
         env:
-          NIJIKA_AGENT_NAME: DSH
+          NIJIKA_AGENT_NAME: Agent
+          NIJIKA_HOST_NAME: DSH
 # END NIJIKA-DSH-MCP
 "@
 
+foreach ($profile in $Profiles) {
+    $patch = Join-Path $DshRoot "profiles\$profile\cordis.patch.yml"
+    if (-not (Test-Path -LiteralPath $patch -PathType Leaf)) { throw "DSH profile patch is missing: $patch" }
+    [void](Remove-LegacyNijika ([IO.File]::ReadAllText($patch)))
+}
 foreach ($profile in $Profiles) {
     $patch = Join-Path $DshRoot "profiles\$profile\cordis.patch.yml"
     if (-not (Test-Path -LiteralPath $patch -PathType Leaf)) {
@@ -81,8 +159,8 @@ $skillTarget = Join-Path $DshRoot 'skills\nijika-dsh-dialog\SKILL.md'
 $skillDirectory = Split-Path -Parent $skillTarget
 New-Item -ItemType Directory -Path $skillDirectory -Force | Out-Null
 if ((Test-Path -LiteralPath $skillTarget) -and
-    (Get-FileHash -LiteralPath $skillTarget).Hash -ne
-    (Get-FileHash -LiteralPath $skillSource).Hash) {
+    [Convert]::ToBase64String([IO.File]::ReadAllBytes($skillTarget)) -ne
+    [Convert]::ToBase64String([IO.File]::ReadAllBytes($skillSource))) {
     Copy-Item -LiteralPath $skillTarget -Destination "$skillTarget.bak-nijika-$(Get-Date -Format 'yyyyMMdd-HHmmss-fff')"
 }
 Copy-Item -LiteralPath $skillSource -Destination $skillTarget -Force
