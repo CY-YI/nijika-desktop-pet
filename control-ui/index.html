@@ -8,29 +8,32 @@
   <title>虹夏桌宠 · 设置中心</title>
   <link rel="icon" href="/skin/default/happy.png">
   <link rel="stylesheet" href="/styles.css">
+  <script src="/form-state.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/interaction.js" defer></script>
 </head>
 <body>
+  <a class="skip-link" href="#main-content">跳到页面内容</a>
   <div class="app-shell">
     <aside class="sidebar">
       <a class="brand" href="#agents"><span class="brand-icon">✦</span><span>虹夏桌宠<small>NIJIKA COMPANION</small></span></a>
       <p class="nav-caption">我的小小工作伙伴</p>
       <nav aria-label="设置中心导航">
-        <button class="nav-item active" data-page="agents" aria-current="page"><span>⌘</span>Agent 接入<span class="nav-dot"></span></button>
-        <button class="nav-item" data-page="focus"><span>◷</span>专注与提醒</button>
-        <button class="nav-item" data-page="notes"><span>✎</span>今日便签与陪伴</button>
-        <button class="nav-item" data-page="interaction"><span>☺</span>互动与养成</button>
-        <button class="nav-item" data-page="skins"><span>♧</span>角色衣橱</button>
-        <button class="nav-item" data-page="settings"><span>☷</span>动作与陪伴</button>
-        <button class="nav-item" data-page="support"><span>♡</span>投喂支持</button>
+        <button class="nav-item active" data-page="agents" aria-current="page" aria-label="Agent 接入" title="Agent 接入"><span aria-hidden="true">⌘</span><span class="nav-label">Agent 接入</span><span class="nav-dot" aria-hidden="true"></span></button>
+        <button class="nav-item" data-page="focus" aria-label="专注与提醒" title="专注与提醒"><span aria-hidden="true">◷</span><span class="nav-label">专注与提醒</span></button>
+        <button class="nav-item" data-page="notes" aria-label="今日便签与陪伴" title="今日便签与陪伴"><span aria-hidden="true">✎</span><span class="nav-label">今日便签与陪伴</span></button>
+        <button class="nav-item" data-page="interaction" aria-label="互动与养成" title="互动与养成"><span aria-hidden="true">☺</span><span class="nav-label">互动与养成</span></button>
+        <button class="nav-item" data-page="skins" aria-label="角色衣橱" title="角色衣橱"><span aria-hidden="true">♧</span><span class="nav-label">角色衣橱</span></button>
+        <button class="nav-item" data-page="settings" aria-label="动作与陪伴" title="动作与陪伴"><span aria-hidden="true">☷</span><span class="nav-label">动作与陪伴</span></button>
+        <button class="nav-item" data-page="support" aria-label="投喂支持" title="投喂支持"><span aria-hidden="true">♡</span><span class="nav-label">投喂支持</span></button>
       </nav>
       <div class="sidebar-bottom"><div class="side-pet"><img src="/skin/default/happy.png" alt="开心的虹夏"><p>专注你的工作，<br>剩下的，我来提醒。</p></div><div class="version"><span class="small-dot"></span>本机运行<span>设置中心 0.2</span></div></div>
     </aside>
     <div class="workspace">
       <header class="topbar"><div><span class="breadcrumb">设置中心</span><span class="slash">/</span><strong id="page-name">Agent 接入</strong></div><div class="top-actions"><span id="renderer-pill" class="status-pill"><i></i>正在检查桌宠</span><button id="start-pet" class="button small secondary" hidden>启动虹夏</button></div></header>
       <div id="connection-error" class="error-banner" role="alert" hidden></div>
-      <main>
+      <div id="draft-notice" class="draft-notice" hidden><span id="draft-summary" role="status"></span><button id="review-drafts" type="button" class="text-button">查看修改 →</button></div>
+      <main id="main-content" tabindex="-1">
         <section id="page-agents" class="page">
           <div class="page-heading"><div><p class="eyebrow">YOUR AGENT, ONE LITTLE COMPANION</p><h1>Agent 接入</h1><p>把需要你回应的时刻，交给虹夏。</p></div><button class="button primary" data-add-agent><span>＋</span>添加 Agent</button></div>
           <div class="hero">
@@ -42,6 +45,7 @@
           <div id="agents-list" class="agent-grid"></div>
           <div id="empty-agents" class="empty-agents" hidden><span class="empty-symbol">⌘</span><div><h3>第一个伙伴，正在等你接入</h3><p>支持 Codex、ChatGPT Work、DeepSeek Harness 和其他 MCP 客户端。</p></div><button class="button secondary" data-add-agent>添加第一个 Agent <span>＋</span></button></div>
           <div class="tip-card"><span>i</span><p><strong>两种提醒，各有分工。</strong>普通问答由 Agent 调用工具；命令授权由已接通的客户端审批事件触发，仍在原审批卡中批准。</p></div>
+          <details class="help-card"><summary>各客户端有什么不同？多 Agent 会不会冲突？</summary><p>各请求独立编号、按队列显示，点击只写回该请求。显示名称不是权限隔离：同一电脑用户的可信客户端共用消息库。配置会先备份、保留其他服务；同名未知服务需先核对。</p><div id="agent-capabilities" class="agent-grid"></div><p>面板测试只验证本机气泡；接收方还需在自己的客户端新任务中实际调用一次。已结束的任务不能被晚到点击自动唤醒。</p></details>
         </section>
 
         <section id="page-focus" class="page" hidden>
@@ -62,6 +66,7 @@
                 <label>专注时长（分钟）<input id="focus-length" name="focus_minutes" type="number" min="1" max="180" required></label>
                 <label>休息时长（分钟）<input id="break-length" name="break_minutes" type="number" min="1" max="180" required></label>
                 <button class="button secondary" type="submit">保存时长</button>
+                <span id="focus-save-status" class="form-status" role="status">时长保存在这台电脑</span>
               </form>
             </div>
             <div>
@@ -103,8 +108,8 @@
         </section>
 
         <section id="page-interaction" class="page" hidden>
-          <div class="page-heading"><div><p class="eyebrow">A LITTLE CLOSER</p><h1>互动与养成 <span class="interaction-edition">先试试看</span></h1><p>摸摸头，晃晃脚。工作以外，也一起放松一下。</p></div></div>
-          <div class="interaction-scope"><span aria-hidden="true">✦</span><p><strong>这一版，先在这里体验。</strong> 动作在右侧试映，养成数值保存在本机；桌面触摸与彩蛋动作将在效果确认后接入。</p></div>
+          <div class="page-heading"><div><p class="eyebrow">A LITTLE CLOSER</p><h1>互动与养成 <span class="interaction-edition">基础互动</span></h1><p>摸摸头，晃晃脚。工作以外，也一起放松一下。</p></div></div>
+          <div class="interaction-scope"><span aria-hidden="true">✦</span><p id="interaction-desktop-status">正在检查桌面互动。这里的动作按钮用于试映，点心和喝水会保存养成数值。</p></div>
           <div class="interaction-layout">
             <div class="interaction-panels">
               <article class="interaction-card">
@@ -132,8 +137,8 @@
               <form id="interaction-form" class="interaction-card">
                 <div class="interaction-card-heading"><div><span class="interaction-kicker">03 · 按你的习惯</span><h2>陪伴有自己的节奏</h2></div></div>
                 <label class="interaction-toggle"><span><strong>开启轻养成</strong><small>饱食、水分与心情缓慢变化；关闭后暂停数值。</small></span><input type="checkbox" role="switch" name="enabled"></label>
-                <label class="interaction-toggle"><span><strong>允许分区触摸</strong><small>先在右侧试用：头顶摸头、脸颊轻戳。</small></span><input type="checkbox" role="switch" name="touch_enabled" checked></label>
-                <label class="interaction-toggle"><span><strong>显示互动小特效</strong><small>摸头的爱心、投喂的点心和水杯。</small></span><input type="checkbox" role="switch" name="effects_enabled" checked></label>
+                <label class="interaction-toggle"><span><strong>允许分区触摸</strong><small>保存后桌面头顶摸头、脸颊轻戳；独立于轻养成开关。</small></span><input type="checkbox" role="switch" name="touch_enabled" checked></label>
+                <label class="interaction-toggle"><span><strong>显示互动小特效</strong><small>桌面的星光反馈，以及试映室的爱心、点心和水杯。</small></span><input type="checkbox" role="switch" name="effects_enabled" checked></label>
                 <p class="interaction-footnote">离线变化最多计算 8 小时；每次点心或喝水间隔 30 秒。这些设置不改变 Agent 提醒和命令审批。</p>
                 <div class="interaction-save-row"><span id="interaction-save-status" role="status">设置保存在这台电脑</span><button id="save-interaction" type="submit" class="button primary" disabled>保存互动设置</button></div>
               </form>
@@ -154,6 +159,7 @@
           <div class="page-heading"><div><p class="eyebrow">A NEW LOOK, THE SAME COMPANION</p><h1>角色衣橱</h1><p>换一个喜欢的外观，陪你继续做事。</p></div><button id="import-skin" class="button primary">＋ 导入皮肤</button><input id="skin-file" type="file" accept=".png,.zip" hidden></div>
           <div class="wardrobe-layout"><div class="preview-stage"><span class="stage-label">桌宠外观预览</span><img id="skin-preview" src="/skin/default/curious.png" alt="所选角色皮肤的完整预览"><span class="stage-floor"></span><strong id="skin-preview-name">虹夏 · 经典制服</strong></div><div><div class="section-title"><h2>我的皮肤</h2><span id="skin-count"></span></div><div id="skins-list" class="skin-grid"></div><div class="help-card"><h3>把你喜欢的形象带进来</h3><p>透明 PNG 可作为单图皮肤，动作保留，表情固定。表情皮肤 ZIP 需包含九张同尺寸、透明背景的 PNG。</p><details><summary>查看表情包格式</summary><p>画布比例约为 2:3，总文件不超过 32 MB。</p><code>curious.png · happy.png · worried.png · sleepy.png · wink.png · thinking.png · pout.png · excited.png · blink.png</code><p>可附带 manifest.json，用 name 字段命名。图片包不支持运行脚本。</p></details></div></div></div>
           <div class="creator-card"><div class="creator-heading"><div><h3>自制角色 · 让 AI 帮你画</h3><p>想换成自己的角色、原创形象或别的动漫人物？把下面的提示词复制给你常用的 AI 绘图工具（或能画图的 AI 助手），它会按桌宠需要的格式出图；拿到图片后回到本页点“导入皮肤”即可。</p></div><button id="copy-skin-prompt" class="button dark" type="button">复制 AI 生成提示词</button></div>
+            <div class="help-card"><h3>连续待机 · PNG 多帧 ZIP</h3><p id="skin-preview-detail" role="status">支持原有 PNG / 九表情，也支持连续待机帧。</p><p>建议 8–16 张 512×768 透明 PNG，按 idle_000.png 起连续编号。ZIP 内放 manifest.json，列明 frames 和 durations_ms；表情图可选，缺省时以首帧补齐。</p><p>2–48 帧；每帧 40–5000 毫秒，总长 ≤60 秒；总像素 ≤2400 万；ZIP ≤32 MB、解压 ≤64 MB。所有图片同尺寸、约 2:3，不支持脚本和视频。首尾对齐，常驻表情选“好奇”时播放；关闭动作则静止。</p><button id="download-skin-template" class="button secondary" type="button">下载可导入模板 ZIP</button><p>模板复用当前皮肤的平静/闭眼图演示两帧时序，请替换成自己的角色。单图皮肤两帧相同会保持静态；不代表已自动生成新角色。</p></div>
             <div class="format-grid">
               <div class="format-block"><h4>方案一：单张 PNG（最省事）</h4><span class="format-tag">推荐先用这个</span><ul><li>格式：<code>PNG</code>，必须有透明背景（四角透明）</li><li>画布比例：<b>宽 : 高 ≈ 2 : 3</b>（如 1024×1536、683×1024）</li><li>尺寸：最小边 ≥ 32 像素，总像素 ≤ 800 万（1024×1536 刚好合适）</li><li>内容：完整角色入画，人物居中、留少量边距</li><li>效果：动作会保留（呼吸/摇摆），表情固定不变</li><li>文件名随意，例如 <code>my-character.png</code></li></ul></div>
               <div class="format-block"><h4>方案二：ZIP 表情包（九种表情）</h4><span class="format-tag">效果更完整</span><ul><li>格式：<code>ZIP</code>，内含 <b>9 张同尺寸透明 PNG</b></li><li>文件名必须完全一致：<code>curious</code> <code>happy</code> <code>worried</code> <code>sleepy</code> <code>wink</code> <code>thinking</code> <code>pout</code> <code>excited</code> <code>blink</code>（各自 <code>.png</code>）</li><li>九张画布尺寸必须完全相同，角色位置对齐（只有表情不同）</li><li>可放一个 <code>manifest.json</code>，用 <code>name</code> 字段给皮肤命名</li><li>限制：不超过 10 个文件、压缩包 ≤ 32 MB、解压后 ≤ 64 MB</li><li>不支持任何脚本文件（.py/.js/.exe 等一律拒绝）</li></ul></div>
@@ -171,14 +177,14 @@
         <section id="page-support" class="page" hidden>
           <div class="page-heading"><div><p class="eyebrow">A LITTLE THANK YOU</p><h1>投喂支持</h1><p>喜欢这个小小的陪伴，也可以请开发者喝杯饮料。</p></div></div>
           <div class="support-card"><div class="support-art"><span>♡</span><img src="/skin/default/happy.png" alt="感谢你的虹夏"><span class="support-sparkle">✧</span></div><div class="support-copy"><span class="hero-tag">THANKS FOR BEING HERE</span><h2>你的喜欢，<br>让小陪伴继续。</h2><p id="support-message">谢谢你喜欢这个小小的陪伴。</p><strong id="support-author">虹夏桌宠的开发者</strong><div id="support-unconfigured" class="quiet-note">投喂入口尚未配置。<br>开发者可以在下方添加收款图片或支持链接。</div><img id="support-image" class="qr-image" alt="开发者提供的收款图片" hidden><a id="support-link" class="button dark" target="_blank" rel="noopener noreferrer" hidden>前往支持 ↗</a><p class="support-note">自愿支持，不影响任何桌宠功能。</p></div></div>
-          <details class="support-config"><summary>我是开发者，配置投喂入口 <span>＋</span></summary><form id="support-form"><div class="form-grid"><label>作者名称<input name="name" maxlength="40" required></label><label>支持链接（可选）<input name="url" type="url" placeholder="https://…"></label></div><label>感谢的话<textarea name="message" maxlength="200" rows="2"></textarea></label><div class="support-upload"><div><strong>收款图片</strong><p>选择你自己的 PNG / JPEG 图片，最多 8 MB。</p></div><button id="upload-support" class="button secondary" type="button">选择图片</button><input id="support-file" type="file" accept="image/png,image/jpeg,image/webp" hidden></div><button class="button primary" type="submit">保存投喂入口</button></form></details>
+          <details class="support-config"><summary>我是开发者，配置投喂入口 <span>＋</span></summary><form id="support-form"><div class="form-grid"><label>作者名称<input name="name" maxlength="40" required></label><label>支持链接（可选）<input name="url" type="url" placeholder="https://…"></label></div><label>感谢的话<textarea name="message" maxlength="200" rows="2"></textarea></label><div class="support-upload"><div><strong>收款图片</strong><p>选择你自己的 PNG / JPEG 图片，最多 8 MB。</p></div><button id="upload-support" class="button secondary" type="button">选择图片</button><input id="support-file" type="file" accept="image/png,image/jpeg,image/webp" hidden></div><div class="settings-footer"><span id="support-save-status" class="form-status" role="status">投喂入口保存在这台电脑</span><button class="button primary" type="submit">保存投喂入口</button></div></form><div class="help-card"><h3>把赞助入口一起发给使用者</h3><p>保存真实链接或收款图后，导出公开发布资料。压缩包仅含作者名称、说明、链接和可选图片，不含聊天记录、密钥或 Agent 配置。打包时通过 --support-bundle 选择该 ZIP，收件人无需重新配置赞助入口。</p><button id="export-support" class="button secondary" type="button">导出公开赞助资料</button><p>这是自愿赞助展示，不是支付系统；桌宠不会验证到账，也不会因未赞助限制功能。发布前请确认图片可公开展示。</p></div></details>
         </section>
       </main>
       <footer class="workspace-footer"><span>一点陪伴，少一点来回切换。</span><span>✦ Nijika Desktop Companion</span></footer>
     </div>
   </div>
 
-  <dialog id="agent-dialog" aria-labelledby="wizard-title"><div class="dialog-header"><div><p class="eyebrow">MEET A NEW PARTNER</p><h2 id="wizard-title">添加 Agent</h2></div><button id="close-wizard" class="icon-button" aria-label="关闭添加向导">×</button></div><ol class="stepper" aria-label="接入步骤"><li class="current">1<span>选择伙伴</span></li><li>2<span>确认配置</span></li><li>3<span>完成接入</span></li></ol><form id="agent-form"><div id="wizard-step-one"><p class="field-label">你想接入哪个客户端？</p><div id="client-choices" class="client-choices"></div><label for="agent-name">给伙伴起个名字</label><input id="agent-name" name="name" maxlength="30" placeholder="例如：写代码的 Codex" required><details id="advanced-location"><summary>配置位置（已自动检测）</summary><label for="agent-location">客户端配置目录</label><input id="agent-location" name="location" placeholder="使用自动检测到的位置"><p class="field-help">仅在使用其他配置目录时修改，不需要模型密钥。</p></details></div><div id="wizard-step-two" hidden><div class="review-banner"><span>✓</span><div><strong>配置改动已准备好</strong><p>已有文件会先备份，其他服务和配置会保留。</p></div></div><ul id="plan-files" class="plan-files"></ul><div id="plan-notes" class="plan-notes"></div><details id="export-preview"><summary>查看 MCP 配置与触发说明</summary><pre id="plan-export"></pre></details></div><div id="wizard-step-three" hidden><div class="success-check">✓</div><h3 id="wizard-success-title">伙伴已添加</h3><p id="wizard-success-text"></p><div id="success-notes" class="plan-notes"></div><div class="guide-card"><div class="guide-heading"><h4 id="guide-title">接下来请照这几步做</h4><span class="guide-tag" id="guide-tag">复制即用</span></div><p class="bundle-summary">接入文件保存目录（已自动生成）<code id="bundle-location"></code></p><ol id="guide-steps" class="guide-steps"></ol><div class="prompt-box"><div class="prompt-heading"><strong>自动配置提示词 · 含完整路径、配置与规则</strong><button id="copy-guide-prompt" class="button small secondary" type="button">复制自动配置提示词</button></div><pre id="guide-prompt"></pre></div><p id="guide-tip" class="field-help"></p><div class="files-box"><div class="prompt-heading"><strong>这套配置用到的文件和位置</strong><button id="copy-guide-files" class="button small secondary" type="button">复制全部路径</button></div><ul id="guide-files" class="guide-files"></ul></div></div><p class="field-help">“测试提醒”验证本机显示与点击回传；还需在客户端新任务中确认 Agent 会主动调用。</p></div><p id="wizard-error" class="form-error" role="alert" hidden></p><div class="dialog-footer"><button id="wizard-back" class="button secondary" type="button">取消</button><button id="wizard-next" class="button primary" type="submit">检测并继续 →</button></div></form></dialog>
+  <dialog id="agent-dialog" aria-labelledby="wizard-title"><div class="dialog-header"><div><p class="eyebrow">MEET A NEW PARTNER</p><h2 id="wizard-title">添加 Agent</h2></div><button id="close-wizard" class="icon-button" aria-label="关闭添加向导">×</button></div><ol class="stepper" aria-label="接入步骤"><li class="current">1<span>选择伙伴</span></li><li>2<span>确认配置</span></li><li>3<span>完成接入</span></li></ol><form id="agent-form"><div id="wizard-step-one"><p class="field-label">你想接入哪个客户端？</p><div id="client-choices" class="client-choices"></div><label for="agent-name">给伙伴起个名字</label><input id="agent-name" name="name" maxlength="30" placeholder="例如：写代码的 Codex" required><div id="custom-source" hidden><label for="agent-identity">Agent 名称（气泡头部第一项）</label><input id="agent-identity" maxlength="20" placeholder="例如：ChatGPT、Claude；不知道可留空"><label for="agent-software">所在软件（必填）</label><input id="agent-software" maxlength="40" placeholder="例如：VS Code、Obsidian、Claude Desktop"><p class="field-help">伙伴昵称只用于管理。气泡按“Agent · 所在软件”显示；多模型软件不确定 Agent 时使用 Agent。每个软件单独生成配置，不要将这份固定来源共享到全部客户端。</p></div><details id="advanced-location"><summary>配置位置（已自动检测）</summary><label for="agent-location">客户端配置目录</label><input id="agent-location" name="location" placeholder="使用自动检测到的位置"><p class="field-help">仅在使用其他配置目录时修改，不需要模型密钥。</p></details></div><div id="wizard-step-two" hidden><div class="review-banner"><span>✓</span><div><strong>配置改动已准备好</strong><p>已有文件会先备份，其他服务和配置会保留。</p></div></div><ul id="plan-files" class="plan-files"></ul><div id="plan-notes" class="plan-notes"></div><details id="export-preview"><summary>查看 MCP 配置与触发说明</summary><pre id="plan-export"></pre></details></div><div id="wizard-step-three" hidden><div class="success-check">✓</div><h3 id="wizard-success-title">伙伴已添加</h3><p id="wizard-success-text"></p><div id="success-notes" class="plan-notes"></div><div class="guide-card"><div class="guide-heading"><h4 id="guide-title">接下来请照这几步做</h4><span class="guide-tag" id="guide-tag">复制即用</span></div><p class="bundle-summary">接入文件保存目录（已自动生成）<code id="bundle-location"></code></p><ol id="guide-steps" class="guide-steps"></ol><div class="prompt-box"><div class="prompt-heading"><strong>自动配置提示词 · 含完整路径、配置与规则</strong><button id="copy-guide-prompt" class="button small secondary" type="button">复制自动配置提示词</button></div><pre id="guide-prompt"></pre></div><p id="guide-tip" class="field-help"></p><div class="files-box"><div class="prompt-heading"><strong>这套配置用到的文件和位置</strong><button id="copy-guide-files" class="button small secondary" type="button">复制全部路径</button></div><ul id="guide-files" class="guide-files"></ul></div></div><p class="field-help">“测试提醒”验证本机显示与点击回传；还需在客户端新任务中确认 Agent 会主动调用。</p></div><p id="wizard-error" class="form-error" role="alert" hidden></p><div class="dialog-footer"><button id="wizard-back" class="button secondary" type="button">取消</button><button id="wizard-next" class="button primary" type="submit">检测并继续 →</button></div></form></dialog>
   <div id="toast" class="toast" role="status" hidden></div>
 </body>
 </html>

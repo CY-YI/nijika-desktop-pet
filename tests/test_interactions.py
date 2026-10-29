@@ -5,6 +5,7 @@ import io
 import json
 import tempfile
 import threading
+import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -53,6 +54,37 @@ class CareTests(unittest.TestCase):
         self.assertEqual(self.store.snapshot(10001)["feed_wait"], 29)
         self.store.feed("feed", 10030)
 
+    def test_feeding_publishes_one_desktop_action_revision(self):
+        self.store.configure({"enabled": True}, 10000)
+        first = self.store.snapshot(10000)
+        self.assertEqual((first["action_revision"], first["last_action"]), (0, ""))
+        self.store.feed("feed", 10000)
+        feed = self.store.snapshot(10000)
+        self.assertEqual((feed["action_revision"], feed["last_action"]), (1, "feed"))
+        self.store.feed("drink", 10001)
+        drink = self.store.snapshot(10001)
+        self.assertEqual((drink["action_revision"], drink["last_action"]), (2, "drink"))
+
+    def test_fast_feed_and_drink_are_claimed_in_order_once_across_instances(self):
+        self.store.configure({"enabled": True}, 10000)
+        self.store.feed("feed", 10000)
+        self.store.feed("drink", 10000)
+        self.assertNotIn("_desktop_actions", self.store.snapshot(10000))
+        first = InteractionStore(self.database).take_action(10001)
+        second = InteractionStore(self.database).take_action(10001)
+        self.assertEqual([first["action"], second["action"]], ["feed", "drink"])
+        self.assertIsNone(self.store.take_action(10001))
+
+    def test_cosmetic_actions_expire_or_cancel_when_care_is_disabled(self):
+        self.store.configure({"enabled": True}, 10000)
+        self.store.feed("feed", 10000)
+        self.assertIsNone(self.store.take_action(10031))
+        self.store.feed("drink", 10032)
+        self.store.configure({"enabled": False}, 10033)
+        self.store.configure({"enabled": True}, 10034)
+        self.assertIsNone(self.store.take_action(10034))
+        self.assertGreater(self.store.snapshot(10034)["hydration"], 99)
+
     def test_parallel_feeds_only_apply_once_and_clock_rollback_does_not_double_decay(self):
         self.store.configure({"enabled": True}, 10000)
         def feed():
@@ -66,7 +98,7 @@ class CareTests(unittest.TestCase):
         self.store.snapshot(11000)
         self.assertEqual(self.store.snapshot(13600)["satiety"], future["satiety"])
 
-    def test_strict_settings_and_no_desktop_action_queue(self):
+    def test_strict_settings_and_no_separate_desktop_action_table(self):
         for patch_data in ({}, {"enabled":"yes"}, {"touch_enabled":1}, {"satiety":100}, {"unknown":True}):
             with self.assertRaises(ValueError):
                 self.store.configure(patch_data, 10000)
@@ -149,6 +181,18 @@ class InteractionAPITests(unittest.TestCase):
                 self.assertEqual(response.read(), b"webp-preview")
             self.assertEqual(self.app.interaction.snapshot()["satiety"], before["satiety"])
             self.assertIsNone(self.app.notifications.next_pending())
+
+    def test_state_exposes_desktop_playback_when_renderer_is_alive(self):
+        status = self.app.store.root / "renderer-status.json"
+        status.write_text(json.dumps({"heartbeat_at": time.time(), "window_visible": True,
+                                      "desktop_playback": True, "supports_control": True,
+                                      "applied_revision": 0}), encoding="utf-8")
+        with self.call("/api/state") as response:
+            state = json.load(response)
+        self.assertTrue(state["renderer"]["desktop_playback"])
+        self.assertTrue(state["interaction"]["desktop_playback"])
+        status.write_text(json.dumps({"heartbeat_at": time.time() - 30, "desktop_playback": True}), encoding="utf-8")
+        self.assertFalse(self.app.state()["interaction"]["desktop_playback"])
 
     def test_settings_round_trip_feeding_and_unknown_actions_rejected(self):
         with self.call("/api/interaction", {"enabled":True, "effects_enabled":False}) as response:

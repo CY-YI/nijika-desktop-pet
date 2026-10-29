@@ -7,11 +7,14 @@ import re
 import sqlite3
 import time
 import uuid
+import tempfile
 from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
 from PIL import Image, UnidentifiedImageError
 from notification_store import default_database_path
+from skin_animation import MAX_FRAMES, MAX_PIXELS, validate_animation
+from support_bundle import application_directory, load_public_support, public_support_image, validate_support, export_bundle
 
 EXPRESSIONS = ("curious", "happy", "worried", "sleepy", "wink", "thinking", "pout", "excited")
 SPRITES = (*EXPRESSIONS, "blink")
@@ -21,8 +24,9 @@ IDENTIFIER = re.compile(r"^[a-f0-9]{32}$")
 
 
 class ControlStore:
-    def __init__(self, database: Path | None = None):
+    def __init__(self, database: Path | None = None, *, public_root: Path | None = None):
         self.database = database or default_database_path()
+        self.public_root = public_root or application_directory()
         self.root = self.database.parent
         self.root.mkdir(parents=True, exist_ok=True)
         connection = self.connect()
@@ -111,6 +115,12 @@ class ControlStore:
         folder = self.root / "skins" / skin
         if not (folder / "manifest.json").is_file() or not all((folder / f"{name}.png").is_file() for name in SPRITES):
             raise ValueError("找不到这个皮肤，请重新导入。")
+        try:
+            animation = validate_animation(json.loads((folder / "manifest.json").read_text(encoding="utf-8")).get("idle"))
+            if animation and not all((folder / name).is_file() for name in animation["frames"]):
+                raise ValueError("待机帧缺失，请重新导入皮肤。")
+        except (OSError, ValueError, AttributeError) as error:
+            raise ValueError("皮肤清单或待机帧无效，请重新导入。") from error
         return folder
 
     def skins(self) -> list[dict]:
@@ -122,7 +132,8 @@ class ControlStore:
                 self.skin_directory(manifest.parent.name)
                 data = json.loads(manifest.read_text(encoding="utf-8"))
                 result.append({"id": manifest.parent.name, "name": str(data["name"])[:40],
-                               "kind": data.get("kind", "expressions"), "builtin": False})
+                               "kind": data.get("kind", "expressions"), "builtin": False,
+                               "idle": validate_animation(data.get("idle"))})
             except (OSError, ValueError, KeyError):
                 continue
         return result
@@ -151,19 +162,25 @@ class ControlStore:
             raise ValueError("皮肤文件不能超过 32 MB。")
         name = Path(filename).stem.strip()[:40] or "我的皮肤"
         images = {}
+        animation = None
         kind = "static"
         if filename.lower().endswith(".zip"):
             kind = "expressions"
             try:
                 with ZipFile(io.BytesIO(data)) as archive:
                     entries = [item for item in archive.infolist() if not item.is_dir()]
-                    allowed = {f"{sprite}.png" for sprite in SPRITES} | {"manifest.json"}
-                    if len(entries) > 10 or sum(item.file_size for item in entries) > 64 * 1024 * 1024:
+                    allowed = ({f"{sprite}.png" for sprite in SPRITES} | {"manifest.json"} |
+                               {f"idle_{index:03d}.png" for index in range(MAX_FRAMES)})
+                    if len(entries) > 10 + MAX_FRAMES or sum(item.file_size for item in entries) > 64 * 1024 * 1024:
                         raise ValueError("图片包文件过多或解压体积超过 64 MB。")
+                    seen, pixels = set(), 0
                     for item in entries:
                         path = Path(item.filename.replace("\\", "/"))
                         if path.is_absolute() or ".." in path.parts or len(path.parts) > 2 or path.name not in allowed:
-                            raise ValueError("皮肤包只能包含九张指定 PNG 和可选 manifest.json。")
+                            raise ValueError("皮肤包只能包含指定表情 PNG、待机帧和 manifest.json。")
+                        if path.name in seen:
+                            raise ValueError("皮肤包中存在重名文件。")
+                        seen.add(path.name)
                         if path.name == "manifest.json":
                             if item.file_size > 4096:
                                 raise ValueError("皮肤清单过大。")
@@ -171,40 +188,64 @@ class ControlStore:
                             if not isinstance(manifest, dict):
                                 raise ValueError("皮肤清单需要是 JSON 对象。")
                             name = str(manifest.get("name", name)).strip()[:40] or name
+                            animation = validate_animation(manifest.get("idle"))
                         else:
                             sprite = path.stem
                             if sprite in images:
                                 raise ValueError("皮肤包中存在重名图片。")
-                            images[sprite] = self.read_image(archive.read(item))
-                    if set(images) != set(SPRITES) or len({image.size for image in images.values()}) != 1:
+                            raw = archive.read(item)
+                            with Image.open(io.BytesIO(raw)) as header:
+                                pixels += header.width * header.height
+                            if pixels > MAX_PIXELS:
+                                raise ValueError("皮肤总像素超过 2400 万，请缩小画布或减少帧数。")
+                            images[sprite] = self.read_image(raw)
+                    idle_names = {name[:-4] for name in animation["frames"]} if animation else set()
+                    if animation:
+                        if not idle_names.issubset(images) or set(images) - set(SPRITES) != idle_names:
+                            raise ValueError("清单中的待机帧与 ZIP 内容不一致。")
+                        first = images[animation["frames"][0][:-4]]
+                        for sprite in SPRITES:
+                            images.setdefault(sprite, first)
+                        kind = "animated"
+                    if set(images) != set(SPRITES) | idle_names or len({image.size for image in images.values()}) != 1:
                         raise ValueError("皮肤包需要九张同尺寸图片：八种表情与 blink.png。")
-            except (BadZipFile, json.JSONDecodeError) as error:
+            except (BadZipFile, json.JSONDecodeError, UnidentifiedImageError, OSError,
+                    UnicodeError, Image.DecompressionBombError) as error:
                 raise ValueError("皮肤 ZIP 或清单格式无效。") from error
         else:
             image = self.read_image(data)
             images = dict.fromkeys(SPRITES, image)
         skin_id = uuid.uuid4().hex
         folder = self.root / "skins" / skin_id
-        folder.mkdir(parents=True)
-        for sprite, image in images.items():
-            image.save(folder / f"{sprite}.png")
         item = {"id": skin_id, "name": name, "kind": kind, "builtin": False}
-        (folder / "manifest.json").write_text(json.dumps(item, ensure_ascii=False), encoding="utf-8")
+        if animation:
+            item["idle"] = animation
+        folder.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="import-", dir=folder.parent) as staging:
+            temporary = Path(staging) / skin_id
+            temporary.mkdir()
+            for sprite, image in images.items():
+                image.save(temporary / f"{sprite}.png")
+            (temporary / "manifest.json").write_text(json.dumps(item, ensure_ascii=False), encoding="utf-8")
+            temporary.replace(folder)
         return item
 
     def support(self) -> dict:
-        config = self.document("support", {"name": "虹夏桌宠的开发者", "message": "谢谢你喜欢这个小小的陪伴。", "url": ""})
-        return {**config, "has_image": (self.root / "support" / "qr.png").is_file()}
+        config = self.document("support", load_public_support(self.public_root))
+        return {**config, "has_image": self.support_image() is not None}
+
+    def support_image(self) -> Path | None:
+        local = self.root / "support" / "qr.png"
+        return local if local.is_file() else public_support_image(self.public_root)
+
+    def export_support(self) -> bytes:
+        config = self.support()
+        config.pop("has_image")
+        image = self.support_image()
+        return export_bundle(config, image.read_bytes() if image else None)
 
     def update_support(self, patch: dict) -> dict:
-        from urllib.parse import urlsplit
-        if set(patch) != {"name", "message", "url"} or not all(isinstance(v, str) for v in patch.values()):
-            raise ValueError("请填写作者名、说明和可选支持链接。")
-        if len(patch["name"]) > 40 or not patch["name"].strip() or len(patch["message"]) > 200:
-            raise ValueError("作者名限 1–40 字，说明限 200 字。")
-        url = urlsplit(patch["url"])
-        if patch["url"] and (len(patch["url"]) > 2048 or url.scheme != "https" or not url.hostname or url.username or url.password):
-            raise ValueError("支持链接必须是完整的 HTTPS 地址。")
+        patch = validate_support(patch)
         connection = self.connect()
         try:
             with connection:

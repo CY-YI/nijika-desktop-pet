@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import hmac
+import io
 import json
 import os
 import secrets
@@ -16,6 +17,7 @@ from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
+from zipfile import ZipFile, ZIP_DEFLATED
 
 from PIL import Image
 
@@ -29,6 +31,24 @@ from interaction_motion import ACTIONS, preview_webp
 
 WINDOW_TITLE = "虹夏桌宠 · 设置中心"
 _preview_lock = threading.Lock()
+
+
+@lru_cache(maxsize=4)
+def skin_idle_preview(directory: str) -> bytes:
+    from skin_animation import SkinTimeline
+    timeline = SkinTimeline.load(Path(directory))
+    if not timeline.animation:
+        raise ValueError("这个皮肤没有待机帧。")
+    frames = []
+    for filename in timeline.animation["frames"]:
+        with Image.open(Path(directory) / filename) as source:
+            image = source.convert("RGBA")
+            image.thumbnail((256, 384), Image.Resampling.LANCZOS)
+            frames.append(image)
+    output = io.BytesIO()
+    frames[0].save(output, format="WEBP", save_all=True, append_images=frames[1:],
+                   duration=timeline.animation["durations_ms"], loop=0, lossless=True)
+    return output.getvalue()
 
 
 @lru_cache(maxsize=8)
@@ -51,7 +71,7 @@ def application_root() -> Path:
 
 class ControlApplication:
     def __init__(self, database: Path | None = None, root: Path | None = None, home: Path | None = None):
-        self.store = ControlStore(database)
+        self.store = ControlStore(database, public_root=root or application_root())
         self.notifications = NotificationStore(self.store.database)
         self.companion = CompanionStore(self.store.database)
         self.interaction = InteractionStore(self.store.database)
@@ -62,12 +82,16 @@ class ControlApplication:
         try:
             status = json.loads((self.store.root / "renderer-status.json").read_text(encoding="utf-8"))
             age = time.time() - status.get("heartbeat_at", 0)
-            return {"online": 0 <= age < 12, "active_notice_id": status.get("active_notice_id"),
+            online = 0 <= age < 12
+            return {"online": online, "active_notice_id": status.get("active_notice_id"),
                     "window_visible": bool(status.get("window_visible")),
                     "supports_control": bool(status.get("supports_control")),
+                    "desktop_playback": bool(online and status.get("desktop_playback")),
+                    "interaction_action": status.get("interaction_action") if online else None,
                     "applied_revision": status.get("applied_revision", -1)}
         except (OSError, ValueError, TypeError):
-            return {"online": False, "window_visible": False, "supports_control": False, "applied_revision": -1}
+            return {"online": False, "window_visible": False, "supports_control": False,
+                    "desktop_playback": False, "interaction_action": None, "applied_revision": -1}
 
     def notice(self, request_id: str) -> dict:
         if not IDENTIFIER.fullmatch(request_id):
@@ -80,6 +104,7 @@ class ControlApplication:
                                                  renderer.get("active_notice_id") == request_id)}
 
     def state(self) -> dict:
+        renderer = self.renderer()
         agents = self.store.agents()
         for agent in agents:
             request_id = agent.get("test_request_id")
@@ -87,14 +112,16 @@ class ControlApplication:
             agent.update(self.setup.describe(agent))
             # Backups are local recovery artifacts, not useful to every state poll.
             agent.pop("backups", None)
-        return {"renderer": self.renderer(), "settings": self.store.settings(), "agents": agents,
+        return {"renderer": renderer, "settings": self.store.settings(), "agents": agents,
                 "clients": self.setup.clients(), "skins": self.store.skins(), "support": self.store.support(),
                 "companion": self.companion.snapshot(),
-                "interaction": {**self.interaction.snapshot(), "desktop_playback": False}}
+                "interaction": {**self.interaction.snapshot(),
+                                "desktop_playback": bool(renderer.get("desktop_playback"))}}
 
     def post(self, route: str, data: dict) -> dict:
         if route == "/api/agents/plan":
-            return self.setup.plan(data.get("client"), data.get("name"), data.get("location", ""))
+            return self.setup.plan(data.get("client"), data.get("name"), data.get("location", ""),
+                                   data.get("agent_identity"), data.get("software", ""))
         if route == "/api/agents/apply":
             return self.setup.apply(data.get("plan_id", ""))
         if route == "/api/agents/prepare":
@@ -112,8 +139,10 @@ class ControlApplication:
             previous = agent.get("test_request_id")
             if previous and self.notice(previous)["status"] == "pending":
                 return self.notice(previous)
-            notice = self.notifications.create(agent["source_name"], "接入测试",
-                        "这是管理面板发送的本机测试提醒。点击后可在面板看到回执；外部 Agent 仍需在新任务中验证调用。", ("收到测试",))
+            identity = self.setup.export_agent(agent)["mcpServers"]["nijika-pet"]["env"]
+            notice = self.notifications.create(identity["NIJIKA_AGENT_NAME"], "接入测试",
+                        "这是管理面板发送的本机测试提醒。点击后可在面板看到回执；外部 Agent 仍需在新任务中验证调用。", ("收到测试",),
+                        software=identity.get("NIJIKA_HOST_NAME", ""))
             agent["test_request_id"] = notice.id
             self.store.save_agent(agent)
             return self.notice(notice.id)
@@ -218,6 +247,21 @@ class ControlHandler(BaseHTTPRequestHandler):
         try:
             if route == "/api/state":
                 self.send_json(self.server.app.state())
+            elif route == "/api/support/export":
+                self.send_bytes(self.server.app.store.export_support(), "application/zip")
+            elif route == "/api/skins/template":
+                store = self.server.app.store
+                directory = store.skin_directory(store.settings()["skin"]) or resource_root() / "assets/sprites"
+                manifest = {"name": "多帧皮肤示例（请替换为自己的角色）", "idle": {
+                    "frames": ["idle_000.png", "idle_001.png"], "durations_ms": [1800, 140]}}
+                output = io.BytesIO()
+                with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+                    archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False))
+                    for sprite in SPRITES:
+                        archive.writestr(sprite + ".png", (directory / (sprite + ".png")).read_bytes())
+                    archive.writestr("idle_000.png", (directory / "curious.png").read_bytes())
+                    archive.writestr("idle_001.png", (directory / "blink.png").read_bytes())
+                self.send_bytes(output.getvalue(), "application/zip")
             elif route.startswith("/api/interaction-preview/"):
                 action = route.rsplit("/", 1)[-1].removesuffix(".webp")
                 query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
@@ -240,9 +284,9 @@ class ControlHandler(BaseHTTPRequestHandler):
                 agent = self.server.app.store.agent(route.rsplit("/", 1)[1])
                 if not agent:
                     raise ValueError("找不到 Agent 档案。")
-                self.send_json({"config": self.server.app.setup.export(agent["source_name"]),
+                self.send_json({"config": self.server.app.setup.export_agent(agent),
                                 "instructions": (self.server.app.root / "distribution/codex-global-instructions.txt").read_text(encoding="utf-8-sig")})
-            elif route in ("/", "/app.js", "/interaction.js", "/styles.css"):
+            elif route in ("/", "/app.js", "/form-state.js", "/interaction.js", "/styles.css"):
                 filename = "index.html" if route == "/" else route[1:]
                 data = (resource_root() / "control-ui" / filename).read_bytes()
                 if filename == "index.html":
@@ -251,12 +295,24 @@ class ControlHandler(BaseHTTPRequestHandler):
                 self.send_bytes(data, content_type)
             elif route.startswith("/skin/"):
                 parts = route.strip("/").split("/")
-                if len(parts) != 3 or parts[2] not in {f"{item}.png" for item in SPRITES}:
+                if len(parts) != 3:
                     raise ValueError("角色图片路径无效。")
                 directory = self.server.app.store.skin_directory(parts[1]) or resource_root() / "assets" / "sprites"
+                if parts[2] == "idle.webp":
+                    with _preview_lock:
+                        data = skin_idle_preview(str(directory))
+                    self.send_bytes(data, "image/webp")
+                    return
+                from skin_animation import SkinTimeline
+                idle = (SkinTimeline.load(directory).animation or {}).get("frames", [])
+                if parts[2] not in {f"{item}.png" for item in SPRITES} | set(idle):
+                    raise ValueError("角色图片路径无效。")
                 self.send_bytes((directory / parts[2]).read_bytes(), "image/png")
             elif route == "/support/qr.png":
-                self.send_bytes((self.server.app.store.root / "support" / "qr.png").read_bytes(), "image/png")
+                image = self.server.app.store.support_image()
+                if image is None:
+                    raise ValueError("尚未配置有效的收款图片。")
+                self.send_bytes(image.read_bytes(), "image/png")
             else:
                 self.send_json({"error": "页面不存在。"}, 404)
         except ValueError as error:

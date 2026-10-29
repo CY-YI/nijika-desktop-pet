@@ -15,9 +15,11 @@ DEFAULTS = {
     "enabled": False, "touch_enabled": True, "effects_enabled": True,
     "satiety": 80.0, "hydration": 80.0, "mood": 80.0,
     "updated_at": 0.0, "last_feed": 0.0, "last_drink": 0.0,
+    "action_revision": 0, "last_action": "",
 }
 SWITCHES = {"enabled", "touch_enabled", "effects_enabled"}
 COOLDOWN = 30
+ACTION_TTL = 30
 
 
 class InteractionStore:
@@ -56,7 +58,8 @@ class InteractionStore:
 
     @staticmethod
     def _public(care, now):
-        return {**care, "feed_wait": max(0, math.ceil(care["last_feed"] + COOLDOWN - now)),
+        return {**{key: value for key, value in care.items() if not key.startswith("_")},
+                "feed_wait": max(0, math.ceil(care["last_feed"] + COOLDOWN - now)),
                 "drink_wait": max(0, math.ceil(care["last_drink"] + COOLDOWN - now))}
 
     def snapshot(self, now: float | None = None) -> dict:
@@ -75,6 +78,8 @@ class InteractionStore:
             connection.execute("BEGIN IMMEDIATE")
             care = self._load(connection, now)
             care.update(patch)
+            if patch.get("enabled") is False:
+                care["_desktop_actions"] = []
             self._save(connection, care)
         return self._public(care, now)
 
@@ -94,5 +99,24 @@ class InteractionStore:
             care[value_key] = min(100.0, care[value_key] + 20)
             care["mood"] = min(100.0, care["mood"] + 4)
             care[last_key] = now
+            care["last_action"] = action
+            care["action_revision"] = int(care.get("action_revision", 0)) + 1
+            events = [event for event in care.get("_desktop_actions", [])
+                      if 0 <= now - event["created_at"] < ACTION_TTL]
+            events.append({"action": action, "revision": care["action_revision"], "created_at": now})
+            care["_desktop_actions"] = events[-8:]
             self._save(connection, care)
         return {"status": "applied", "action": action, "care": self._public(care, now)}
+
+    def take_action(self, now: float | None = None) -> dict | None:
+        """Claim one recent cosmetic response; a click never depends on playback."""
+        now = time.time() if now is None else now
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            care = self._load(connection, now)
+            events = [event for event in care.get("_desktop_actions", [])
+                      if care["enabled"] and 0 <= now - event["created_at"] < ACTION_TTL]
+            event = events.pop(0) if events else None
+            care["_desktop_actions"] = events
+            self._save(connection, care)
+        return event

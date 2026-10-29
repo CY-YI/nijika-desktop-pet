@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -13,8 +14,25 @@ import uuid
 from pathlib import Path
 
 from control_store import ControlStore, IDENTIFIER
+from notice_source import resolve_source
+from setup_config import codex_service_update, remove_legacy_dsh_nijika_entry
 
 CLIENTS = {"codex": "Codex", "work": "ChatGPT Work", "dsh": "DeepSeek Harness", "custom": "其他 MCP 客户端"}
+CANONICAL_AGENT_NAMES = {"codex": "Codex", "work": "Work", "dsh": "DSH"}
+CLIENT_CAPABILITIES = {
+    "codex": {"transport": "stdio MCP + 本机技能", "approval": "可选原生钩子，需本人信任",
+              "completion": "MCP 主动调用；可选 Stop 兜底", "reload": "重载连接或新建任务；钩子另行审阅",
+              "note": "不改原生审批权限；桌宠点击不能批准命令。"},
+    "work": {"transport": "本机插件 + stdio MCP", "approval": "未接原生权限事件",
+             "completion": "依靠 Agent 主动调用 MCP", "reload": "安装并启用插件后，新建本机 Work 任务",
+             "note": "当前启动器需要 Codex CLI 与 python.exe；不适用于云端 Work。"},
+    "dsh": {"transport": "desktop/web 配置 + stdio MCP", "approval": "未接原生权限事件",
+            "completion": "依靠 Agent 主动调用 MCP", "reload": "重启 DSH 并新建会话",
+            "note": "需检查两个 profile；晚到回复不会自动唤醒已结束的任务。"},
+    "custom": {"transport": "通用 stdio MCP 配置导出", "approval": "取决于宿主专属集成",
+               "completion": "依靠 Agent 主动调用 MCP", "reload": "由接收方 AI 核实客户端和配置作用域",
+               "note": "Claude Code 可参考接入手册；不能向普通网页聊天安装本机服务。"},
+}
 
 INSTALL_RULES = """虹夏桌面提醒规则：
 1. 实质成果太长、需要用户审阅时，调用 show_completion(task=30字内标题, summary=1–120字结果)，只发送一次；它只是通知，不是批准。简短事实问答不例行提醒。
@@ -152,6 +170,61 @@ def marked_block(original: str, block: str, start: str, end: str) -> str:
     return original.rstrip("\r\n") + "\n\n" + block.rstrip() + "\n"
 
 
+def normalize_codex_agent_name(original: str, agent_name: str) -> str:
+    return normalize_codex_environment(original, {"NIJIKA_AGENT_NAME": agent_name})
+
+
+def normalize_codex_environment(original: str, environment: dict[str, str]) -> str:
+    """Update just the managed env, including table and inline TOML layouts."""
+    expected = tomllib.loads(original)
+    expected["mcp_servers"]["nijika-pet"].setdefault("env", {}).update(environment)
+    lines = original.splitlines(keepends=True)
+    section = ""
+    found = set()
+    env_header = None
+    for index, line in enumerate(lines):
+        match = re.match(r"^\[([^\]]+)\]\s*(?:#.*)?$", line.rstrip("\r\n"))
+        if match:
+            section = match.group(1)
+            if section == "mcp_servers.nijika-pet.env":
+                env_header = index
+        if section == "mcp_servers.nijika-pet":
+            inline = re.match(r"^(\s*env\s*=\s*\{)(.*?)(\}\s*(?:#.*)?)$", line.rstrip("\r\n"))
+            if inline:
+                body = inline.group(2)
+                for key, value in environment.items():
+                    replacement = json.dumps(value, ensure_ascii=False)
+                    body, count = re.subn(
+                        r"(" + re.escape(key) + r"\s*=\s*)(\"[^\"]*\"|'[^']*')",
+                        lambda m: m[1] + replacement, body)
+                    if not count:
+                        body = body.rstrip().rstrip(",") + (", " if body.strip() else "") + key + " = " + replacement
+                    found.add(key)
+                newline = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
+                lines[index] = inline[1] + body + inline[3] + newline
+        elif section == "mcp_servers.nijika-pet.env":
+            for key, value in environment.items():
+                updated, count = re.subn(
+                    r"^(\s*" + re.escape(key) + r"\s*=\s*)(\"[^\"]*\"|'[^']*')",
+                    lambda m: m[1] + json.dumps(value, ensure_ascii=False), lines[index])
+                if count:
+                    found.add(key)
+                    lines[index] = updated
+    missing = [f"{key} = {json.dumps(value, ensure_ascii=False)}\n"
+               for key, value in environment.items() if key not in found]
+    if missing:
+        if env_header is not None:
+            if not lines[env_header].endswith("\n"):
+                lines[env_header] += "\n"
+            lines[env_header + 1:env_header + 1] = missing
+        else:
+            lines += ["\n[mcp_servers.nijika-pet.env]\n", *missing]
+    result = "".join(lines)
+    if tomllib.loads(result) != expected:
+        raise ValueError("Codex env 格式不受支持，请人工核对；没有写入。")
+    return result
+
+
 def digest(data: bytes | None) -> str:
     return hashlib.sha256(data).hexdigest() if data is not None else "absent"
 
@@ -176,12 +249,22 @@ class AgentSetup:
             directory = self.default_home(client)
             present = ((directory / "config.toml").is_file() or bool(shutil.which("codex"))) if client in ("codex", "work") else directory.is_dir()
             result.append({"id": client, "label": label, "detected": bool(present) if client != "custom" else True,
-                           "location": str(directory) if client != "custom" else ""})
+                           "location": str(directory) if client != "custom" else "",
+                           "capabilities": CLIENT_CAPABILITIES[client]})
         return result
 
-    def export(self, name: str) -> dict:
+    def export(self, name: str, agent_name: str | None = None, software: str = "") -> dict:
+        source = resolve_source("auto" if agent_name else name[:20], software, agent_name=agent_name)
+        environment = {"NIJIKA_AGENT_NAME": source.agent}
+        if source.software != "未识别软件":
+            environment["NIJIKA_HOST_NAME"] = source.software
         return {"mcpServers": {"nijika-pet": {"command": str(self.mcp), "args": [],
-                "env": {"NIJIKA_AGENT_NAME": name}}}}
+                "env": environment}}}
+
+    def export_agent(self, agent: dict) -> dict:
+        # Built-in clients are stable even for old profiles with a custom nickname.
+        source = CANONICAL_AGENT_NAMES.get(agent["client"], agent["source_name"])
+        return self.export(source, agent.get("agent_identity"), agent.get("software", ""))
 
     def bundle_directory(self, agent_id: str) -> Path:
         if not isinstance(agent_id, str) or not IDENTIFIER.fullmatch(agent_id):
@@ -193,7 +276,7 @@ class AgentSetup:
         client = agent["client"]
         directory = Path(agent["location"])
         bundle = self.bundle_directory(agent["id"])
-        config = self.export(agent["source_name"])
+        config = self.export_agent(agent)
         files = client_files(client, self.mcp, directory, bundle, self.store.root)
         guide = {**client_guide(client), "steps": list(client_guide(client)["steps"])}
         config_text = json.dumps(config, ensure_ascii=False, indent=2)
@@ -236,6 +319,12 @@ class AgentSetup:
             "\n客户端类别：" + CLIENTS[client] +
             "\nMCP 传输：stdio，无地址端口，无需模型 API 密钥。\n\n"
             "【本客户端的通知范围与必要人工步骤】\n" + capabilities[client] + "\n\n"
+            "\nNIJIKA_AGENT_NAME 是 Agent 名称，NIJIKA_HOST_NAME 是所在软件。"
+            "例如 ChatGPT / Work、ChatGPT / Codex、Claude / VS Code。"
+            "下方配置已包含向导指定的身份与软件，保留这些字段；实际客户端不符时先核对，不能用默认值覆盖。"
+            "旧档案没有软件字段时须补全实际软件；多模型宿主不知道身份时保留 Agent。"
+            "同一客户端只保留一个指向同一虹夏程序的服务，避免 nijika-pet 和 nijika_pet 重复。"
+            "工具支持可选 agent_name/software 参数细化本次来源；task 只写任务名，不重复来源。\n\n"
             "【完整 MCP 配置，可直接作为合并依据】\n" + config_text +
             "\n\n【请自动执行】\n"
             "1. 先验证 MCP 程序存在及上述接入文件可读；即使不能读接入文件，下方已附完整配置与规则。"
@@ -302,7 +391,8 @@ class AgentSetup:
         if previous != data:
             files.append({"path": path, "before": previous, "after": data, "purpose": purpose})
 
-    def plan(self, client: str, name: str, location: str = "") -> dict:
+    def plan(self, client: str, name: str, location: str = "",
+             agent_identity: str | None = None, software: str = "") -> dict:
         if client not in CLIENTS or not isinstance(name, str) or not 1 <= len(name.strip()) <= 30 or any(ord(c) < 32 for c in name):
             raise ValueError("请选择客户端，并填写 1–30 字的 Agent 名称。")
         if not self.mcp.is_file():
@@ -315,7 +405,15 @@ class AgentSetup:
         if str(directory).startswith("\\\\"):
             raise ValueError("本轮只支持本机配置目录，不支持网络共享。")
         files, notes, commands = [], [], []
-        source_name = name
+        source_name = CANONICAL_AGENT_NAMES.get(client, name)
+        if client == "custom":
+            if not isinstance(software, str) or not software.strip() or software.strip() in ("auto", "未识别软件"):
+                raise ValueError("请填写实际所在软件，例如 VS Code 或 Obsidian。")
+            source = resolve_source("auto", software, agent_name=agent_identity or "Agent")
+        else:
+            source = resolve_source(source_name)
+        agent_identity, software = source.agent, source.software
+        notes.append("预期气泡头部：" + source.heading + "；伙伴昵称只用于管理，任务名另起一行。")
         if client == "codex":
             path = directory / "config.toml"
             original = path.read_text(encoding="utf-8-sig") if path.exists() else ""
@@ -323,17 +421,20 @@ class AgentSetup:
                 config = tomllib.loads(original)
             except tomllib.TOMLDecodeError as error:
                 raise ValueError("Codex 配置格式无效，请先修复 config.toml。") from error
-            existing = config.get("mcp_servers", {}).get("nijika-pet")
-            if existing:
-                if not Path(existing.get("command", "")).is_file():
-                    raise ValueError("原有 nijika-pet 指向的程序不存在，请先修复原配置，避免覆盖未知服务。")
-                source_name = existing.get("env", {}).get("NIJIKA_AGENT_NAME", "Codex")
-                notes.append("保留已有 nijika-pet 服务及其权限设置；补齐技能与主动提醒规则。")
+            updated, migration_notes = codex_service_update(
+                original, self.mcp, self.root,
+                self.export(source_name)["mcpServers"]["nijika-pet"]["env"], normalize_codex_environment)
+            notes.extend(migration_notes)
+            if "nijika-pet" in tomllib.loads(updated).get("mcp_servers", {}):
+                self._add_file(files, path, updated, "统一 Codex 虹夏来源标识并保留其他配置")
+                notes.append("保留已有虹夏权限设置；来源为 ChatGPT · Codex，目标程序：" + str(self.mcp))
             else:
                 block = ("# BEGIN NIJIKA-UI-MCP\n[mcp_servers.nijika-pet]\ncommand = " +
                          json.dumps(str(self.mcp), ensure_ascii=False) +
-                         "\n[mcp_servers.nijika-pet.env]\nNIJIKA_AGENT_NAME = " +
-                         json.dumps(name, ensure_ascii=False) + "\n# END NIJIKA-UI-MCP")
+                         "\n[mcp_servers.nijika-pet.env]\n" +
+                         "\n".join(key + " = " + json.dumps(value, ensure_ascii=False) for key, value in
+                                   self.export(source_name)["mcpServers"]["nijika-pet"]["env"].items()) +
+                         "\n# END NIJIKA-UI-MCP")
                 updated = marked_block(original, block, "# BEGIN NIJIKA-UI-MCP", "# END NIJIKA-UI-MCP")
                 tomllib.loads(updated)
                 self._add_file(files, path, updated, "添加虹夏 MCP 服务，保留其他配置")
@@ -354,11 +455,14 @@ class AgentSetup:
                 if "id: mcp-nijika-pet" in original and "# BEGIN NIJIKA-DSH-MCP" not in original:
                     raise ValueError("DSH 中已有不受虹夏标记管理的同名条目，请先人工核对。")
                 command = str(self.mcp).replace("'", "''")
-                agent_name = name.replace("'", "''")
+                original = remove_legacy_dsh_nijika_entry(original)
+                source = resolve_source(source_name)
+                agent_name = source.agent.replace("'", "''")
                 block = ("# BEGIN NIJIKA-DSH-MCP\n- insert:\n    - id: mcp-nijika-pet\n"
                          "      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n"
                          "        serverName: nijika_pet\n        transport: stdio\n"
                          f"        command: '{command}'\n        env:\n          NIJIKA_AGENT_NAME: '{agent_name}'\n"
+                         f"          NIJIKA_HOST_NAME: '{source.software}'\n"
                          "# END NIJIKA-DSH-MCP")
                 self._add_file(files, path, marked_block(original, block, "# BEGIN NIJIKA-DSH-MCP", "# END NIJIKA-DSH-MCP"), f"配置 DSH {profile} 的 MCP")
             self._add_file(files, directory / "skills/nijika-dsh-dialog/SKILL.md",
@@ -384,7 +488,7 @@ class AgentSetup:
                     manifest = json.loads(content)
                     server = manifest["mcpServers"]["nijika-work-pet"]
                     server["args"][-1] = str(self.mcp)
-                    server.setdefault("env", {})["NIJIKA_AGENT_NAME"] = name
+                    server.setdefault("env", {}).update(self.export(source_name)["mcpServers"]["nijika-pet"]["env"])
                     content = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
                 self._add_file(files, staging / relative, content, "准备本机 Work 插件文件")
             commands = [[executable, "plugin", "marketplace", "add", str(staging), "--json"],
@@ -400,12 +504,13 @@ class AgentSetup:
         if len(self.plans) >= 32:
             self.plans.pop(next(iter(self.plans)))
         self.plans[plan_id] = {"client": client, "name": name, "source_name": source_name, "id": agent_id,
+                              "agent_identity": agent_identity, "software": software,
                               "location": str(directory), "files": files, "notes": notes,
                               "commands": commands, "created": time.monotonic()}
         return {"plan_id": plan_id, "client": client, "name": name, "notes": notes,
                 "files": [{"path": str(item["path"]), "purpose": item["purpose"],
                            "action": "更新并备份" if item["before"] is not None else "新建"} for item in files],
-                "external_action": bool(commands), "export": self.export(source_name),
+                "external_action": bool(commands), "export": self.export(source_name, agent_identity, software),
                 "instructions": INSTALL_RULES,
                 **self.describe(self.plans[plan_id])}
 
@@ -453,6 +558,7 @@ class AgentSetup:
                     raise ValueError("Work 插件注册未完成；准备文件已保留，请检查客户端的插件状态后重新检测。")
             item = {"id": plan["id"], "name": plan["name"],
                     "source_name": plan["source_name"], "client": plan["client"], "location": plan["location"],
+                    "agent_identity": plan["agent_identity"], "software": plan["software"],
                     "status": "exported" if plan["client"] == "custom" else "configured",
                     "test_request_id": None, "updated_at": int(time.time()), "backups": backups}
             info = self.prepare_files(item)

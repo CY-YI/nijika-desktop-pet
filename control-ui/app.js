@@ -4,12 +4,54 @@ const $$ = selector => [...document.querySelectorAll(selector)];
 const token = $('meta[name="nijika-token"]').content;
 const clientNames = {codex:"Codex", work:"ChatGPT Work", dsh:"DeepSeek Harness", custom:"其他 MCP 客户端"};
 const marks = {codex:"⌘", work:"✳", dsh:"≈", custom:"＋"};
-let state = null, settingsDirty = false, supportDirty = false, toastTimer;
+let state = null, toastTimer, refreshSequence = 0, refreshRequests = 0;
 let agentsSignature = "", skinsSignature = "", supportSignature = "";
+let skinPreviewSequence = 0;
 let wizard = {step:1, client:"codex", plan:null, agent:null, busy:false};
+const draftForms = [];
+function bindDraft(id, status, page, label) {
+  const draft = new FormDraft($(id), $(status), updateDraftNotice);
+  draftForms.push({draft, page, label});
+  return draft;
+}
+function updateDraftNotice() {
+  const changed = draftForms.filter(item => item.draft.dirty || item.draft.saving);
+  const interactionChanged = typeof interactionDirty !== "undefined" && interactionDirty;
+  const labels = [...new Set(changed.map(item => item.label))];
+  if (interactionChanged) labels.push("互动设置");
+  $("#draft-notice").hidden = labels.length === 0;
+  const message = "尚未保存 · " + labels.join("、") + "（切换页面会保留，关闭窗口前请保存）";
+  if ($("#draft-summary").textContent !== message) $("#draft-summary").textContent = message;
+  for (const item of $$(".nav-item")) {
+    const dirty = changed.some(form => form.page === item.dataset.page) ||
+      (interactionChanged && item.dataset.page === "interaction");
+    item.classList.toggle("has-draft", dirty);
+    item.setAttribute("aria-label", item.title + (dirty ? "，有未保存的修改" : ""));
+  }
+}
+const settingsDraft = bindDraft("#settings-form", "#settings-status", "settings", "动作与陪伴");
+const focusDraft = bindDraft("#focus-form", "#focus-save-status", "focus", "专注时长");
+const reminderDraft = bindDraft("#reminder-form", "#reminder-status", "focus", "健康提醒");
+const supportDraft = bindDraft("#support-form", "#support-save-status", "support", "投喂入口");
+$("#review-drafts").addEventListener("click", () => {
+  const target = draftForms.find(item => item.draft.dirty || item.draft.saving);
+  const page = target?.page || "interaction";
+  gotoPage(page);
+  if (page === "support") $(".support-config").open = true;
+  const form = target?.draft.form || $("#interaction-form");
+  form.scrollIntoView({block:"center"});
+  form.querySelector("input, select, textarea").focus({preventScroll:true});
+});
+window.addEventListener("beforeunload", event => {
+  if (draftForms.some(item => item.draft.dirty || item.draft.saving) ||
+      (typeof interactionDirty !== "undefined" && (interactionDirty || interactionSaving))) {
+    event.preventDefault();
+    event.returnValue = "";
+  }
+});
 
 const SKIN_AI_PROMPT = [
-"请帮我制作一张可以用在 Windows 桌宠上的角色图。请先按下面的要求出图，成品请直接保存为 PNG 文件。",
+"请制作可导入虹夏 Windows 桌宠的原创角色皮肤，优先交付含连续待机帧的 ZIP。只需小幅自然动作，不需要复杂转身。若无法制作多帧，请明确说明能力限制，再交付单张透明 PNG。",
 "",
 "【角色设定】（把下一行括号里的内容换成你想要的角色，例如“金发双马尾的动漫少女，绿色马甲，红色蝴蝶结，Q 版比例”）",
 "（角色描述：）",
@@ -23,18 +65,26 @@ const SKIN_AI_PROMPT = [
 "",
 "【文件要求·非常重要，请严格遵守】",
 "1. 格式：PNG，且必须带透明通道（RGBA）。",
-"2. 画布比例：宽 : 高 ≈ 2 : 3，推荐尺寸 1024×1536 像素。",
+"2. 画布比例：宽 : 高 ≈ 2 : 3，多帧统一使用 512×768 像素。",
 "3. 图片四角必须是透明的，人物以外区域全部透明。",
 "4. 总像素不超过 800 万，最小边不小于 32 像素。",
-"5. 如果能一次输出多张，请再画 9 张同一个角色的表情版本，画布尺寸完全相同，只有表情不同，文件名分别是：",
+"5. 可选增加 9 张同角色、同尺寸、同位置的表情版本，只有表情不同，文件名分别是：",
 "   curious.png（好奇/平静）、happy.png（开心微笑）、worried.png（担心求助）、sleepy.png（困倦）、",
 "   wink.png（眨眼俏皮）、thinking.png（思考）、pout.png（小生气）、excited.png（兴奋加油）、blink.png（闭眼眨眼）。",
-"   请把这 9 张打包成一个 ZIP，文件名与上面完全一致，不要改名、不要多加文件。",
+"   表情图可和下面的待机帧放在同一个 ZIP 中；只交付表情包时则仅放这 9 张图。",
 "",
 "【最后请告诉我】",
 "1. 每张图的尺寸和格式；",
 "2. 背景是否已经是真正的透明（请在导出后自检）；",
-"3. 如果只能生成白色背景，请明确说明，我会自己抠图。"
+"3. 如果只能生成白色背景，请明确说明，我会自己抠图。",
+"",
+"【需要连续待机动画时，优先输出以下多帧 ZIP】",
+"保持同一角色、同一画布和脚底位置，制作 2–48 张连续透明 PNG，建议 8–16 张、512×768。只做小幅呼吸、发梢摆动或眨眼，首尾衔接，不要改变脸型和衣服。",
+"帧名依次为 idle_000.png、idle_001.png……；至少 2 张，所有帧必须同尺寸、宽高比约 2:3。",
+'ZIP 根目录放 manifest.json，例如：{"name":"我的角色","idle":{"frames":["idle_000.png","idle_001.png"],"durations_ms":[120,120]}}。',
+"请按实际帧数扩展 frames 和 durations_ms，数组长度一致。每帧 40–5000 毫秒、总长 ≤60 秒；输入 PNG 总像素 ≤2400 万，ZIP ≤32 MB、解压 ≤64 MB。建议 16 张 512×768。",
+"八表情和 blink.png 可一起放入，且全部同尺寸；没有表情图时会以首帧补齐。除上述 PNG 和 manifest.json 外不要添加文件、脚本、说明或子 ZIP。",
+"默认平静表情会循环播放待机；其他表情/互动暂时覆盖，结束后恢复。动作关闭时只显示静态图。若不能生成真实多帧或 ZIP，请如实说明，不要把同一张图复制多次冒充动画。"
 ].join("\n");
 
 function renderSkinPrompt() {
@@ -82,6 +132,11 @@ function download(data, filename, type="application/json") {
   document.body.append(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
+async function downloadArchive(path, filename) {
+  const response = await fetch(path, {headers:{"X-Nijika-Token":token}});
+  if (!response.ok) throw new Error((await response.json()).error || "导出失败");
+  download(await response.arrayBuffer(), filename, "application/zip");
+}
 function gotoPage(page) {
   if (!["agents","focus","notes","interaction","skins","settings","support"].includes(page)) page = "agents";
   $$(".page").forEach(item => item.hidden = item.id !== "page-" + page);
@@ -92,10 +147,19 @@ function gotoPage(page) {
   });
   $("#page-name").textContent = {agents:"Agent 接入",focus:"专注与提醒",notes:"今日便签与陪伴",interaction:"互动与养成",skins:"角色衣橱",settings:"动作与陪伴",support:"投喂支持"}[page];
   history.replaceState(null,"", "#" + page);
+  document.title = $("#page-name").textContent + " · 虹夏设置中心";
   document.dispatchEvent(new CustomEvent("nijika:page", {detail: page}));
+  if (state) updateSkinPreview();
+  $("#main-content").focus({preventScroll:true});
+  window.scrollTo({top:0, behavior:"instant"});
 }
 $$(".nav-item").forEach(item => item.addEventListener("click", () => gotoPage(item.dataset.page)));
 $(".brand").addEventListener("click", () => gotoPage("agents"));
+$(".skip-link").addEventListener("click", event => {
+  event.preventDefault();
+  $("#main-content").focus();
+});
+window.addEventListener("hashchange", () => gotoPage(location.hash.slice(1)));
 
 function testLabel(agent) {
   if (!agent.test) return agent.status === "exported" ? "接入资料就绪" : "已配置 · 待实测";
@@ -109,6 +173,16 @@ function renderAgents() {
   $("#agent-count").textContent = state.agents.length;
   $("#agent-badge").textContent = state.agents.length;
   $("#test-count").textContent = state.agents.filter(item => item.test?.status === "answered").length;
+  const comparison = $("#agent-capabilities"); comparison.replaceChildren();
+  for (const client of state.clients) {
+    const info = client.capabilities;
+    if (!info) continue;
+    const row = node("article", "help-card");
+    row.append(node("h3","",client.label),node("p","",info.transport),
+      node("p","","完成：" + info.completion),node("p","","权限：" + info.approval),
+      node("p","","生效：" + info.reload),node("small","",info.note));
+    comparison.append(row);
+  }
   for (const agent of state.agents) {
     const card = node("article","agent-card");
     const heading = node("div","agent-card-heading");
@@ -116,6 +190,9 @@ function renderAgents() {
     const title = node("div"); title.append(node("h3","",agent.name),node("small","",clientNames[agent.client]));
     heading.append(title,node("span","agent-status" + (agent.test?.status === "answered" ? " verified" : ""),testLabel(agent)));
     card.append(heading);
+    const sourceEnv = agent.export?.mcpServers?.["nijika-pet"]?.env;
+    if (sourceEnv) card.append(node("p","field-help","气泡来源：" +
+      sourceEnv.NIJIKA_AGENT_NAME + " · " + (sourceEnv.NIJIKA_HOST_NAME || "待补所在软件")));
     const description = agent.status === "exported" ? "复制自动配置提示词给能操作本机的 AI，由它完成接入；文件保存在固定目录。" :
       agent.test?.status === "answered" ? "桌面显示与点击回传已验证。请在客户端新任务中确认 Agent 主动调用。" :
       "准备好后，先发一条桌面测试提醒；客户端需重启或新建任务后验证。";
@@ -154,14 +231,15 @@ function renderSkins() {
   const list = $("#skins-list"); list.replaceChildren();
   $("#skin-count").textContent = state.skins.length + " 套外观";
   const selected = state.skins.find(item => item.id === state.settings.skin) || state.skins[0];
-  $("#skin-preview").src = "/skin/" + selected.id + "/curious.png";
+  updateSkinPreview();
   $("#skin-preview-name").textContent = selected.name;
   $("#hero-character").src = "/skin/" + selected.id + "/curious.png";
   for (const skin of state.skins) {
     const active = skin.id === state.settings.skin;
     const card = node("article","skin-card" + (active ? " selected" : ""));
     const image = node("img"); image.src = "/skin/" + skin.id + "/curious.png"; image.alt = skin.name;
-    card.append(image,node("h3","",skin.name),node("p","",skin.kind === "static" ? "单图皮肤 · 固定表情" : "九帧表情 · 支持眨眼"));
+    card.append(image,node("h3","",skin.name),node("p","",skin.kind === "animated" ?
+      "连续待机 · " + skin.idle.frames.length + " 帧" : skin.kind === "static" ? "单图皮肤 · 固定表情" : "九帧表情 · 支持眨眼"));
     if (active) card.append(node("span","skin-selected","正在使用"));
     const apply = button(active ? "已应用" : "应用这个外观","button " + (active ? "secondary" : "primary"),() => guarded(async () => {
       await api("/api/settings",{skin:skin.id}); await refresh(); toast("外观已保存，桌宠会自动应用。");
@@ -169,6 +247,25 @@ function renderSkins() {
     apply.disabled = active; card.append(apply); list.append(card);
   }
 }
+async function updateSkinPreview() {
+  const sequence = ++skinPreviewSequence;
+  const skin = state.skins.find(item => item.id === state.settings.skin) || state.skins[0];
+  const animate = skin.kind === "animated" && location.hash === "#skins" && !document.hidden &&
+    state.settings.motion !== "off" && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const src = "/skin/" + skin.id + (animate ? "/idle.webp" : "/curious.png");
+  const image = new Image(); image.src = src;
+  try {
+    await image.decode();
+    if (sequence === skinPreviewSequence) {
+      $("#skin-preview").src = src;
+      $("#skin-preview-detail").textContent = animate ? "正在循环试映待机帧；桌面平静表情使用同一时序。" :
+        skin.kind === "animated" ? "静态预览；进入衣橱并开启动作可查看多帧待机。" : "单图或九表情皮肤，保留原有连续动作。";
+    }
+  } catch {
+    if (sequence === skinPreviewSequence) $("#skin-preview-detail").textContent = "预览未加载，请重新导入或切回默认皮肤。";
+  }
+}
+document.addEventListener("visibilitychange", () => {if (state) updateSkinPreview();});
 function syncSettings() {
   const form = $("#settings-form");
   for (const key of ["motion","width","expression"]) form.elements.namedItem(key).value = state.settings[key];
@@ -191,12 +288,12 @@ function renderSupport() {
   if (support.has_image) $("#support-image").src = "/support/qr.png?v=" + Date.now();
   const link = $("#support-link"); link.hidden = !support.url;
   if (support.url) link.href = support.url; else link.removeAttribute("href");
-  if (!supportDirty) {
+  supportDraft.sync(() => {
     for (const key of ["name","message","url"]) $("#support-form").elements[key].value = support[key];
-  }
+  });
 }
 
-let focusSignature = "", notesSignature = "", reminderDirty = false;
+let focusSignature = "", notesSignature = "";
 function renderCompanion() {
   const data = state.companion;
   if (!data) return;
@@ -215,19 +312,18 @@ function renderCompanion() {
   $("#focus-minutes").textContent = Math.round((timer.focus_seconds_today || 0) / 60);
   $("#focus-streak").textContent = data.affection.days;
   const form = $("#focus-form");
-  if (document.activeElement?.tagName !== "INPUT") {
+  focusDraft.sync(() => {
     form.elements.focus_minutes.value = timer.focus_minutes;
     form.elements.break_minutes.value = timer.break_minutes;
-  }
+  }, "时长已保存在这台电脑");
   const reminders = data.reminders, paused = reminders.paused_until * 1000 > Date.now();
-  if (!reminderDirty) {
+  reminderDraft.sync(() => {
     $("#reminder-enabled").checked = reminders.enabled;
     $("#sedentary-minutes").value = reminders.sedentary_minutes;
     $("#water-minutes").value = reminders.water_minutes;
     $("#eye-minutes").value = reminders.eye_minutes;
-  }
-  $("#reminder-status").textContent = !reminders.enabled ? "提醒已关闭"
-    : paused ? "免打扰中，恢复后继续计时" : "提醒间隔会保存在本机";
+  }, !reminders.enabled ? "提醒已关闭"
+    : paused ? "免打扰中，恢复后继续计时" : "提醒间隔已保存在本机");
   $("#pause-reminders").hidden = paused;
   $("#resume-reminders").hidden = !paused;
   const signature = JSON.stringify(data.notes);
@@ -266,28 +362,35 @@ function renderNotes() {
   }
 }
 async function refresh(force=false) {
+  const sequence = ++refreshSequence;
+  refreshRequests++;
   try {
-    state = await api("/api/state");
+    const nextState = await api("/api/state");
+    if (sequence !== refreshSequence) return;
+    state = nextState;
     const online = state.renderer.online;
     const pill = $("#renderer-pill"); pill.classList.toggle("online",online);
     pill.replaceChildren(node("i"),document.createTextNode(online ? "虹夏在桌面陪伴" : "桌宠尚未启动"));
     $("#start-pet").hidden = online; $("#pet-status").textContent = online ? "陪伴中" : "未启动";
     const nextAgents = JSON.stringify(state.agents);
     if (force || nextAgents !== agentsSignature) {agentsSignature = nextAgents; renderAgents();}
-    const nextSkins = JSON.stringify([state.skins,state.settings.skin]);
+    const nextSkins = JSON.stringify([state.skins,state.settings.skin,state.settings.motion]);
     if (force || nextSkins !== skinsSignature) {skinsSignature = nextSkins; renderSkins(); previewMotion();}
-    if (!settingsDirty) syncSettings();
+    settingsDraft.sync(syncSettings, !online ? "已保存；桌宠启动后应用" :
+      !state.renderer.supports_control ? "当前桌宠需更新后重启，才能应用面板设置" :
+      state.renderer.applied_revision >= state.settings.revision ? "已同步到桌面上的虹夏" : "已保存，等待桌宠应用…");
     const nextSupport = JSON.stringify(state.support);
     if (force || nextSupport !== supportSignature) {supportSignature = nextSupport; renderSupport();}
     renderCompanion();
     if (typeof renderInteraction === "function") renderInteraction(state.interaction);
-    $("#settings-status").textContent = settingsDirty ? "有未保存的修改" : !online ? "已保存；桌宠启动后应用" :
-      !state.renderer.supports_control ? "当前桌宠需更新后重启，才能应用面板设置" :
-      state.renderer.applied_revision >= state.settings.revision ? "已同步到桌面上的虹夏" : "已保存，等待桌宠应用…";
+    updateDraftNotice();
     $("#connection-error").hidden = true;
   } catch (error) {
+    if (sequence !== refreshSequence) return;
     $("#connection-error").textContent = "无法连接设置中心：" + error.message;
     $("#connection-error").hidden = false;
+  } finally {
+    refreshRequests--;
   }
 }
 
@@ -296,6 +399,10 @@ function chooseClient(client) {
   $("#agent-name").value = clientNames[client];
   $("#agent-location").value = state.clients.find(item => item.id === client)?.location || "";
   $("#advanced-location").hidden = client === "custom";
+  $("#custom-source").hidden = client !== "custom";
+  $("#agent-software").required = client === "custom";
+  $("#agent-software").disabled = client !== "custom";
+  $("#agent-identity").disabled = client !== "custom";
 }
 function renderGuide(guide, neededFiles, bundleDirectory="") {
   if (!guide) return;
@@ -340,6 +447,10 @@ async function copyText(text, control, message="提示词已复制，可直接�
 }
 function renderWizard() {
   for (const step of [1,2,3]) $("#wizard-step-" + ["","one","two","three"][step]).hidden = wizard.step !== step;
+  $$("#wizard-step-one input").forEach(input => {
+    input.disabled = wizard.step !== 1 ||
+      (["agent-identity","agent-software"].includes(input.id) && wizard.client !== "custom");
+  });
   $$(".stepper li").forEach((item,index) => {item.classList.toggle("current",index+1 === wizard.step); item.classList.toggle("done",index+1 < wizard.step);});
   $("#wizard-back").textContent = wizard.step === 1 ? "取消" : wizard.step === 2 ? "← 上一步" : "完成";
   $("#wizard-next").textContent = wizard.step === 1 ? "检测并继续 →" : wizard.step === 2 ?
@@ -351,6 +462,8 @@ function renderWizard() {
 function openWizard() {
   if (!state) {toast("正在连接，请稍后再试。"); return;}
   wizard = {step:1,client:"codex",plan:null,agent:null,busy:false};
+  $("#agent-identity").value = "";
+  $("#agent-software").value = "";
   const choices = $("#client-choices"); choices.replaceChildren();
   for (const client of state.clients) {
     const label = node("label","client-option");
@@ -378,7 +491,9 @@ $("#agent-form").addEventListener("submit",async event => {
   wizard.busy = true; renderWizard();
   try {
     if (wizard.step === 1) {
-      wizard.plan = await api("/api/agents/plan",{client:wizard.client,name:$("#agent-name").value,location:$("#agent-location").value});
+      wizard.plan = await api("/api/agents/plan",{client:wizard.client,name:$("#agent-name").value,location:$("#agent-location").value,
+        agent_identity:wizard.client === "custom" ? $("#agent-identity").value.trim() || "Agent" : null,
+        software:wizard.client === "custom" ? $("#agent-software").value.trim() : ""});
       $("#plan-files").replaceChildren();
       for (const file of wizard.plan.files) {
         const item = node("li"); item.append(node("strong","",file.action + " · " + file.purpose),node("code","",file.path)); $("#plan-files").append(item);
@@ -413,15 +528,17 @@ $("#agent-form").addEventListener("submit",async event => {
   }
 });
 
-$("#settings-form").addEventListener("change",() => {settingsDirty = true; previewMotion(); $("#settings-status").textContent = "有未保存的修改";});
+$("#settings-form").addEventListener("change", previewMotion);
 $("#settings-form").addEventListener("submit",event => {
-  event.preventDefault(); const form = event.currentTarget;
+  event.preventDefault();
   guarded(async () => {
-    await api("/api/settings",{motion:form.elements.motion.value,width:Number(form.elements.width.value),expression:form.elements.expression.value,chat_enabled:form.elements.chat_enabled.checked});
-    settingsDirty = false; await refresh(); toast("设置已保存，正在同步到虹夏。");
-  },form.querySelector('[type="submit"]'));
+    const saved = await settingsDraft.save(draft => api("/api/settings",{...draft,width:Number(draft.width)}));
+    if (saved) {await refresh(); toast(state.renderer.online ? "设置已保存，正在同步到虹夏。" : "设置已保存；启动桌宠后会自动应用。");}
+  });
 });
 $("#import-skin").addEventListener("click",() => $("#skin-file").click());
+$("#download-skin-template").addEventListener("click", event => guarded(
+  () => downloadArchive("/api/skins/template","nijika-skin-template.zip"),event.currentTarget));
 $("#copy-skin-prompt").addEventListener("click",event => guarded(() => copyText(SKIN_AI_PROMPT,$("#copy-skin-prompt"),"提示词已复制，粘贴给会画图的 AI 即可。"),event.currentTarget));
 $("#copy-skin-prompt-2").addEventListener("click",event => guarded(() => copyText(SKIN_AI_PROMPT,$("#copy-skin-prompt-2"),"提示词已复制，粘贴给会画图的 AI 即可。"),event.currentTarget));
 $("#skin-file").addEventListener("change",event => {
@@ -432,15 +549,19 @@ $("#skin-file").addEventListener("change",event => {
     await refresh(); toast("已导入“" + skin.name + "”，选择应用即可切换。");
   },$("#import-skin")).finally(() => event.target.value = "");
 });
-$("#support-form").addEventListener("input",() => supportDirty = true);
 $("#support-form").addEventListener("submit",event => {
-  event.preventDefault(); const form = event.currentTarget;
+  event.preventDefault();
   guarded(async () => {
-    await api("/api/support",{name:form.elements.name.value.trim(),message:form.elements.message.value,url:form.elements.url.value.trim()});
-    supportDirty = false; await refresh(true); toast("投喂入口已保存。");
-  },form.querySelector('[type="submit"]'));
+    const saved = await supportDraft.save(draft => api("/api/support",{name:draft.name.trim(),message:draft.message,url:draft.url.trim()}));
+    if (saved) {await refresh(true); toast("投喂入口已保存。");}
+  });
 });
 $("#upload-support").addEventListener("click",() => $("#support-file").click());
+$("#export-support").addEventListener("click",event => guarded(async () => {
+  if (supportDraft.dirty || supportDraft.saving) throw new Error("请先保存投喂入口，再导出公开资料。");
+  await downloadArchive("/api/support/export","nijika-public-support.zip");
+  toast("已导出公开赞助资料，仅包含说明、链接和收款图片。");
+},event.currentTarget));
 $("#support-file").addEventListener("change",event => {
   const file = event.target.files[0]; if (!file) return;
   guarded(async () => {
@@ -465,20 +586,19 @@ $("#focus-reset").addEventListener("click",event => guarded(async () => {
 $("#focus-form").addEventListener("submit",event => {
   event.preventDefault();
   guarded(async () => {
-    await api("/api/focus",{action:"configure",focus_minutes:Number($("#focus-length").value),
-      break_minutes:Number($("#break-length").value)});
-    await refresh(true); toast("专注与休息时长已保存。");
-  },event.currentTarget.querySelector('[type="submit"]'));
+    const saved = await focusDraft.save(draft => api("/api/focus",{action:"configure",
+      focus_minutes:Number(draft.focus_minutes),break_minutes:Number(draft.break_minutes)}));
+    if (saved) {await refresh(true); toast("专注与休息时长已保存。");}
+  });
 });
-$("#reminder-form").addEventListener("input",() => reminderDirty = true);
 $("#reminder-form").addEventListener("submit",event => {
   event.preventDefault();
   guarded(async () => {
-    await api("/api/reminders",{enabled:$("#reminder-enabled").checked,
-      sedentary_minutes:Number($("#sedentary-minutes").value),water_minutes:Number($("#water-minutes").value),
-      eye_minutes:Number($("#eye-minutes").value)});
-    reminderDirty = false; await refresh(true); toast("提醒设置已保存，间隔从此刻重新计算。");
-  },event.currentTarget.querySelector('[type="submit"]'));
+    const saved = await reminderDraft.save(draft => api("/api/reminders",{enabled:draft["reminder-enabled"],
+      sedentary_minutes:Number(draft["sedentary-minutes"]),water_minutes:Number(draft["water-minutes"]),
+      eye_minutes:Number(draft["eye-minutes"])}));
+    if (saved) {await refresh(true); toast("提醒设置已保存，间隔从此刻重新计算。");}
+  });
 });
 $("#pause-reminders").addEventListener("click",event => guarded(async () => {
   await api("/api/reminders",{pause_minutes:60}); await refresh(true); toast("好，接下来 60 分钟不打扰你。");
@@ -499,4 +619,4 @@ $("#note-text").addEventListener("keydown",event => {
 gotoPage(location.hash.slice(1));
 renderSkinPrompt();
 refresh();
-setInterval(() => refresh(),3000);
+setInterval(() => { if (!refreshRequests) refresh(); },3000);

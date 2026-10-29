@@ -21,6 +21,8 @@ from notification_store import Notification, NotificationStore
 from legacy_queue import LegacyQueueBridge, legacy_database_paths
 from control_store import ControlStore, DEFAULTS
 from companion_store import CompanionStore
+from interaction_store import InteractionStore
+from interaction_motion import ACTIONS as INTERACTION_ACTIONS, hit_region, motion_at
 
 
 EXPRESSIONS = (
@@ -340,8 +342,10 @@ def render_pose(
 
 class SpriteSet:
     def __init__(self, width: int, height: int, directory: Path | None = None):
+        from skin_animation import SkinTimeline
         self.width = width
         self.height = height
+        self.timeline = SkinTimeline.load(directory or resource_dir())
         self.sources: dict[str, Image.Image] = {}
         self.memory_dc = None
         self.bitmap = None
@@ -351,7 +355,8 @@ class SpriteSet:
         if not screen_dc:
             raise ctypes.WinError(ctypes.get_last_error())
         try:
-            for name in SPRITE_NAMES:
+            idle = (self.timeline.animation or {}).get("frames", [])
+            for name in (*SPRITE_NAMES, *(frame[:-4] for frame in idle)):
                 with Image.open((directory or resource_dir()) / f"{name}.png") as source:
                     art = source.convert("RGBA").resize(
                         (width - 20, height - 30), Image.Resampling.LANCZOS
@@ -402,6 +407,7 @@ class SpriteSet:
 
 
 from dataclasses import dataclass
+from notice_source import notification_source, task_heading
 from PIL import ImageFont
 
 
@@ -415,6 +421,7 @@ class BubbleNotice:
     kind: str = "chat"
     duration: float | None = 6.0
     request_id: str | None = None
+    source: str = ""
 
 
 def bubble_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
@@ -472,7 +479,7 @@ def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, 
     lines = wrap_bubble_text(notice.text, body_font, width - 58,
                              limit=None if notice.request_id and described else
                              6 if notice.request_id else 3)
-    text_y = 62
+    text_y = 96 if notice.source else 62
     content_bottom = text_y + len(lines) * 33
     footer_y = None
     if notice.kind in ("agent", "approval"):
@@ -505,8 +512,11 @@ def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, 
         fill=fill, outline=outline,
     )
     draw.line((pointer_x - 13, card_bottom - 2, pointer_x + 14, card_bottom - 2), fill=fill, width=5)
-    draw.text((27, 22), fit_bubble_text(notice.title, title_font, width - 95),
+    draw.text((27, 22), fit_bubble_text(notice.source or notice.title, title_font, width - 95),
               font=title_font, fill=(149, 80, 65, 255))
+    if notice.source:
+        draw.text((27, 57), fit_bubble_text(notice.title, small_font, width - 58),
+                  font=small_font, fill=(123, 108, 98, 255))
     draw.text((width - 40, 17), "×", font=title_font, fill=(130, 117, 110, 255))
     for index, line in enumerate(lines):
         draw.text((27, text_y + index * 33), line, font=body_font, fill=(65, 56, 55, 255))
@@ -824,6 +834,20 @@ class PetWindow:
             self.companion = None
             log_notice_event("companion_start_failed", repr(error))
         self.next_companion_poll = 0.0
+        try:
+            self.interaction: InteractionStore | None = InteractionStore()
+            self.interaction_snapshot = self.interaction.snapshot()
+            self.interaction_revision = int(self.interaction_snapshot.get("action_revision", 0))
+        except (OSError, sqlite3.Error) as error:
+            self.interaction = None
+            self.interaction_snapshot = {}
+            self.interaction_revision = 0
+            log_notice_event("interaction_start_failed", repr(error))
+        self.next_interaction_poll = 0.0
+        self.last_interaction_error_at = 0.0
+        self.interaction_action: str | None = None
+        self.interaction_started = 0.0
+        self.interaction_duration = 0.0
         self.last_reminder_at = 0.0
         self.badge_cache: tuple[str, str] | None = None
         self.state = preferences["expression"]
@@ -934,14 +958,16 @@ class PetWindow:
                 and self.bubble.ensure_display(self._bubble_anchor())):
             return
         self.active_notice_id = pending.id
+        self.stop_interaction()
         try:
+            source = notification_source(pending.agent, pending.software)
             self.bubble.show(
-                BubbleNotice(f"{pending.agent} · {pending.title}", pending.message,
+                BubbleNotice(task_heading(pending.title, source), pending.message,
                              actions=pending.choices,
                              action_descriptions=pending.choice_descriptions,
                              action_recommended=pending.choice_recommended,
                              kind=pending.kind, duration=None,
-                             request_id=pending.id),
+                             request_id=pending.id, source=source.heading),
                 self._bubble_anchor(),
             )
         except Exception as error:
@@ -1029,6 +1055,35 @@ class PetWindow:
             self.bubble.show(BubbleNotice(f"虹夏 · {title}", text, duration=9.0), self._bubble_anchor())
             self.set_state("worried")
 
+    def _poll_interaction(self, now: float) -> None:
+        """Apply saved care actions to the desktop renderer once per revision."""
+        if self.interaction is None or now < self.next_interaction_poll:
+            return
+        self.next_interaction_poll = now + 0.8
+        try:
+            snapshot = self.interaction.snapshot()
+        except (OSError, sqlite3.Error) as error:
+            self.next_interaction_poll = now + 5.0
+            if now - self.last_interaction_error_at >= 30:
+                log_notice_event("interaction_poll_failed", repr(error))
+                self.last_interaction_error_at = now
+            return
+        revision = int(snapshot.get("action_revision", 0))
+        self.interaction_snapshot = snapshot
+        self.interaction_revision = revision
+        if ((self.interaction_action in ("feed", "drink") and not snapshot.get("enabled"))
+                or (self.interaction_action in ("pet", "poke", "nod") and not snapshot.get("touch_enabled", True))):
+            self.stop_interaction()
+        if self.interaction_action or self.drag_start or self.active_notice_id or (self.bubble.notice and self.bubble.notice.kind in ("agent", "approval")):
+            return
+        try:
+            event = self.interaction.take_action()
+        except (OSError, sqlite3.Error) as error:
+            log_notice_event("interaction_claim_failed", repr(error))
+            return
+        if event:
+            self.start_interaction(event["action"])
+
     @staticmethod
     def _focus_badge(timer: dict) -> tuple[str, str] | None:
         if timer["status"] not in ("running", "paused"):
@@ -1106,6 +1161,8 @@ class PetWindow:
             payload = {
                 "pid": os.getpid(), "heartbeat_at": time.time(),
                 "supports_control": self.controls is not None, "applied_revision": self.settings_revision,
+                "desktop_playback": self.interaction is not None,
+                "interaction_action": self.interaction_action,
                 "width": self.width, "motion": self.motion_mode,
                 "database": str(path.resolve()), "database_file_id": stat.st_ino,
                 "active_notice_id": self.bubble.notice.request_id if self.bubble.notice else None,
@@ -1146,7 +1203,9 @@ class PetWindow:
             self.defer_next_notice_until = time.monotonic() + 2.5
             self.bubble.show(
                 BubbleNotice("虹夏 · 已回复",
-                             "已收到审批提醒，请在 Codex 审批卡授权。" if notice.kind == "approval"
+                             ("已收到审批提醒，请在 Claude Code 的权限提示中授权。"
+                              if result.software == "Claude Code" or result.agent == "Claude code"
+                              else "已收到审批提醒，请在 Codex 审批卡授权。") if notice.kind == "approval"
                              else f"已选择「{selected}」，Agent 会按此继续。" if any(notice.action_descriptions)
                              else "已收到完成提醒。",
                              duration=2.5),
@@ -1193,9 +1252,54 @@ class PetWindow:
             self.bounce_count = count
         self.tick()
 
+    def start_interaction(self, action: str) -> None:
+        """Start a bounded, reversible MVP interaction on the real desktop pet."""
+        if action not in INTERACTION_ACTIONS:
+            return
+        if self.active_notice_id or (self.bubble.notice and self.bubble.notice.kind in ("agent", "approval")):
+            return
+        settings = self.interaction_snapshot
+        if action in ("pet", "poke", "nod") and settings and not settings.get("touch_enabled", True):
+            return
+        if action in ("feed", "drink") and settings and not settings.get("enabled", False):
+            return
+        self.interaction_action = action
+        self.interaction_started = time.monotonic()
+        self.interaction_duration = INTERACTION_ACTIONS[action][1]
+        self.bounce_started = 0.0
+        self.next_health_write = 0.0
+        self.tick()
+
+    def stop_interaction(self) -> None:
+        self.interaction_action = None
+        self.next_health_write = 0.0
+
+    def _render_interaction(self, now: float) -> bool:
+        action = self.interaction_action
+        if not action:
+            return False
+        elapsed = now - self.interaction_started
+        if elapsed >= self.interaction_duration:
+            self.stop_interaction()
+            return False
+        motion = motion_at(action, elapsed)
+        strength = {"off": 0.0, "gentle": 0.42}.get(self.motion_mode, 1.0)
+        name = INTERACTION_ACTIONS[action][2]
+        self.show_pose(
+            name,
+            shift_y=-motion["drop"] * self.height * strength,
+            angle=motion["head"] * strength,
+            scale_x=1.0 - motion["press"] * strength,
+            scale_y=1.0 + motion["drop"] * 0.35 * strength,
+            sparkle=motion["hearts"] * strength if self.interaction_snapshot.get("effects_enabled", True) else 0.0,
+            badge=self.badge_cache,
+        )
+        return True
+
     def set_state(self, name: str, *, react: bool = True, bounce_count: int = 1) -> None:
         if name not in EXPRESSIONS:
             return
+        self.stop_interaction()
         self.state = name
         self.blink_until = 0.0
         self.wink_until = 0.0
@@ -1211,6 +1315,7 @@ class PetWindow:
     def set_motion(self, mode: str) -> None:
         if mode not in ("lively", "gentle", "off"):
             return
+        self.stop_interaction()
         self.motion_mode = mode
         self.motion_started = time.monotonic()
         self.bounce_started = self.blink_until = self.wink_until = 0.0
@@ -1227,6 +1332,8 @@ class PetWindow:
             self.next_chat = now + random.uniform(110.0, 180.0)
             if not self.drag_start and self.bubble.notice is None:
                 self.say()
+        if self._render_interaction(now):
+            return
         if self.motion_mode == "off":
             self.show_pose(self.state)
             return
@@ -1238,13 +1345,16 @@ class PetWindow:
             self.bounce_count = 1
             self.next_idle_hop = now + random.uniform(12.0, 19.0)
         name = self.state
-        if self.state == "curious" and now >= self.next_blink:
+        animated_idle = self.sprites.timeline.frame(now - self.motion_started) if self.state == "curious" else None
+        if not animated_idle and self.state == "curious" and now >= self.next_blink:
             self.blink_until = now + 0.14
             self.next_blink = now + random.uniform(3.0, 6.0)
-        if self.motion_mode == "lively" and self.state == "curious" and now >= self.next_wink:
+        if not animated_idle and self.motion_mode == "lively" and self.state == "curious" and now >= self.next_wink:
             self.wink_until = now + 0.55
             self.next_wink = now + random.uniform(9.0, 15.0)
-        if self.blink_until > now:
+        if animated_idle:
+            name = animated_idle
+        elif self.blink_until > now:
             name = "blink"
         elif self.wink_until > now:
             name = "wink"
@@ -1320,6 +1430,8 @@ class PetWindow:
                 (501, "让虹夏说句话"), (502, "演示：完成提醒"),
                 (503, "演示：请求选择"),
                 (504, "日常闲聊：开启" if self.chat_enabled else "日常闲聊：关闭"),
+                (801, "互动：摇头"), (802, "互动：坐姿小舞"), (803, "互动：提起晃晃"),
+                (804, "停止当前动作"),
                 (301, "退出桌宠"),
             ]
             for command, title in options:
@@ -1364,6 +1476,11 @@ class PetWindow:
             self.next_chat = time.monotonic() + random.uniform(110.0, 180.0)
             if not self.chat_enabled and self.bubble.notice and self.bubble.notice.kind == "chat":
                 self.bubble.hide()
+        elif command in (801, 802, 803):
+            self.start_interaction(("shake", "dance", "lift")[command - 801])
+        elif command == 804:
+            self.stop_interaction()
+            self.tick()
         elif command == 601:
             self.open_control_panel()
         elif command == 301:
@@ -1397,6 +1514,7 @@ class PetWindow:
 
     def _wnd_proc(self, hwnd: int, message: int, wparam: int, lparam: int) -> int:
         if message == WM_LBUTTONDOWN:
+            self.stop_interaction()
             x, y = self._cursor()
             self.drag_start = (x, y, self.x, self.y)
             self.dragged = False
@@ -1406,8 +1524,12 @@ class PetWindow:
             user32.ReleaseCapture()
             self.drag_start = None
             self.dragged = False
-            self.set_state("excited", bounce_count=2)
-            self.say(STATE_LINES["excited"])
+            if self.interaction_snapshot.get("touch_enabled", True):
+                self.start_interaction("dance")
+                self.say(INTERACTION_ACTIONS["dance"][3])
+            else:
+                self.set_state("excited", bounce_count=2)
+                self.say(STATE_LINES["excited"])
             return 0
         if message == WM_MOUSEMOVE and self.drag_start and wparam & MK_LBUTTON:
             x, y = self._cursor()
@@ -1430,9 +1552,16 @@ class PetWindow:
                 if self.dragged:
                     self.drag_direction = 0
                 else:
-                    index = (EXPRESSIONS.index(self.state) + 1) % len(EXPRESSIONS)
-                    self.set_state(EXPRESSIONS[index])
-                    self.say(STATE_LINES[self.state])
+                    if self.interaction_snapshot.get("touch_enabled", True):
+                        local_x = ctypes.c_short(lparam & 0xFFFF).value
+                        local_y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
+                        action = hit_region(local_x / max(1, self.width), local_y / max(1, self.height))
+                        self.start_interaction(action)
+                        self.say(INTERACTION_ACTIONS[action][3])
+                    else:
+                        index = (EXPRESSIONS.index(self.state) + 1) % len(EXPRESSIONS)
+                        self.set_state(EXPRESSIONS[index])
+                        self.say(STATE_LINES[self.state])
                     self.record_affection("pet")
             self.drag_start = None
             self.dragged = False
@@ -1448,6 +1577,7 @@ class PetWindow:
                 elif wparam == 2:
                     self.poll_notifications_safely()
                     self._poll_companion(time.monotonic())
+                    self._poll_interaction(time.monotonic())
                 elif wparam == 3:
                     user32.DestroyWindow(hwnd)
             except Exception as error:

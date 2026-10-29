@@ -153,10 +153,19 @@ class AgentSetupTests(unittest.TestCase):
         self.assertFalse((directory / "AGENTS.md").exists())
 
     def test_dsh_both_profiles_preserve_existing_patch_and_repeat_without_duplicate(self):
+        legacy = (
+            '- insert:\n'
+            '    # magpie\n'
+            '    - id: magpie-mcp-nijika-pet\n'
+            '      config:\n'
+            '        serverName: "nijika-pet"\n'
+            '        env:\n'
+            '          NIJIKA_AGENT_NAME: "Claude code"\n'
+        )
         for profile in ("desktop", "web"):
             path = self.home / ".dsh/profiles" / profile / "cordis.patch.yml"
             path.parent.mkdir(parents=True)
-            path.write_text("# keep existing DSH patch\n", encoding="utf-8")
+            path.write_text("# keep existing DSH patch\n" + legacy, encoding="utf-8")
         for _ in range(2):
             plan = self.setup.plan("dsh", "DSH's 助手")
             self.setup.apply(plan["plan_id"])
@@ -164,10 +173,12 @@ class AgentSetupTests(unittest.TestCase):
             value = (self.home / ".dsh/profiles" / profile / "cordis.patch.yml").read_text(encoding="utf-8")
             self.assertTrue(value.startswith("# keep existing DSH patch"))
             self.assertEqual(value.count("id: mcp-nijika-pet"), 1)
-            self.assertIn("DSH''s 助手", value)
+            self.assertNotIn("magpie-mcp-nijika-pet", value)
+            self.assertIn("NIJIKA_AGENT_NAME: 'Agent'", value)
+            self.assertIn("NIJIKA_HOST_NAME: 'DSH'", value)
 
     def test_custom_export_never_writes_unknown_client_and_no_arbitrary_command(self):
-        plan = self.setup.plan("custom", "自定义助手")
+        plan = self.setup.plan("custom", "自定义助手", agent_identity="Claude", software="VS Code")
         self.assertFalse(plan["files"])
         self.assertFalse(plan["external_action"])
         self.assertEqual(plan["export"]["mcpServers"]["nijika-pet"]["command"], str(ROOT / "dist/虹夏MCP-v2.exe"))
@@ -183,7 +194,8 @@ class AgentSetupTests(unittest.TestCase):
         self.assertEqual(prompt, result["agent"]["guide"]["prompt"])
         self.assertIn(str(bundle / "nijika-mcp.json"), prompt)
         self.assertIn(str(self.setup.mcp), prompt)
-        self.assertIn('"NIJIKA_AGENT_NAME": "自定义助手"', prompt)
+        self.assertIn('"NIJIKA_AGENT_NAME": "Claude"', prompt)
+        self.assertIn('"NIJIKA_HOST_NAME": "VS Code"', prompt)
         self.assertIn("修改前备份", prompt)
         self.assertIn("目标路径未知", prompt)
         self.assertNotIn("用“下载 MCP 配置”", prompt)
@@ -209,7 +221,8 @@ class AgentSetupTests(unittest.TestCase):
         content = json.loads(manifest.read_text(encoding="utf-8"))
         server = content["mcpServers"]["nijika-work-pet"]
         self.assertEqual(server["args"][-1], str(self.setup.mcp))
-        self.assertEqual(server["env"]["NIJIKA_AGENT_NAME"], "Work 助手")
+        self.assertEqual(server["env"]["NIJIKA_AGENT_NAME"], "ChatGPT")
+        self.assertEqual(server["env"]["NIJIKA_HOST_NAME"], "Work")
         work_files = result["agent"]["needed_files"]
         self.assertTrue(any(item["path"] == str(manifest) and item["exists"] for item in work_files))
         self.assertFalse(any(item["path"].endswith("AGENTS.md") for item in work_files))
@@ -265,9 +278,13 @@ class AgentSetupTests(unittest.TestCase):
         self.assertNotIn(str(self.home / ".codex/hooks.json"), plan["guide"]["prompt"])
         self.assertNotIn(hooks, [item["path"] for item in self.setup.plans[plan["plan_id"]]["files"]])
         result = self.setup.apply(plan["plan_id"])
-        self.assertEqual(path.read_text(encoding="utf-8"), original)
+        updated = path.read_text(encoding="utf-8")
+        self.assertIn('NIJIKA_AGENT_NAME = "ChatGPT"', updated)
+        self.assertIn('NIJIKA_HOST_NAME = "Codex"', updated)
+        self.assertNotEqual(updated, original)
         self.assertEqual(hooks.read_bytes(), hook_bytes)
-        self.assertEqual(result["agent"]["export"]["mcpServers"]["nijika-pet"]["env"]["NIJIKA_AGENT_NAME"], "原助手")
+        self.assertEqual(result["agent"]["export"]["mcpServers"]["nijika-pet"]["env"]["NIJIKA_AGENT_NAME"], "ChatGPT")
+        self.assertEqual(result["agent"]["export"]["mcpServers"]["nijika-pet"]["env"]["NIJIKA_HOST_NAME"], "Codex")
 
     def test_refresh_old_handoff_updates_prompt_but_leaves_client_files_untouched(self):
         agent = {"id": "f" * 32, "client": "custom", "name": "旧伙伴", "source_name": "旧伙伴",
@@ -321,8 +338,36 @@ class LocalAPITests(unittest.TestCase):
             self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
             self.assertNotIn(b"NIJIKA_SESSION_TOKEN",response.read())
 
+    def test_animation_template_import_preview_and_public_support_export(self):
+        def binary(route, token=True):
+            request = Request(self.server.origin + route, headers={"X-Nijika-Token": self.server.token} if token else {})
+            with urlopen(request, timeout=10) as response:
+                return response.read()
+        for route in ("/api/skins/template", "/api/support/export"):
+            with self.subTest(route=route), self.assertRaises(HTTPError) as error:
+                binary(route, token=False)
+            self.assertEqual(error.exception.code, 403)
+        template = binary("/api/skins/template")
+        skin = self.app.store.import_skin(template, "template.zip")
+        self.assertEqual(skin["kind"], "animated")
+        with Image.open(io.BytesIO(binary("/skin/" + skin["id"] + "/idle.webp"))) as image:
+            self.assertTrue(image.is_animated)
+        self.app.store.update_support({"name": "Test author", "message": "Thank you", "url": "https://example.com/support"})
+        with ZipFile(io.BytesIO(binary("/api/support/export"))) as archive:
+            self.assertEqual(archive.namelist(), ["distribution/support.json"])
+        self.assertTrue(all("capabilities" in client for client in self.call("/api/state")["clients"]))
+
+    def test_page_loads_draft_controller_before_app_and_serves_its_real_source(self):
+        with urlopen(self.server.origin, timeout=3) as response:
+            html = response.read().decode("utf-8")
+        self.assertLess(html.index('src="/form-state.js"'), html.index('src="/app.js"'))
+        with urlopen(self.server.origin + "/form-state.js", timeout=3) as response:
+            self.assertEqual(response.headers.get_content_type(), "text/javascript")
+            self.assertEqual(response.read(), (ROOT / "control-ui/form-state.js").read_bytes())
+
     def test_same_pending_test_reused_click_readback_is_not_external_agent_verification(self):
-        plan = self.call("/api/agents/plan", {"client":"custom","name":"本机测试"})
+        plan = self.call("/api/agents/plan", {"client":"custom","name":"本机测试",
+                                            "agent_identity":"ChatGPT","software":"Obsidian"})
         result = self.call("/api/agents/apply", {"plan_id":plan["plan_id"]})
         self.assertEqual(result["agent"]["guide"]["title"], "复制给 AI，自动完成配置")
         self.assertIn("nijika-pet", result["agent"]["guide"]["prompt"])
@@ -332,6 +377,10 @@ class LocalAPITests(unittest.TestCase):
         first = self.call("/api/agents/test", {"id":result["agent"]["id"]})
         second = self.call("/api/agents/test", {"id":result["agent"]["id"]})
         self.assertEqual(first["request_id"],second["request_id"])
+        notice = self.app.notifications.get(first["request_id"])
+        self.assertEqual((notice.agent, notice.software), ("ChatGPT", "Obsidian"))
+        exported = self.call("/api/agents/export/" + result["agent"]["id"])
+        self.assertEqual(exported["config"], plan["export"])
         self.assertFalse(first["visible"])
         self.app.notifications.answer(first["request_id"],0)
         reply = self.call("/api/notices/" + first["request_id"])
