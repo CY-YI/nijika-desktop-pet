@@ -9,6 +9,51 @@ import tomllib
 from pathlib import Path
 
 
+def json_service_update(document: dict, mcp: Path, environment: dict[str, str],
+                        client: str) -> dict:
+    """Merge owned stdio services only; preserve unrelated fields and options."""
+    result = copy.deepcopy(document)
+    servers = result.setdefault("mcpServers", {})
+    if not isinstance(servers, dict):
+        raise ValueError("MCP 服务列表格式无效；没有写入。")
+    selected = {}
+    for key, entry in servers.items():
+        command = entry.get("command") if isinstance(entry, dict) else None
+        path = Path(command) if isinstance(command, str) and command else None
+        current = path is not None and path.is_absolute() and path.resolve() == mcp.resolve()
+        candidate = path is not None and path.name.casefold() in ("虹夏mcp-v2.exe", "虹夏mcp.exe")
+        if key not in ("nijika-pet", "nijika_pet") and not current and not candidate:
+            continue
+        same = (candidate and path.is_file() and mcp.is_file() and
+                hashlib.sha256(path.read_bytes()).digest() == hashlib.sha256(mcp.read_bytes()).digest())
+        if not (current or same) or not path.is_file():
+            raise ValueError("同名服务或旧虹夏程序无法核实；没有写入或新增重复服务。")
+        if entry.get("args", []) != [] or entry.get("type", "stdio") not in ("stdio", "local"):
+            raise ValueError("已有虹夏服务参数或传输方式需人工核对；没有写入。")
+        if not isinstance(entry.get("env", {}), dict):
+            raise ValueError("虹夏环境变量格式无效。")
+        selected[key] = entry
+    def options(entry):
+        value = copy.deepcopy(entry)
+        for key in ("command", "args"):
+            value.pop(key, None)
+        value.setdefault("env", {})
+        for key in ("NIJIKA_AGENT_NAME", "NIJIKA_HOST_NAME", "NIJIKA_PROFILE_ID"):
+            value["env"].pop(key, None)
+        return value
+    chosen = copy.deepcopy(selected.get("nijika-pet", next(iter(selected.values()), {})))
+    if any(options(entry) != options(chosen) for entry in selected.values()):
+        raise ValueError("虹夏别名的权限或设置存在冲突；没有写入。")
+    for key in selected:
+        del servers[key]
+    chosen.update(command=str(mcp), args=[])
+    chosen.setdefault("env", {}).update(environment)
+    if not selected and client == "copilot":
+        chosen.update(type="local", tools=["*"])
+    servers["nijika-pet"] = chosen
+    return result
+
+
 def remove_legacy_dsh_nijika_entry(original: str) -> str:
     """Edit only a legacy list item; unsupported YAML is left for manual review.
 
@@ -116,7 +161,7 @@ def codex_service_update(original: str, mcp: Path, root: Path,
         value.pop("command", None)
         value.pop("args", None)
         value.setdefault("env", {})
-        for field in ("NIJIKA_AGENT_NAME", "NIJIKA_HOST_NAME"):
+        for field in ("NIJIKA_AGENT_NAME", "NIJIKA_HOST_NAME", "NIJIKA_PROFILE_ID"):
             value["env"].pop(field, None)
         return value
     if any(options(entry) != options(chosen) or entry.get("args", []) != chosen.get("args", [])

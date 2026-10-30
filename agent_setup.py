@@ -15,10 +15,11 @@ from pathlib import Path
 
 from control_store import ControlStore, IDENTIFIER
 from notice_source import resolve_source
-from setup_config import codex_service_update, remove_legacy_dsh_nijika_entry
+from setup_config import codex_service_update, remove_legacy_dsh_nijika_entry, json_service_update
+from agent_discovery import CLIENTS, CANONICAL_NAMES, JSON_CLIENTS, client_home, json_paths, bounded_bytes, parse_json, magpie_state, scan
+from vscode_agents import instructions as vscode_instructions, route_for
 
-CLIENTS = {"codex": "Codex", "work": "ChatGPT Work", "dsh": "DeepSeek Harness", "custom": "其他 MCP 客户端"}
-CANONICAL_AGENT_NAMES = {"codex": "Codex", "work": "Work", "dsh": "DSH"}
+CANONICAL_AGENT_NAMES = CANONICAL_NAMES
 CLIENT_CAPABILITIES = {
     "codex": {"transport": "stdio MCP + 本机技能", "approval": "可选原生钩子，需本人信任",
               "completion": "MCP 主动调用；可选 Stop 兜底", "reload": "重载连接或新建任务；钩子另行审阅",
@@ -33,6 +34,11 @@ CLIENT_CAPABILITIES = {
                "completion": "依靠 Agent 主动调用 MCP", "reload": "由接收方 AI 核实客户端和配置作用域",
                "note": "Claude Code 可参考接入手册；不能向普通网页聊天安装本机服务。"},
 }
+for _client in JSON_CLIENTS:
+    CLIENT_CAPABILITIES[_client] = {
+        "transport": "用户级 JSON + 持久提醒规则", "approval": "本向导不安装原生权限钩子",
+        "completion": "依靠 Agent 主动调用 MCP", "reload": "重载客户端或新建任务后实际调用",
+        "note": "项目配置可能覆盖用户配置；找到文件不等于客户端已加载。"}
 
 INSTALL_RULES = """虹夏桌面提醒规则：
 1. 实质成果太长、需要用户审阅时，调用 show_completion(task=30字内标题, summary=1–120字结果)，只发送一次；它只是通知，不是批准。简短事实问答不例行提醒。
@@ -143,6 +149,12 @@ def client_files(client: str, mcp: Path, directory: Path, bundle: Path,
             {"label": "桌面交互技能", "path": str(directory / "skills" / "nijika-dsh-dialog" / "SKILL.md"),
              "kind": "技能", "required": False},
         ]
+    elif client in JSON_CLIENTS:
+        config, rules = json_paths(client, directory)
+        entries += [
+            {"label": CLIENTS[client] + " 用户级 MCP 配置", "path": str(config), "kind": "配置", "required": True},
+            {"label": CLIENTS[client] + " 主动提醒规则", "path": str(rules), "kind": "规则", "required": True},
+        ]
     elif client == "work":
         staging = data_root / "integrations" / "work"
         entries += [
@@ -232,22 +244,71 @@ def digest(data: bytes | None) -> str:
 class AgentSetup:
     def __init__(self, root: Path, store: ControlStore, home: Path | None = None):
         self.root, self.store = root, store
-        self.home = home or Path.home()
+        self.home = (home or Path.home()).resolve()
         self.use_environment = home is None
         self.mcp = root / "dist" / "虹夏MCP-v2.exe"
         self.plans: dict[str, dict] = {}
+        self.batches: dict[str, dict] = {}
         self.lock = threading.Lock()
 
     def default_home(self, client: str) -> Path:
-        if client in ("codex", "work"):
-            return Path(os.environ.get("CODEX_HOME", self.home / ".codex")) if self.use_environment else self.home / ".codex"
-        return self.home / ".dsh" if client == "dsh" else self.home
+        return client_home(client, self.home, self.use_environment)
+
+    def discover(self) -> dict:
+        return {"clients": scan(self.home, self.mcp, use_environment=self.use_environment),
+                "scanned_at": int(time.time()),
+                "scope": "当前用户目录" if self.use_environment else "隔离测试目录（不是当前电脑的完整配置）",
+                "note": "仅解析已知接入配置并返回安全摘要，不收集密钥、聊天内容或登录状态。"}
+
+    def batch_plan(self, selected: list[str]) -> dict:
+        if (not isinstance(selected, list) or not 1 <= len(selected) <= len(CLIENTS) - 1 or
+                any(not isinstance(item, str) or item not in CLIENTS or item == "custom" for item in selected) or
+                len(set(selected)) != len(selected)):
+            raise ValueError("请选择不重复的受支持客户端。")
+        results = []
+        for client in selected:
+            try:
+                results.append({"client": client, "status": "ready",
+                                "plan": self.plan(client, CLIENTS[client])})
+            except (ValueError, OSError):
+                results.append({"client": client, "status": "blocked",
+                                "error": "无法安全预览。请用单独向导核对配置格式、同名服务或依赖；原配置未修改。"})
+        batch_id = uuid.uuid4().hex
+        self.batches = {key: value for key, value in self.batches.items()
+                        if time.monotonic() - value["created"] < 600}
+        if len(self.batches) >= 8:
+            self.batches.pop(next(iter(self.batches)))
+        self.batches[batch_id] = {"created": time.monotonic(), "results": results}
+        return {"batch_id": batch_id, "results": results,
+                "note": "按客户端分别应用；某项失败不回滚其他已成功项。Work 可能执行插件注册。"}
+
+    def batch_apply(self, batch_id: str) -> dict:
+        with self.lock:
+            batch = self.batches.pop(batch_id, None)
+        if not batch or time.monotonic() - batch["created"] > 600:
+            raise ValueError("批量预览已过期或已应用，请重新扫描。")
+        results = []
+        for item in batch["results"]:
+            if item["status"] != "ready":
+                results.append(item)
+                continue
+            try:
+                result = self.apply(item["plan"]["plan_id"])
+                results.append({"client": item["client"], "status": result["agent"]["status"],
+                                "agent_id": result["agent"]["id"], "backup_count": result["backup_count"]})
+            except (ValueError, OSError):
+                results.append({"client": item["client"], "status": "failed",
+                                "error": "未完成，请重新扫描并用单独向导核对；若为 Work 请检查插件注册状态后再试。"})
+        return {"results": results}
 
     def clients(self) -> list[dict]:
         result = []
         for client, label in CLIENTS.items():
             directory = self.default_home(client)
-            present = ((directory / "config.toml").is_file() or bool(shutil.which("codex"))) if client in ("codex", "work") else directory.is_dir()
+            if client in JSON_CLIENTS:
+                present = json_paths(client, directory)[0].is_file() or bool(shutil.which(client))
+            else:
+                present = ((directory / "config.toml").is_file() or bool(shutil.which("codex"))) if client in ("codex", "work") else directory.is_dir()
             result.append({"id": client, "label": label, "detected": bool(present) if client != "custom" else True,
                            "location": str(directory) if client != "custom" else "",
                            "capabilities": CLIENT_CAPABILITIES[client]})
@@ -264,7 +325,13 @@ class AgentSetup:
     def export_agent(self, agent: dict) -> dict:
         # Built-in clients are stable even for old profiles with a custom nickname.
         source = CANONICAL_AGENT_NAMES.get(agent["client"], agent["source_name"])
-        return self.export(source, agent.get("agent_identity"), agent.get("software", ""))
+        result = (self.export(source) if agent["client"] in CANONICAL_AGENT_NAMES else
+                  self.export(source, agent.get("agent_identity"), agent.get("software", "")))
+        server = result["mcpServers"]["nijika-pet"]
+        server["env"]["NIJIKA_PROFILE_ID"] = agent["id"]
+        if agent["client"] == "copilot":
+            server.update(type="local", tools=["*"])
+        return result
 
     def bundle_directory(self, agent_id: str) -> Path:
         if not isinstance(agent_id, str) or not IDENTIFIER.fullmatch(agent_id):
@@ -278,6 +345,16 @@ class AgentSetup:
         bundle = self.bundle_directory(agent["id"])
         config = self.export_agent(agent)
         files = client_files(client, self.mcp, directory, bundle, self.store.root)
+        editor = (client == "custom" and
+                  str(agent.get("software", "")).casefold() in {"vs code", "vs code insiders"})
+        route = route_for(agent.get("agent_identity", "")) if editor else None
+        if route:
+            for label, relative in (("扩展后端配置（可能与其他宿主共用）", route[2]),
+                                    ("扩展后端持久规则（须附编辑器条件）", route[3])):
+                if relative:
+                    path = directory / relative
+                    files.append({"label": label, "path": str(path), "kind": "配置参考",
+                                  "required": False, "exists": path.is_file()})
         guide = {**client_guide(client), "steps": list(client_guide(client)["steps"])}
         config_text = json.dumps(config, ensure_ascii=False, indent=2)
         paths = "\n".join(item["label"] + "：" + item["path"] for item in files)
@@ -311,6 +388,29 @@ class AgentSetup:
                       "里的 JSON 当成客户端已加载的文件，也不要猜测客户端品牌和配置格式。"
                       "若识别不到唯一目标，只向我询问客户端名称或项目/全局作用域这一项。",
         }
+        if client in JSON_CLIENTS:
+            capabilities[client] = CLIENT_CAPABILITIES[client]["note"] + "普通提醒依靠 MCP；不安装原生审批/完成钩子。"
+            adapters[client] = ("目标为 " + CLIENTS[client] +
+                "。按上述用户级 JSON 路径合并 mcpServers；将主动规则合并到列出的规则文件。"
+                "保留其他服务与客户端设置，核对项目作用域是否覆盖用户级配置。")
+        guide_software = str(agent.get("software") or "")
+        guide_identity = str(agent.get("agent_identity") or "Agent")
+        if client == "custom" and guide_software.casefold() in {"vs code", "vs code insiders"}:
+            capabilities["custom"] += " 当前目标是 VS Code 中的具体扩展，编辑器来源必须按本次调用显式标注。"
+            adapters["custom"] = vscode_instructions(guide_identity, guide_software)
+            adapters["custom"] += (
+                "先核对上述后端配置参考和该扩展自己的 MCP 设置入口。"
+                "未列出配置参考时，目标路径未知，必须先查证，不得猜测。"
+                "仅复用现有服务或在已核实的后端格式中安装一份服务；"
+                "对共享后端保留原来的来源环境变量和档案编号。下方 VS Code 环境变量"
+                "仅可用于已确认专属于该编辑器的独立服务，不得覆盖共享配置。"
+                "在持久规则中加入上述条件来源规则，不能只口头承诺。"
+                "如果该扩展没有 MCP 接入能力，明确报告不支持，不写入猜测路径。\n"
+                '验证必须在该扩展中调用 show_completion(task="编辑器接入验证", '
+                'summary="编辑器具体 Agent 来源测试。", agent_name=' +
+                json.dumps(guide_identity, ensure_ascii=False) + ", software=" +
+                json.dumps(guide_software, ensure_ascii=False) + ")。"
+            )
         prompt = (
             "请现在帮我把本机的虹夏桌宠接入你当前的 AI 客户端，直接执行配置与验证。\n"
             "我已授权这次虹夏接入所必需的文件配置修改。你需要具备同一台 Windows 电脑的文件读写"
@@ -325,7 +425,8 @@ class AgentSetup:
             "旧档案没有软件字段时须补全实际软件；多模型宿主不知道身份时保留 Agent。"
             "同一客户端只保留一个指向同一虹夏程序的服务，避免 nijika-pet 和 nijika_pet 重复。"
             "工具支持可选 agent_name/software 参数细化本次来源；task 只写任务名，不重复来源。\n\n"
-            "【完整 MCP 配置，可直接作为合并依据】\n" + config_text +
+            "【完整 MCP 配置，可直接作为合并依据】\n" +
+            ("注意：这是编辑器独立服务的参考。共享后端禁止直接覆盖此 env；保留原来源与编号，只用本次调用参数区分编辑器。\n" if editor else "") + config_text +
             "\n\n【请自动执行】\n"
             "1. 先验证 MCP 程序存在及上述接入文件可读；即使不能读接入文件，下方已附完整配置与规则。"
             "核实当前电脑与路径匹配，不要手动双击 stdio MCP 程序。\n"
@@ -343,7 +444,8 @@ class AgentSetup:
             " summary=\"当前 AI 客户端已发现虹夏工具；这是一条接入测试提醒。\")。"
             "文件存在、面板测试和 pending 均不证明外部客户端已连通或气泡已显示。"
             "最后列明实际改动的文件、备份位置、验证结果和未完成项。\n\n"
-            "【需要安装的持久提醒规则】\n" + INSTALL_RULES
+            "【需要安装的持久提醒规则】\n" + INSTALL_RULES +
+            ("\n" + vscode_instructions(guide_identity, guide_software) if editor else "")
         )
         guide["prompt"] = prompt
         guide["title"] = "复制给 AI，自动完成配置"
@@ -353,6 +455,22 @@ class AgentSetup:
                 "复制下方自动配置提示词，发给这台电脑上能读写文件的 AI 客户端。",
                 "AI 会按真实路径核对、补齐和验证；需要重载或本人确认时会明确告知。",
             ]
+        if agent.get("manager") == "magpie":
+            guide.update(title="由 MAGPIE 管理，核对现有连接",
+                steps=["在 MAGPIE 核对虹夏仅分发一次到此客户端，并同步。",
+                       "重载该客户端，复制下面的只读验证提示词给新任务。",
+                       "共享连接不含本档案编号时，面板不会自动认领其调用；请在气泡核对来源和点击回传。"],
+                prompt=("当前虹夏由 MAGPIE 管理。本次不授权修改客户端配置；不要新增服务或抢占管理权。"
+                    "请只读核对现有虹夏工具，缺失时报告需在 MAGPIE 同步/重载，不能假称已连接。\n"
+                    "预期气泡来源：" + self.export_agent(agent)["mcpServers"]["nijika-pet"]["env"]["NIJIKA_AGENT_NAME"] +
+                    " · " + agent.get("software", "") + "。多模型宿主不知道 Agent 身份时保留 Agent。\n"
+                    "工具可见后只调用一次 show_completion(task=\"虹夏接入验证\", summary=\"现有 MAGPIE 连接的工具调用测试。\")。"
+                    "以实际工具前缀为准；支持来源参数时填写实际 agent_name/software。"
+                    "pending 只表示排队，不等于已显示。不要输出原配置、环境变量或凭据。"),
+                tip="切换为虹夏管理时，先在 MAGPIE 取消该目标分发，再重新扫描；不自动修改管理器。")
+            if editor:
+                guide["prompt"] += "\n" + vscode_instructions(guide_identity, guide_software)
+                guide["prompt"] += "\n本次只验证来源参数；不安装或修改持久规则。"
         return {"guide": guide, "needed_files": files, "export": config,
                 "bundle_directory": str(bundle),
                 "bundle_ready": all((bundle / name).is_file() for name in
@@ -368,6 +486,9 @@ class AgentSetup:
             "nijika-agent-instructions.txt": INSTALL_RULES,
             "nijika-setup-prompt.txt": info["guide"]["prompt"],
         }
+        if agent["client"] == "custom" and agent.get("software", "").casefold() in {"vs code", "vs code insiders"}:
+            contents["nijika-agent-instructions.txt"] += "\n" + vscode_instructions(
+                agent.get("agent_identity") or "Agent", agent["software"])
         skill_path = {"dsh": "integrations/dsh/nijika-dsh-dialog/SKILL.md",
                       "work": "plugins/nijika-work-local/skills/nijika-work-dialog/SKILL.md"}.get(
                           agent["client"], "skills/nijika-desktop-dialog/SKILL.md")
@@ -385,8 +506,11 @@ class AgentSetup:
                 temporary.unlink(missing_ok=True)
         return self.describe(agent)
 
-    def _add_file(self, files: list, path: Path, content: str, purpose: str) -> None:
+    def _add_file(self, files: list, path: Path, content: str, purpose: str,
+                  expected_digest: str | None = None) -> None:
         previous = path.read_bytes() if path.exists() else None
+        if expected_digest is not None and digest(previous) != expected_digest:
+            raise ValueError("读取配置期间文件已被其他程序修改，请重新预览；没有写入。")
         data = content.encode("utf-8")
         if previous != data:
             files.append({"path": path, "before": previous, "after": data, "purpose": purpose})
@@ -413,8 +537,70 @@ class AgentSetup:
         else:
             source = resolve_source(source_name)
         agent_identity, software = source.agent, source.software
+        existing = next((item for item in self.store.agents() if item["client"] == client and
+                         item["location"] == str(directory) and
+                         (client != "custom" or (item.get("software") == software and
+                                                item.get("agent_identity") == agent_identity))), None)
+        agent_id = existing["id"] if existing else uuid.uuid4().hex
+        manager_client = client
+        if client == "custom":
+            manager_client = {"workbuddy": "workbuddy", "workbuddy ai": "workbuddy-ai",
+                "vs code": "vscode", "obsidian": "obsidian", "claude desktop": "claude-desktop"}.get(
+                    software.casefold(), "custom")
+            if software.casefold() in {"vs code", "vs code insiders"}:
+                route = route_for(agent_identity)
+                if route:
+                    manager_client = route[1]
+        manager = magpie_state(self.home, manager_client)
+        if manager["error"]:
+            raise ValueError("MAGPIE 配置无法安全读取，管理归属不明确；没有写入。")
+        managed = manager["managed"]
+        environment = self.export(source_name, agent_identity, software)["mcpServers"]["nijika-pet"]["env"]
+        environment["NIJIKA_PROFILE_ID"] = agent_id
         notes.append("预期气泡头部：" + source.heading + "；伙伴昵称只用于管理，任务名另起一行。")
-        if client == "codex":
+        if managed:
+            notes.append("检测到 MAGPIE 管理：只保存虹夏档案，不写客户端配置或执行注册。保持 MAGPIE 分发，重载后用宿主实际调用验证。")
+        elif client == "custom" and software.casefold() in {"vs code", "vs code insiders"}:
+            route = route_for(agent_identity)
+            if route and route[3]:
+                path = directory / route[3]
+                raw = bounded_bytes(path) if path.exists() else None
+                original = raw.decode("utf-8-sig") if raw is not None else ""
+                # One conditional editor block per engine; the backend MCP/env
+                # remains untouched and CLI tasks do not inherit an editor label.
+                marker = "NIJIKA-VSCODE-SOURCE" + ("-INSIDERS" if software == "VS Code Insiders" else "")
+                block = ("# BEGIN " + marker + "\n" +
+                         vscode_instructions(agent_identity, software) +
+                         "# END " + marker)
+                self._add_file(files, path, marked_block(original, block,
+                    "# BEGIN " + marker, "# END " + marker),
+                    "合并仅在 VS Code 任务生效的来源规则，保留共享 MCP 配置", digest(raw))
+                notes.append("只安装条件来源规则；共享 MCP/权限不修改。需在此扩展实际发现工具并验证；缺服务时复制专属提示词补齐。")
+            else:
+                notes.append("此扩展的 MCP/持久规则格式仍需在其设置中核实；生成专属资料，不写猜测路径。")
+        elif client in JSON_CLIENTS:
+            path, rules = json_paths(client, directory)
+            raw = bounded_bytes(path) if path.exists() else None
+            document = parse_json(raw) if raw is not None else {}
+            if client == "claude":
+                projects = document.get("projects", {})
+                if not isinstance(projects, dict):
+                    raise ValueError("Claude 项目配置格式无法核对。")
+                if any(isinstance(p, dict) and isinstance(p.get("mcpServers"), dict) and
+                       any(key in ("nijika-pet", "nijika_pet") or
+                           (isinstance(v, dict) and v.get("command") == str(self.mcp))
+                           for key, v in p["mcpServers"].items()) for p in projects.values()):
+                    raise ValueError("Claude 项目作用域存在虹夏服务，请先核对，避免覆盖用户级来源。")
+            updated = json_service_update(document, self.mcp, environment, client)
+            if document != updated:
+                self._add_file(files, path, json.dumps(updated, ensure_ascii=False, indent=2) + "\n",
+                               "合并用户级 MCP，保留其他服务和设置", digest(raw))
+            original = rules.read_text(encoding="utf-8-sig") if rules.exists() else ""
+            self._add_file(files, rules, marked_block(original,
+                "# BEGIN NIJIKA-DIALOG\n" + INSTALL_RULES + "# END NIJIKA-DIALOG",
+                "# BEGIN NIJIKA-DIALOG", "# END NIJIKA-DIALOG"), "合并主动提醒规则")
+            notes.append("重载客户端并新建任务；项目作用域可能覆盖用户级设置，不自动更改项目或命令权限。")
+        elif client == "codex":
             path = directory / "config.toml"
             original = path.read_text(encoding="utf-8-sig") if path.exists() else ""
             try:
@@ -423,7 +609,7 @@ class AgentSetup:
                 raise ValueError("Codex 配置格式无效，请先修复 config.toml。") from error
             updated, migration_notes = codex_service_update(
                 original, self.mcp, self.root,
-                self.export(source_name)["mcpServers"]["nijika-pet"]["env"], normalize_codex_environment)
+                environment, normalize_codex_environment)
             notes.extend(migration_notes)
             if "nijika-pet" in tomllib.loads(updated).get("mcp_servers", {}):
                 self._add_file(files, path, updated, "统一 Codex 虹夏来源标识并保留其他配置")
@@ -433,7 +619,7 @@ class AgentSetup:
                          json.dumps(str(self.mcp), ensure_ascii=False) +
                          "\n[mcp_servers.nijika-pet.env]\n" +
                          "\n".join(key + " = " + json.dumps(value, ensure_ascii=False) for key, value in
-                                   self.export(source_name)["mcpServers"]["nijika-pet"]["env"].items()) +
+                                   environment.items()) +
                          "\n# END NIJIKA-UI-MCP")
                 updated = marked_block(original, block, "# BEGIN NIJIKA-UI-MCP", "# END NIJIKA-UI-MCP")
                 tomllib.loads(updated)
@@ -463,6 +649,7 @@ class AgentSetup:
                          "        serverName: nijika_pet\n        transport: stdio\n"
                          f"        command: '{command}'\n        env:\n          NIJIKA_AGENT_NAME: '{agent_name}'\n"
                          f"          NIJIKA_HOST_NAME: '{source.software}'\n"
+                         f"          NIJIKA_PROFILE_ID: '{agent_id}'\n"
                          "# END NIJIKA-DSH-MCP")
                 self._add_file(files, path, marked_block(original, block, "# BEGIN NIJIKA-DSH-MCP", "# END NIJIKA-DSH-MCP"), f"配置 DSH {profile} 的 MCP")
             self._add_file(files, directory / "skills/nijika-dsh-dialog/SKILL.md",
@@ -488,7 +675,7 @@ class AgentSetup:
                     manifest = json.loads(content)
                     server = manifest["mcpServers"]["nijika-work-pet"]
                     server["args"][-1] = str(self.mcp)
-                    server.setdefault("env", {}).update(self.export(source_name)["mcpServers"]["nijika-pet"]["env"])
+                    server.setdefault("env", {}).update(environment)
                     content = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
                 self._add_file(files, staging / relative, content, "准备本机 Work 插件文件")
             commands = [[executable, "plugin", "marketplace", "add", str(staging), "--json"],
@@ -497,9 +684,6 @@ class AgentSetup:
         else:
             notes.append("将接入文件保存在本机专属目录。复制自动配置提示词给有本机操作能力的 AI，由它核实并接入自己的客户端。")
         plan_id = uuid.uuid4().hex
-        existing = next((item for item in self.store.agents() if item["client"] == client and
-                         item["location"] == str(directory)), None) if client != "custom" else None
-        agent_id = existing["id"] if existing else uuid.uuid4().hex
         self.plans = {key: value for key, value in self.plans.items() if time.monotonic() - value["created"] < 600}
         if len(self.plans) >= 32:
             self.plans.pop(next(iter(self.plans)))
@@ -507,7 +691,11 @@ class AgentSetup:
                               "agent_identity": agent_identity, "software": software,
                               "location": str(directory), "files": files, "notes": notes,
                               "commands": commands, "created": time.monotonic()}
+        self.plans[plan_id]["manager"] = "magpie" if managed else "nijika"
+        self.plans[plan_id]["manager_digest"] = manager["digest"]
+        self.plans[plan_id]["manager_client"] = manager_client
         return {"plan_id": plan_id, "client": client, "name": name, "notes": notes,
+                "manager": "magpie" if managed else "nijika",
                 "files": [{"path": str(item["path"]), "purpose": item["purpose"],
                            "action": "更新并备份" if item["before"] is not None else "新建"} for item in files],
                 "external_action": bool(commands), "export": self.export(source_name, agent_identity, software),
@@ -519,6 +707,16 @@ class AgentSetup:
             plan = self.plans.get(plan_id)
             if not plan or time.monotonic() - plan["created"] > 600:
                 raise ValueError("配置预览已过期，请重新检测。")
+            if any(item["id"] != plan["id"] and item["client"] == plan["client"] and
+                   item["location"] == plan["location"] and
+                   (plan["client"] != "custom" or
+                    (item.get("software") == plan["software"] and
+                     item.get("agent_identity") == plan["agent_identity"]))
+                   for item in self.store.agents()):
+                raise ValueError("预览后已有同一客户端档案被添加，请重新预览，避免重复登记。")
+            manager = magpie_state(self.home, plan["manager_client"])
+            if manager["error"] or manager["digest"] != plan["manager_digest"]:
+                raise ValueError("预览后 MAGPIE 管理配置发生变化，请重新扫描，避免两个管理器冲突。")
             for item in plan["files"]:
                 path = item["path"]
                 now = path.read_bytes() if path.exists() else None
@@ -559,10 +757,11 @@ class AgentSetup:
             item = {"id": plan["id"], "name": plan["name"],
                     "source_name": plan["source_name"], "client": plan["client"], "location": plan["location"],
                     "agent_identity": plan["agent_identity"], "software": plan["software"],
-                    "status": "exported" if plan["client"] == "custom" else "configured",
+                    "status": "managed" if plan["manager"] == "magpie" else "exported" if plan["client"] == "custom" else "configured",
+                    "manager": plan["manager"],
                     "test_request_id": None, "updated_at": int(time.time()), "backups": backups}
             info = self.prepare_files(item)
             self.store.save_agent(item)
-            del self.plans[plan_id]
+            self.plans.pop(plan_id, None)
             return {"agent": {**item, **info},
                     "notes": plan["notes"], "backup_count": len(backups)}

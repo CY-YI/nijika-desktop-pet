@@ -182,3 +182,11 @@ button:disabled{cursor:default}
   .dialog-footer .button{white-space:normal;min-height:44px}
   .toast{left:16px;right:16px;bottom:16px;transform:none;max-width:none}
 }
+.discovery-panel { margin-bottom:24px; }
+.discovery-panel .section-title { flex-wrap:wrap; gap:12px; }
+.discovery-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); gap:12px; }
+.discovery-item { min-width:0; padding:16px; border:1px solid var(--line,#e8dccb); border-radius:16px; }
+.discovery-heading { display:flex; align-items:center; flex-wrap:wrap; gap:8px; cursor:pointer; }
+.discovery-heading input { width:20px; height:20px; flex:none; }
+.discovery-item .file-path, .discovery-results .file-path { display:block; white-space:normal; overflow-wrap:anywhere; }
+.discovery-results { margin-top:16px; }

@@ -3,6 +3,7 @@
 import tempfile
 import unittest
 import asyncio
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,9 +12,60 @@ from mcp.types import Implementation
 
 import mcp_server
 from notification_store import NotificationStore
+from agent_activity import AgentActivity
 
 
 class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_editor_agent_labels_are_per_call_and_replies_remain_independent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            isolated = NotificationStore(Path(directory) / "notices.sqlite3")
+            with patch.object(mcp_server, "store", isolated), \
+                    patch.object(mcp_server, "EDITOR_HOST", ""), \
+                    patch.object(mcp_server, "AGENT_NAME", "auto"), \
+                    patch.object(mcp_server, "HOST_NAME", ""):
+                async with Client(mcp_server.mcp, client_info=Implementation(name="dsh-mcp-client", version="test")) as client:
+                    ids = []
+                    for identity in ("Codex", "Claude Code", "DSH", "CodeBuddy"):
+                        result = await client.call_tool("request_decision", {
+                            "task": "同一个任务", "question": "先核对哪项？",
+                            "agent_name": identity, "software": "VS Code",
+                            "options": [{"label": "配置", "description": "先检查当前配置文件。"},
+                                        {"label": "来源", "description": "先检查当前气泡来源。"}]})
+                        notice = isolated.get(result.structured_content["request_id"])
+                        self.assertEqual((notice.agent, notice.software), (identity, "VS Code"))
+                        ids.append(notice.id)
+                    self.assertEqual(len(set(ids)), 4)
+                    for index, request_id in enumerate(reversed(ids)):
+                        isolated.answer(request_id, index % 2)
+                        reply = await client.call_tool("get_reply", {"request_id": request_id})
+                        self.assertEqual(reply.structured_content["choice_index"], index % 2)
+                    result = await client.call_tool("show_completion", {"task": "后端验证", "summary": "来源不应被前一次调用覆盖。"})
+                    notice = isolated.get(result.structured_content["request_id"])
+                    self.assertEqual((notice.agent, notice.software), ("Agent", "DSH"))
+
+    async def test_profile_activity_is_recorded_only_by_successful_host_notice(self):
+        with tempfile.TemporaryDirectory() as directory:
+            isolated = NotificationStore(Path(directory) / "notices.sqlite3")
+            profile = "f" * 32
+            activity = AgentActivity(isolated.path)
+            with patch.object(mcp_server, "store", isolated), patch.dict(os.environ, {"NIJIKA_PROFILE_ID": profile}):
+                async with Client(mcp_server.mcp, client_info=Implementation(name="gemini-cli", version="test")) as client:
+                    await client.list_tools()
+                    self.assertFalse(activity.snapshot(profile)["called"])
+                    result = await client.call_tool("request_decision", {"task":"宿主验证", "question":"先核对哪项？", "options":[
+                        {"label":"配置", "description":"先核对客户端配置位置。"},
+                        {"label":"气泡", "description":"先核对桌面消息与回执。"}]})
+                    notice_id = result.structured_content["request_id"]
+                    self.assertTrue(activity.snapshot(profile)["called"])
+                    self.assertFalse(activity.snapshot(profile)["answered"])
+                    isolated.answer(notice_id, 1)
+                    reply = await client.call_tool("get_reply", {"request_id":notice_id})
+                    self.assertEqual(reply.structured_content["choice"], "气泡")
+                    self.assertTrue(activity.snapshot(profile)["answered"])
+                    with patch("mcp_server.AgentActivity", side_effect=OSError("unavailable")):
+                        notice = await client.call_tool("show_completion", {"task":"降级测试","summary":"验证记录失败仍可发送。"})
+                        self.assertEqual(notice.structured_content["status"], "pending")
+
     async def test_known_callers_correct_stale_labels_without_overriding_custom_or_work(self) -> None:
         cases = [
             ("DSH", "codex-mcp-client", "ChatGPT", "Codex"),

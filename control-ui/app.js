@@ -2,8 +2,9 @@
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const token = $('meta[name="nijika-token"]').content;
-const clientNames = {codex:"Codex", work:"ChatGPT Work", dsh:"DeepSeek Harness", custom:"其他 MCP 客户端"};
-const marks = {codex:"⌘", work:"✳", dsh:"≈", custom:"＋"};
+const clientNames = {codex:"Codex", work:"ChatGPT Work", dsh:"DeepSeek Harness",
+  claude:"Claude Code", gemini:"Gemini CLI", copilot:"Copilot CLI", custom:"其他 MCP 客户端"};
+const marks = {codex:"⌘", work:"✳", dsh:"≈", claude:"✷", gemini:"✧", copilot:"◎", custom:"＋"};
 let state = null, toastTimer, refreshSequence = 0, refreshRequests = 0;
 let agentsSignature = "", skinsSignature = "", supportSignature = "";
 let skinPreviewSequence = 0;
@@ -162,6 +163,9 @@ $(".skip-link").addEventListener("click", event => {
 window.addEventListener("hashchange", () => gotoPage(location.hash.slice(1)));
 
 function testLabel(agent) {
+  if (agent.host_activity?.answered) return "宿主调用 · 已点击";
+  if (agent.host_activity?.called) return "收到宿主调用";
+  if (agent.status === "managed" && !agent.test) return "MAGPIE 管理 · 待验证";
   if (!agent.test) return agent.status === "exported" ? "接入资料就绪" : "已配置 · 待实测";
   if (agent.test.status === "answered") return "本机测试已点击";
   if (agent.test.visible) return "测试正在显示";
@@ -192,7 +196,13 @@ function renderAgents() {
     card.append(heading);
     const sourceEnv = agent.export?.mcpServers?.["nijika-pet"]?.env;
     if (sourceEnv) card.append(node("p","field-help","气泡来源：" +
-      sourceEnv.NIJIKA_AGENT_NAME + " · " + (sourceEnv.NIJIKA_HOST_NAME || "待补所在软件")));
+      (/^VS Code(?: Insiders)?$/i.test(sourceEnv.NIJIKA_HOST_NAME || "") ?
+        sourceEnv.NIJIKA_HOST_NAME + " · " + sourceEnv.NIJIKA_AGENT_NAME :
+        sourceEnv.NIJIKA_AGENT_NAME + " · " + (sourceEnv.NIJIKA_HOST_NAME || "待补所在软件"))));
+    card.append(node("p","field-help",agent.host_activity?.called ?
+      "宿主调用已记录：" + agent.host_activity.agent + " · " + agent.host_activity.software +
+      (agent.host_activity.answered ? "；该条桌面消息已点击。" : "；桌面回执尚未确认。") :
+      "尚未收到带此档案编号的宿主调用。面板测试、旧配置或 MAGPIE 共享连接不能冒充此项验证。"));
     const description = agent.status === "exported" ? "复制自动配置提示词给能操作本机的 AI，由它完成接入；文件保存在固定目录。" :
       agent.test?.status === "answered" ? "桌面显示与点击回传已验证。请在客户端新任务中确认 Agent 主动调用。" :
       "准备好后，先发一条桌面测试提醒；客户端需重启或新建任务后验证。";
@@ -208,6 +218,101 @@ function renderAgents() {
     actions.append(test,guideButton,exportButton,remove); card.append(actions); list.append(card);
   }
 }
+let discovery = {items:[], selected:new Set(), batch:null, busy:false};
+function discoveryControls() {
+  $("#scan-agents").disabled = discovery.busy;
+  $("#preview-discovery").disabled = discovery.busy || !discovery.selected.size;
+  $("#apply-discovery").hidden = !discovery.batch;
+  $("#apply-discovery").disabled = discovery.busy || !discovery.batch?.results.some(item => item.status === "ready");
+  $$("#discovery-list input, #discovery-list button").forEach(item => item.disabled = discovery.busy);
+}
+function clearDiscoveryPlan() {
+  discovery.batch = null;
+  $("#discovery-results").replaceChildren();
+  discoveryControls();
+}
+function renderDiscovery() {
+  const list = $("#discovery-list"); list.replaceChildren();
+  for (const item of discovery.items) {
+    const card = node("article","discovery-item");
+    const heading = node("label","discovery-heading");
+    if (item.mode === "automatic") {
+      const check = node("input"); check.type = "checkbox"; check.checked = discovery.selected.has(item.id);
+      check.setAttribute("aria-label","选择 " + item.label);
+      check.addEventListener("change", () => {
+        if (check.checked) discovery.selected.add(item.id); else discovery.selected.delete(item.id);
+        clearDiscoveryPlan();
+      });
+      heading.append(check);
+    }
+    heading.append(node("strong","",item.label),node("span","agent-status",item.status));
+    card.append(heading,node("p","field-help",item.evidence.join("；") || "未找到已知入口，可通过单独向导指定目录。"),
+      node("code","file-path",item.config_path),
+      node("p","field-help",(item.manager === "magpie" ? "MAGPIE 管理；保留分发，不直接写配置。" : "") + item.verification));
+    if (item.issue) card.append(node("p","form-error",item.issue));
+    if (item.mode === "guided") {
+      const guide = button(item.identity ? "接入此扩展" : "生成接入指引","button small secondary", () => {
+        openWizard(); chooseClient("custom");
+        const radio = $('#client-choices input[value="custom"]'); if (radio) radio.checked = true;
+        $("#agent-name").value = item.identity || item.label;
+        $("#agent-software").value = item.software;
+        $("#agent-identity").value = item.identity || "Agent";
+        $("#agent-location").value = item.location;
+        renderWizard();
+      });
+      card.append(guide);
+    }
+    list.append(card);
+  }
+  discoveryControls();
+}
+async function discoveryAction(action) {
+  if (discovery.busy) return;
+  discovery.busy = true; discoveryControls();
+  try {await action();}
+  catch (error) {$("#scan-status").textContent = error.message;}
+  finally {discovery.busy = false; discoveryControls();}
+}
+$("#scan-agents").addEventListener("click", () => discoveryAction(async () => {
+  $("#scan-status").textContent = "正在检查已知入口…";
+  const result = await api("/api/agents/scan",{});
+  discovery.items = result.clients;
+  clearDiscoveryPlan(); renderDiscovery();
+  $("#scan-status").textContent = (result.scope ? result.scope + "。 " : "") + "扫描完成：" + result.clients.filter(item => item.detected).length +
+    " 个入口有证据。请选择客户端；未发现的入口也可选择预览，缺依赖会单独提示。";
+}));
+$("#preview-discovery").addEventListener("click", () => discoveryAction(async () => {
+  clearDiscoveryPlan();
+  const result = await api("/api/agents/batch-plan",{clients:[...discovery.selected]});
+  discovery.batch = result;
+  const list = $("#discovery-results");
+  list.append(node("p","field-help",result.note));
+  for (const item of result.results) {
+    const card = node("article","help-card");
+    card.append(node("h3","",clientNames[item.client]));
+    if (item.status !== "ready") card.append(node("p","form-error",item.error));
+    else {
+      card.append(...item.plan.notes.map(text => node("p","field-help",text)));
+      for (const file of item.plan.files) card.append(node("p","field-help",file.action + " · " + file.purpose),
+        node("code","file-path",file.path));
+      if (!item.plan.files.length) card.append(node("p","field-help","不修改客户端文件，只保存管理档案及接入资料。"));
+      if (item.plan.external_action) card.append(node("p","form-error","此项会调用 Codex CLI 注册 Work 本机插件；不授予信任或命令权限。"));
+    }
+    list.append(card);
+  }
+  $("#scan-status").textContent = "预览完成，尚未修改客户端。请查看各项路径、管理归属与外部操作后应用。";
+}));
+$("#apply-discovery").addEventListener("click", () => discoveryAction(async () => {
+  const batchId = discovery.batch.batch_id;
+  discovery.batch = null; discoveryControls();
+  const result = await api("/api/agents/batch-apply",{batch_id:batchId});
+  $("#discovery-results").replaceChildren(...result.results.map(item =>
+    node("p",item.error ? "form-error" : "field-help",clientNames[item.client] + "：" +
+      (item.error || (item.status === "managed" ? "保留 MAGPIE 管理，档案已保存。" :
+        "配置已写入；" + item.backup_count + " 个文件已备份。重载客户端后验证调用。")))));
+  $("#scan-status").textContent = "本轮处理结束，各客户端独立显示结果。下方伙伴卡片可查看步骤、复制验证提示词或做本机测试。";
+  await refresh(true);
+}));
 async function openGuide(agent) {
   agent = (await api("/api/agents/prepare",{id:agent.id})).agent;
   wizard = {step:3,client:agent.client,plan:{guide:agent.guide},agent,busy:false,guideOnly:true};

@@ -14,6 +14,7 @@ from mcp.types import Implementation
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from notification_store import NotificationStore
+from agent_activity import AgentActivity
 
 
 async def verify(executable: Path) -> None:
@@ -41,6 +42,7 @@ async def verify(executable: Path) -> None:
             database = Path(directory) / f"case-{index}.sqlite3"
             params = StdioServerParameters(command=str(executable), args=[], env=dict(
                 os.environ, NIJIKA_PET_DB_PATH=str(database), NIJIKA_AGENT_NAME=configured, NIJIKA_HOST_NAME="",
+                NIJIKA_PROFILE_ID=f"{index:032x}",
             ))
             store = NotificationStore(database)
             async with Client(params, client_info=Implementation(name=caller, version="source-check"), mode=mode) as client:
@@ -54,6 +56,7 @@ async def verify(executable: Path) -> None:
                 assert not completed.is_error, completed
                 assert store.get(completed.structured_content["request_id"]).agent == expected
                 assert store.get(completed.structured_content["request_id"]).software == software
+                assert AgentActivity(database).snapshot(f"{index:032x}")["called"]
                 decision = await client.call_tool("request_decision", {
                     "task": "source-choice", "question": "Which check?", "options": [
                         {"label": "Source", "description": "Check the caller source.", "recommended": True},
@@ -67,6 +70,7 @@ async def verify(executable: Path) -> None:
                 reply = await client.call_tool("get_reply", {"request_id": request_id})
                 assert reply.structured_content["status"] == "answered"
                 assert reply.structured_content["choice"] == "Source"
+                assert AgentActivity(database).snapshot(f"{index:032x}")["answered"]
                 # Same engine embedded in another application: explicit
                 # per-call identity must survive a frozen round trip.
                 detailed = await client.call_tool("show_completion", {
@@ -74,6 +78,12 @@ async def verify(executable: Path) -> None:
                     "agent_name": "ChatGPT", "software": "Obsidian"})
                 notice = store.get(detailed.structured_content["request_id"])
                 assert (notice.agent, notice.software) == ("ChatGPT", "Obsidian")
+                for editor_agent in ("Codex", "Claude Code", "DSH", "CodeBuddy"):
+                    editor_result = await client.call_tool("show_completion", {
+                        "task": "editor-agent-check", "summary": "Isolated editor route.",
+                        "agent_name": editor_agent, "software": "VS Code"})
+                    editor_notice = store.get(editor_result.structured_content["request_id"])
+                    assert (editor_notice.agent, editor_notice.software) == (editor_agent, "VS Code")
             print(f"Source {expected}, {mode}: completion, decision and reply OK")
         database = Path(directory) / "shared.sqlite3"
         store = NotificationStore(database)

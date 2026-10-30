@@ -67,6 +67,23 @@ def verify(executable: Path) -> None:
                 raise AssertionError("Unauthenticated candidate API is accessible")
             before = json.loads(call("/api/state"))
             assert before["agents"] == [] and not before["interaction"]["enabled"]
+            # Concrete editor entries must survive freezing, with bounded
+            # manifest detection and conditional rules rather than global
+            # editor labels leaking into the shared backend configuration.
+            manifest = isolated / "user/.vscode/extensions/openai.chatgpt-1.0/package.json"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text('{"publisher":"openai","name":"chatgpt"}', encoding="utf-8")
+            discovered = json.loads(call("/api/agents/scan", {}))
+            assert "隔离" in discovered["scope"]
+            editor = next(item for item in discovered["clients"] if item.get("extension_id") == "openai.chatgpt")
+            assert editor["identity"] == "Codex" and editor["software"] == "VS Code"
+            editor_plan = json.loads(call("/api/agents/plan", {
+                "client": "custom", "name": "Editor route", "location": str(isolated / "user"),
+                "agent_identity": "Codex", "software": "VS Code"}))
+            assert "VS Code · Codex" in "\n".join(editor_plan["notes"])
+            assert len(editor_plan["files"]) == 1
+            assert 'agent_name="Codex"' in editor_plan["guide"]["prompt"]
+            assert "不得覆盖共享配置" in editor_plan["guide"]["prompt"]
             saved = json.loads(call("/api/interaction", {
                 "enabled": True, "touch_enabled": False, "effects_enabled": False,
             }))
@@ -86,7 +103,8 @@ def verify(executable: Path) -> None:
             assert applied["agent"]["status"] == "exported"
             assert len(json.loads(call("/api/state"))["agents"]) == 1
             identity = plan["export"]["mcpServers"]["nijika-pet"]["env"]
-            assert identity == {"NIJIKA_AGENT_NAME": "Claude", "NIJIKA_HOST_NAME": "VS Code"}
+            assert identity == {"NIJIKA_AGENT_NAME": "Claude", "NIJIKA_HOST_NAME": "VS Code",
+                                "NIJIKA_PROFILE_ID": applied["agent"]["id"]}
             assert applied["agent"]["export"] == plan["export"]
             assert json.loads(call("/api/agents/export/" + applied["agent"]["id"]))["config"] == plan["export"]
             try:
@@ -120,6 +138,21 @@ def verify(executable: Path) -> None:
                 value = (client_home / ".dsh/profiles" / profile / "cordis.patch.yml").read_text(encoding="utf-8")
                 assert sibling in value and "magpie-mcp-nijika-pet" not in value
             assert not json.loads(call("/api/agents/plan", {"client": "dsh", "name": "DSH"}))["files"]
+            discovered = json.loads(call("/api/agents/scan", {}))
+            assert {"codex", "work", "dsh", "claude", "gemini", "copilot"} <= {
+                item["id"] for item in discovered["clients"]}
+            batch = json.loads(call("/api/agents/batch-plan", {"clients": ["claude", "gemini", "copilot"]}))
+            assert all(item["status"] == "ready" for item in batch["results"])
+            result = json.loads(call("/api/agents/batch-apply", {"batch_id": batch["batch_id"]}))
+            assert all(item["status"] == "configured" for item in result["results"])
+            assert all(not item["host_activity"]["called"] for item in json.loads(call("/api/state"))["agents"])
+            assert json.loads((client_home / ".copilot/mcp-config.json").read_text())["mcpServers"]["nijika-pet"]["type"] == "local"
+            manager = client_home / ".config/magpie/library.json"
+            manager.parent.mkdir(parents=True)
+            manager.write_text(json.dumps({"mcp":[{"command":mcp_path,"agents":["gemini"]}]}), encoding="utf-8")
+            managed = json.loads(call("/api/agents/plan", {"client":"gemini","name":"Managed Gemini"}))
+            assert managed["manager"] == "magpie" and not managed["files"]
+            assert json.loads(call("/api/agents/apply", {"plan_id":managed["plan_id"]}))["agent"]["status"] == "managed"
             template = call("/api/skins/template")
             with ZipFile(io.BytesIO(template)) as archive:
                 manifest = json.loads(archive.read("manifest.json"))

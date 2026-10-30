@@ -27,6 +27,7 @@ from control_store import ControlStore, IDENTIFIER, SPRITES
 from notification_store import NotificationStore
 from interaction_store import InteractionStore
 from interaction_motion import ACTIONS, preview_webp
+from agent_activity import AgentActivity
 
 
 WINDOW_TITLE = "虹夏桌宠 · 设置中心"
@@ -77,6 +78,7 @@ class ControlApplication:
         self.interaction = InteractionStore(self.store.database)
         self.root = root or application_root()
         self.setup = AgentSetup(self.root, self.store, home)
+        self.activity = AgentActivity(self.store.database)
 
     def renderer(self) -> dict:
         try:
@@ -109,6 +111,7 @@ class ControlApplication:
         for agent in agents:
             request_id = agent.get("test_request_id")
             agent["test"] = self.notice(request_id) if request_id else None
+            agent["host_activity"] = self.activity.snapshot(agent["id"])
             agent.update(self.setup.describe(agent))
             # Backups are local recovery artifacts, not useful to every state poll.
             agent.pop("backups", None)
@@ -119,6 +122,12 @@ class ControlApplication:
                                 "desktop_playback": bool(renderer.get("desktop_playback"))}}
 
     def post(self, route: str, data: dict) -> dict:
+        if route == "/api/agents/scan":
+            return self.setup.discover()
+        if route == "/api/agents/batch-plan":
+            return self.setup.batch_plan(data.get("clients"))
+        if route == "/api/agents/batch-apply":
+            return self.setup.batch_apply(data.get("batch_id", ""))
         if route == "/api/agents/plan":
             return self.setup.plan(data.get("client"), data.get("name"), data.get("location", ""),
                                    data.get("agent_identity"), data.get("software", ""))
@@ -323,6 +332,16 @@ class ControlHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         route = urlsplit(self.path).path
         if not self.allowed(True):
+            # Closing a socket with a small unread POST body can reset it before
+            # Windows clients receive the 403. Drain only a bounded body, with a
+            # short deadline; never parse or act on unauthenticated input.
+            try:
+                rejected_length = int(self.headers.get("Content-Length", "0"))
+                if 0 < rejected_length <= 64 * 1024:
+                    self.connection.settimeout(1)
+                    self.rfile.read(rejected_length)
+            except (OSError, ValueError):
+                pass
             self.send_json({"error": "管理会话无效或请求来自其他网站。"}, 403)
             return
         try:

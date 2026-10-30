@@ -1,5 +1,17 @@
 # 虹夏桌宠 · 2D 坐姿版
 
+## 当前正式安装状态（2026-10-30）
+
+本机发现、冲突预览、分客户端接入和 VS Code 扩展识别已纳入正式程序。正式安装路径仍为 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏桌宠.exe`；设置中心会显示 `VS Code · Codex`、`VS Code · Claude Code`、`VS Code · DSH`、`VS Code · CodeBuddy` 等具体扩展入口。
+
+正式安装的三个程序已从验收候选同步更新，原有消息数据库、4 个 Agent 档案、MAGPIE 归属和客户端配置均保留。安装前程序与一致性数据库快照在 `backups/vscode-agents-formal-20261030/`；安装后冻结冒烟和 MCP 来源/并发回归通过。扫描只读取已知扩展清单，不读取账号、聊天或密钥；MAGPIE 管理的目标不会由虹夏重复写入。最新私下试用包是 `dist-next/vscode-agents-formal-20261030/虹夏桌宠-VS-Code-Agent正式试用-20261030.zip`，SHA256 `314d8c2589278e30b721366fc9aa3dc7b886e438f559ebb7a440abd07f8145d2`。准确测试边界和剩余自然任务验收见 [PUBLISHING.md](PUBLISHING.md) 与 [TODO.md](TODO.md)。
+
+## 本机发现候选（2026-10-29）
+
+新增“扫描本机 → 勾选客户端 → 预览 → 分别应用”的便捷入口；Codex、Work、DSH 复用既有适配，Claude Code、Gemini CLI、Copilot CLI 新增用户级适配。MAGPIE 管理的目标保留原管理器，不重复写入。编辑器等入口先生成指引；检测、配置、本机测试与真实宿主调用分别显示。见 [接入说明](AGENT_SETUP.md)。
+
+本段保留 10 月 29 日候选开发时的状态记录；当前实际安装状态以上方 10 月 30 日正式安装段为准。
+
 ## 当前状态（2026-10-29）
 
 本机正式程序已更新至本轮 Agent 接入修复版本：桌面提醒与选择、设置中心、基础互动、透明 PNG 多帧皮肤和公开赞助资料导出均已实现。Agent 配置区将管理昵称、Agent 身份和所在软件分开；配置迁移先预览、备份并校验，冲突或未知旧程序会停止写入。

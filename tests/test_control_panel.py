@@ -338,6 +338,32 @@ class LocalAPITests(unittest.TestCase):
             self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
             self.assertNotIn(b"NIJIKA_SESSION_TOKEN",response.read())
 
+    def test_discovery_and_batch_use_existing_auth_and_preserve_verification_boundaries(self):
+        for route in ("/api/agents/scan", "/api/agents/batch-plan", "/api/agents/batch-apply"):
+            with self.subTest(route=route):
+                with self.assertRaises(HTTPError) as error:
+                    self.call(route, {}, token=False)
+                self.assertEqual(error.exception.code, 403)
+        result = self.call("/api/agents/scan", {})
+        self.assertIn("gemini", [item["id"] for item in result["clients"]])
+        plan = self.call("/api/agents/batch-plan", {"clients":["gemini","copilot"]})
+        result = self.call("/api/agents/batch-apply", {"batch_id":plan["batch_id"]})
+        self.assertEqual([item["status"] for item in result["results"]], ["configured","configured"])
+        for agent in self.call("/api/state")["agents"]:
+            self.assertFalse(agent["host_activity"]["called"])
+            self.call("/api/agents/test", {"id":agent["id"]})
+        self.assertTrue(all(not item["host_activity"]["called"] for item in self.call("/api/state")["agents"]))
+
+    def test_rejected_post_bodies_return_403_without_configuring_anything(self):
+        original = self.app.store.settings()
+        for index in range(12):
+            with self.subTest(index=index), self.assertRaises(HTTPError) as error:
+                self.call("/api/settings", {"width":300}, token=index % 2 == 0,
+                          origin="https://example.com" if index % 2 == 0 else None)
+            self.assertEqual(error.exception.code, 403)
+        self.assertEqual(self.app.store.settings(), original)
+        self.assertEqual(self.app.store.agents(), [])
+
     def test_animation_template_import_preview_and_public_support_export(self):
         def binary(route, token=True):
             request = Request(self.server.origin + route, headers={"X-Nijika-Token": self.server.token} if token else {})

@@ -111,7 +111,8 @@ class SetupSafetyTests(unittest.TestCase):
                 self.setup.plan("custom", "伙伴", software=software)
         plan = self.setup.plan("custom", "可以超过二十字的管理昵称这里只影响档案名称", agent_identity="Claude", software="VS Code")
         env = plan["export"]["mcpServers"]["nijika-pet"]["env"]
-        self.assertEqual(env, {"NIJIKA_AGENT_NAME": "Claude", "NIJIKA_HOST_NAME": "VS Code"})
+        self.assertEqual(env, {"NIJIKA_AGENT_NAME": "Claude", "NIJIKA_HOST_NAME": "VS Code",
+                               "NIJIKA_PROFILE_ID": self.setup.plans[plan["plan_id"]]["id"]})
         result = self.setup.apply(plan["plan_id"])
         saved = self.store.agent(result["agent"]["id"])
         self.assertEqual(self.setup.export_agent(saved), plan["export"])

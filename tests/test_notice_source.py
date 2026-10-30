@@ -10,10 +10,10 @@ class NoticeSourceTests(unittest.TestCase):
     def test_explicit_host_distinguishes_shared_engine(self):
         for host in ("Work", "Codex", "VS Code", "Obsidian"):
             source = resolve_source("ChatGPT", host, "codex-mcp-client")
-            self.assertEqual(source.heading, f"ChatGPT · {host}")
+            self.assertEqual(source.heading, f"{host} · ChatGPT" if host == "VS Code" else f"ChatGPT · {host}")
         self.assertEqual(resolve_source("auto", "", "unknown").heading, "Agent · 未识别软件")
         self.assertEqual(resolve_source("auto", "", "dsh", "Claude").heading, "Claude · DSH")
-        self.assertEqual(resolve_source("DSH", "", "codex", "Claude", "VS Code").heading, "Claude · VS Code")
+        self.assertEqual(resolve_source("DSH", "", "codex", "Claude", "VS Code").heading, "VS Code · Claude")
 
     def test_actual_dsh_handshake_from_shared_auto_config(self):
         for configured in ("auto", "Agent", "Claude code"):

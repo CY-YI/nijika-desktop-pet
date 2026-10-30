@@ -1,5 +1,29 @@
 # 本机候选与发布检查单
 
+## VS Code 具体 Agent 正式纳入（2026-10-30）
+
+- 正式安装已更新：`%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏桌宠.exe`、`虹夏MCP-v2.exe`、`虹夏审批提醒.exe` 与冻结候选对应文件一致。工作区 `dist` 已同步。
+- 正式 EXE SHA256：桌宠 `F40E2313671CC582B43DCE8C4694DCD0BF47BAA31A14EB8AD28F8A5DB7E5CA21`；MCP `CA327906509B941464043719465DA8B379A229183E1BD47E5CA479E0C7B29EBD`；审批提醒 `3FE39FA6FB46EA74ED7D83808731E8ABDD440F1B5A0BE221D170CB4FEBD70083`。
+- 更新前三个程序和 SQLite 一致性快照保存在 `backups/vscode-agents-formal-20261030/`。默认回退只恢复所需程序，保留更新后的用户消息和设置；旧 MCP 映像仅供仍持有旧文件的进程，不是启动入口。
+- 正式安装页真实扫描识别 VS Code 中 Codex、Claude Code、DSH、CodeBuddy 四个具体扩展。正式安装冻结冒烟通过；MCP 验证通过 16 种来源、显式编辑器元数据及 4 个并发客户端独立回执。
+- 最新私下试用包：`dist-next/vscode-agents-formal-20261030/虹夏桌宠-VS-Code-Agent正式试用-20261030.zip`，SHA256 `314d8c2589278e30b721366fc9aa3dc7b886e438f559ebb7a440abd07f8145d2`。包内 22 项文件清单全部匹配，解压后的精确 EXE 冻结冒烟通过，不包含测试数据库、回退映像或发送者路径。
+- 安全边界：安装脚本未启用任何 `-Codex/-Work/-Dsh/-*Hooks` 配置开关，扫描为只读，未接管 MAGPIE、未覆盖真实客户端配置。新增或重载真实会话后才能激活新版 MCP 来源识别。
+- 公开发行仍待实际多宿主自然任务验收、真实赞助资料、自制角色试导入、角色/图标再分发依据及干净 Windows 机器验收。本次安装不合并 `main`、不创建公开 Release。
+
+## VS Code 具体 Agent 候选（2026-10-30）
+
+- 候选 ZIP：`dist-next/vscode-agents-20261030/vscode-agents-candidate.zip`，SHA256 `112e7d8309c8bde27660b5b3917a7d9f210b9878ce645a5d79ec3b8a934626e2`。22 项清单哈希通过；无用户数据库、备份文件、`C:\\Users\\CY` 路径或测试赞助资料。
+- 本轮新增：扫描 VS Code stable/Insiders 已知扩展并按 `VS Code · Codex`、`VS Code · Claude Code`、`VS Code · DSH`、`VS Code · CodeBuddy` 分开显示；接入向导预填 Agent/扩展，生成条件来源规则和完整验证提示词。
+- 冻结验证：142 项 Python（141 通过、1 可选 YAML 跳过）、系统 YAML 6 项、20 项 JavaScript；候选 App/MCP、来源回执并发、浏览器 360/1280 检查通过，控制台无错误。证据见 `diagnostics/vscode-agents-20261029/`。
+- 上述候选现已正式纳入本机安装；真实客户端配置仍未由该流程写入，扩展是否启用、是否具备 MCP、宿主自然任务和原生权限事件仍需在实际客户端单独验证。
+
+## 本机发现候选（2026-10-29，本轮最新）
+
+- 独立候选：`dist-next/discovery-20261029/discovery-candidate.zip`，SHA256 `cc834c47682bb95e57a6543c429b74521a7c90d0fc1c8f0ac9f39c81c15d3443`。22 项显式文件清单及 ZIP 完整性通过，包含新版 App/MCP、既有 Hook、安装脚本、简明上手与接入文档；不含真实用户库、配置、赞助测试资料或本机发送者路径文本。
+- 134 项 Python：133 通过、1 项可选 YAML 跳过；系统对应 YAML 组 6 项通过；20 项 JavaScript 和语法检查通过。最终 EXE 接口冒烟覆盖扫描、批量配置、管理归属、来源导出，以及既有皮肤/赞助/互动；MCP 冻结验证覆盖16种来源、编辑器显式参数和4客户端独立回执。自然宿主登录、新会话及所有原生事件未全部实测，不能把协议用例当成实际宿主验收。
+- 浏览器隔离验收覆盖正常/冲突/管理器保留三种结果及1280/360像素布局；最终冻结候选已打开隔离预览，源预览服务关闭。证据与测试日志在 `diagnostics/discovery-20261029/`。最终包仅重新整理了文档，运行程序逐字节等同于通过最终冒烟的文件。
+- 正式安装 App/MCP/Hook 未替换，真实客户端仅只读扫描，没有自动接管 MAGPIE 或关闭现有任务。该候选不等同于已安装、已推送、已公开发布；尚待的发行素材与权利核对沿用下文，不标记项目 ALL_FINISH。
+
 ## 当前交付快照（2026-10-29）
 
 - 历史分享压缩包已按用户授权精简：当前候选和 10 月 28 日 DSH 修复候选保留，其余旧试用/审阅 ZIP 已删除；文末旧路径只作历史记录。详细清单见 TODO.md 压缩包清理检查点及本地 `diagnostics/archive-cleanup-20261029/`。

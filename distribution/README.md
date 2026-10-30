@@ -14,7 +14,9 @@ powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1
 
 在设置中心进入“互动与养成”，保存“允许分区触摸”后可点击桌面角色的头顶、脸颊和身体，双击可触发坐姿小舞；右键可选择基础动作或“停止当前动作”。轻养成是独立开关，开启并保存后可投喂点心/喝水，两种操作分别冷却 30 秒。动作按钮属于面板试映，投喂才会保存数值并发送桌面反馈；工作提醒优先显示。若页面提示桌面互动未连接，先启动或更新这份完整试用包里的桌宠。
 
-Agent 接入是可选的。完整配置、源码安装方式和验证步骤见包内 `AGENT_SETUP.md`。电脑上已安装相应客户端后，关闭正在运行的旧任务和桌宠，再按需要重跑安装脚本并附加参数：
+Agent 接入是可选的。新版设置中心的“扫描本机”会显示 Codex、ChatGPT Work、DSH、Claude Code、Gemini CLI、Copilot CLI 等适配器，并单独识别 VS Code 中已安装的 Codex、Claude Code、DSH、CodeBuddy 和 GitHub Copilot Chat 扩展。MAGPIE 已管理的客户端只登记归属，不在虹夏中重复写入。扫描只读取已知路径和扩展清单，不读取账号、聊天或密钥。
+
+完整配置、源码安装方式和验证步骤见包内 `AGENT_SETUP.md`。电脑上已安装相应客户端后，关闭正在运行的旧任务和桌宠，再按需要重跑安装脚本并附加参数：
 
 ```powershell
 # Codex：安装 MCP 与自动触发技能
@@ -53,3 +55,7 @@ Codex 和 Work 接入需要 `codex` 命令可从 PowerShell 找到；**现有 Wo
 ## Agent 来源填写
 
 通用客户端分别填写 Agent 和所在软件，不要把固定软件来源的配置共享给所有客户端。软件必填，未知模型用 Agent。旧别名或旧路径遇到无法核实/权限冲突时配置会停止，需要先核对原服务；已存在的其他服务不会被自动覆盖。详见 AGENT_SETUP.md。
+
+## 本机发现入口（2026-10-29）
+
+安装后打开 Agent 页的“扫描本机”，勾选软件、查看预览再应用。支持 Codex、ChatGPT Work、DSH、Claude Code、Gemini CLI、Copilot CLI；其他入口可生成指引。MAGPIE 管理项只登记，不改客户端或管理器。完成配置后在宿主新任务调用虹夏；本机测试不代表已接入宿主。旧连接和未带档案编号的共享配置不会自动显示该档案已验证。

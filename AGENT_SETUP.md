@@ -1,5 +1,27 @@
 # 接入 Agent：Codex、ChatGPT Work、DSH、Claude Code 与其他本机客户端
 
+## 2026-10-29 扫描本机与批量接入
+
+设置中心的“扫描本机”只检查已知命令和配置位置，不读取聊天、凭据、登录或额度，不扫描全盘。勾选后点“预览勾选项”，确认每项文件、预期气泡来源和外部操作，再“应用可接入项”。每个客户端独立备份、检查预览后的变更并返回结果；一项失败不回滚其他成功项。Work 注册可能部分完成或超时，需先核对插件状态，不能盲目重试。
+
+| 客户端 | 本轮接入方式 | 用户级配置与规则 |
+| --- | --- | --- |
+| Codex | 现有 TOML 安全适配 | `CODEX_HOME` 或 `~/.codex` 的 config.toml、AGENTS.md、交互技能 |
+| 本机 Work | 现有插件注册 | 本机插件暂存目录；需要 Codex CLI 和 python.exe；发现依赖不证明 Work 应用已安装 |
+| DSH | 现有双 profile 适配 | `~/.dsh/profiles/{desktop,web}/cordis.patch.yml`、AGENTS.md、技能 |
+| Claude Code | 新增 JSON 适配 | `~/.claude.json`、`~/.claude/CLAUDE.md`；发现项目级虹夏配置时停止自动写入 |
+| Gemini CLI | 新增 JSON 适配 | `~/.gemini/settings.json`、GEMINI.md |
+| Copilot CLI | 新增 JSON 适配 | `COPILOT_HOME` 或 `~/.copilot` 的 mcp-config.json、copilot-instructions.md |
+| WorkBuddy / WorkBuddy AI / VS Code / Obsidian / Claude Desktop | 发现入口，生成指引 | 具体扩展、项目或插件作用域由接收方 AI 核对，不自动猜格式或写入 |
+
+若 MAGPIE 已向该目标分发虹夏，本向导只保存档案与只读核对提示词，不写客户端配置、不修改 MAGPIE 库、不执行插件注册。想切换管理器时，先在 MAGPIE 取消该目标分发，再重新扫描。库无法安全读取或预览后有变更时停止应用，避免两个管理器争抢配置。同名未知程序、别名权限冲突、JSON 重复字段或过大配置也不会自动覆盖。
+
+来源仍按“Agent · 所在软件”显示，底层模型不明的多模型软件使用 Agent。这里的路由是本机 MCP 配置分发和独立回执，不代理模型 API，也不读取账户密钥。
+
+**验证分为四件事**：找到入口、写入配置、收到宿主工具调用、桌面消息点击。面板测试只能证明本机链路。新版直接配置含非秘密 `NIJIKA_PROFILE_ID`，新 MCP 在成功创建通知后记录该档案最新请求编号，界面据此显示调用与点击；只列出工具不会算调用。旧连接、旧配置或 MAGPIE 共享服务没有该编号时，不自动认领为某个档案已验证。档案编号与来源名称都不是身份认证或权限隔离，同一用户的可信客户端仍共享本地消息库。
+
+格式依据：Claude Code 的 MCP / memory 官方文档，Gemini CLI 的 MCP / GEMINI.md 官方文档，GitHub Copilot CLI 的 MCP / custom instructions 官方文档。自定义配置根目录或工作区覆盖需单独核对；不承诺已在每个真实宿主、登录环境及版本中完成自然任务测试。
+
 ## 2026-10-29 新版向导与旧配置迁移
 
 “其他 MCP 客户端”现在分开填写管理昵称、Agent 名称、所在软件：例如昵称“编程伙伴”、Agent“Claude”、软件“VS Code”，气泡头部为“Claude · VS Code”。软件必填；不知道模型时 Agent 留空即为 Agent。Codex、Work、DSH 的两项来源由专属适配器填写。生成 JSON、自动配置提示词、下载副本与本机测试使用同一来源。
@@ -264,3 +286,17 @@ powershell -ExecutionPolicy Bypass -File .\integrations\dsh\install.ps1
 向导检测配置变化后拒绝覆盖；重复接入复用已有档案并保留其他配置。Codex 同名服务若指向未知程序会要求先核对。已有窗口/旧 MCP 连接不保证热加载，文件写入、面板测试和 pending 都不证明外部客户端已经接通。本人 hook 信任仍在客户端完成，气泡绝不代替命令审批。
 
 维护者只读检查：`python tools/audit_agent_integrations.py`；真实协议并发检查：`python tools/smoke_mcp_sources.py <虹夏MCP-v2.exe绝对路径>`。前者比较技能和依赖，不输出客户端配置或密钥；后者使用临时数据库，不向正式桌宠排测试问题。这两项不等于每款宿主的真实权限事件验收。
+# VS Code 中的具体 Agent（2026-10-29）
+
+点击“扫描本机”，找到 `VS Code · Codex`、`VS Code · Claude Code` 或其他已安装扩展，点击“接入此扩展”。来源会自动填好，预览后仅安装带编辑器条件的规则；已有 MCP 与命令行/后端共用时保留原配置。没有工具时，将生成的完整配置提示词发给对应扩展中的 AI。MAGPIE 管理时只核对与验证，不重复配置。
+
+在该扩展中新建任务，调用示例：
+
+```text
+请调用虹夏 show_completion，task="编辑器验证"，summary="这条提醒来自 VS Code 的 Codex"，
+agent_name="Codex"，software="VS Code"。使用你实际看到的工具前缀。
+```
+
+其他扩展把 agent_name 换成 Claude Code、DSH 或 CodeBuddy。来源参数只描述本次调用，气泡显示 `VS Code · Codex` 等。不要将 VS Code 固定来源覆盖到共用的全局配置。扩展是否提供 MCP、是否已启用、是否信任/已加载，仍需在真实宿主确认；CodeBuddy 的具体版本若不提供 MCP，应报告不支持，不能靠写一个 JSON 冒充连通。
+
+当前仅扫描已知 Windows 用户级 stable/Insiders 目录；远程 SSH、WSL、容器、便携或自定义扩展目录不在自动检测范围。安装清单不代表连接成功。

@@ -1,5 +1,12 @@
 # 内部接口
 
+## 2026-10-29 编辑器扩展发现与来源
+
+- scan 结果可包含 `extension_id`、`identity`、`backend`、`rules_path`；已知扩展仍用 guided 的专属资料流程，按钮为“接入此扩展”。未确认接口的扩展不得承诺自动写入 MCP。
+- scan 响应增加 `scope`，明确当前用户或隔离测试目录；前端在扫描状态中显示，防止将测试目录误认成本机完整清单。
+- 自定义向导的 agent_identity=Codex/Claude Code/DSH/CodeBuddy、software=VS Code，显示 `VS Code · Agent`。software/agent 独立存储，现有请求编号与回执接口不变，不改历史数据。
+- `NIJIKA_HOST_NAME=VS Code` 仅可用于独立编辑器服务；共享后端保留原值，通过 show_completion/request_decision 可选参数传入本次来源。
+
 ## 2026-10-29 Agent 来源配置字段
 
 POST /api/agents/plan 新增 agent_identity（可选，默认 Agent，最多20字符）与 software（custom 必填，最多40字符）；单行验证与 MCP 一致。内置 codex/work/dsh 使用规范身份，不接受任意覆盖。生成档案及所有导出、本机测试通过 export_agent 统一解析。旧档案未含字段仍可读取，缺失宿主不能视为外部识别成功。API 认证、回环绑定及决策回执协议不变。
@@ -135,3 +142,12 @@ Agent 配置预览具有有效期；文件在预览后发生变化时拒绝覆�
 - `GET /skin/<id>/idle.webp`：与已有角色 PNG 同源只读，按皮肤目录白名单读取，生成小尺寸循环试映；不接收任意文件路径。
 - `GET /api/support/export`：需令牌，返回 `distribution/support.json` 和可选 `distribution/support.png`，没有链接/图片时 400；不包含用户库、配置或 Agent 档案。
 - `GET /api/state.clients[].capabilities`：给出 transport、approval、completion、reload 和 note；表示已实现范围，不表示某个外部客户端已经通过现场测试。
+
+## 2026-10-29 本机发现接口增量
+
+- `POST /api/agents/scan {}`：显式只读扫描，返回已知客户端证据、位置、管理归属、配置问题和验证边界；不在 state 轮询中扫描，不返回服务配置/环境值。
+- `POST /api/agents/batch-plan {"clients":[...]}`：1–6 个不重复专属客户端，返回各项 ready/blocked、路径和说明，及十分钟有效的 batch_id；未写入客户端文件。
+- `POST /api/agents/batch-apply {"batch_id":"..."}`：一次性应用可用项，分别返回 configured/managed/failed/blocked，不提供全局事务承诺。现有单项 plan/apply 保留。
+- 三个接口沿用回环 Host/Origin 和 `X-Nijika-Token` 鉴权；不开放跨域。管理器摘要、文件前摘要和计划有效期均检查。
+- `/api/state` 的客户端新增 Claude/Gemini/Copilot；档案新增 `manager`，`host_activity` 返回该编号最新通知的调用、状态、点击、来源和时间，不返回问题正文。
+- 配置环境 `NIJIKA_PROFILE_ID` 为32位十六进制显示档案编号，不是凭据。新 `agent_activity(profile_id, notification_id)` 辅助表保持原九列通知表及两列 notice_sources 不变；诊断写入失败不影响通知发送。旧 MCP 不含该元数据时仅缺验证证据。

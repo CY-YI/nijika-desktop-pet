@@ -35,6 +35,8 @@ class NoticeSource:
 
     @property
     def heading(self) -> str:
+        if self.software.casefold() in {"vs code", "vs code insiders"}:
+            return f"{self.software} · {self.agent}" if self.agent else self.software
         return f"{self.agent} · {self.software}" if self.software else self.agent
 
 
