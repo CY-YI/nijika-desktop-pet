@@ -122,7 +122,7 @@ class CodexCompletionTests(unittest.TestCase):
                 self.tool(name, response)
                 self.assertIsNotNone(self.stop())
 
-    def test_questions_title_generation_empty_and_waiting_results_are_quiet(self):
+    def test_every_valid_reply_is_notified_once(self):
         for index, (prompt, reply) in enumerate((
             ("1+1等于几？", "2。"),
             ("What is the Python version?", "Python 3.12.8."),
@@ -137,8 +137,26 @@ class CodexCompletionTests(unittest.TestCase):
                 self.identity["turn_id"] = str(index)
                 self.begin(prompt)
                 self.tool()
-                self.assertIsNone(self.stop(reply))
-        self.assertEqual(self.count(), 0)
+                if prompt_class(prompt) != "internal":
+                    self.assertIsNotNone(self.stop(reply))
+                else:
+                    self.assertIsNone(self.stop(reply))
+        self.assertEqual(self.count(), 6)
+
+    def test_simple_question_without_tool_still_creates_notice(self):
+        self.begin("你好吗？")
+        request = self.stop("我很好，谢谢。")
+        self.assertIsNotNone(request)
+        self.assertEqual(self.store.get(request).message, "我很好，谢谢。")
+
+    def test_missing_or_blank_stop_message_still_creates_generic_notice(self):
+        for message in (None, ""):
+            with self.subTest(message=message):
+                self.identity["turn_id"] = "missing-" + str(message)
+                self.begin("1+1等于几？")
+                request = self.stop(message)
+                self.assertIsNotNone(request)
+                self.assertEqual(self.store.get(request).message, "已完成本轮任务，请查看结果。")
 
     def test_no_prompt_or_invalid_identity_never_creates_notice(self):
         self.tool()

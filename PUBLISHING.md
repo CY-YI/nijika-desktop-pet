@@ -1,5 +1,13 @@
 # 本机候选与发布检查单
 
+## 2026-10-31 每轮回复提醒修复
+
+- 新审批 Hook 候选：`dist-next/every-reply-reminder-20261031/虹夏审批提醒.exe`，SHA-256 `59934E1A38A0207F18FB1D3A5EB80D6A9145F655A9FC034D64595E1DA277439A`。
+- 已备份旧 Hook 到 `backups/every-reply-reminder-20261031/`，并同步工作区 `dist/` 与正式安装目录 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\`；桌宠、MCP、消息库、MAGPIE 和用户客户端配置未覆盖。
+- 隔离验证：21 项提醒单元、打包 Hook 冒烟、Codex `question`/`work`/主动 `notice` 三场景通过；真实 CLI 的用户 `config.toml`、notify 和 Hook 信任摘要保持不变。
+- 详细哈希与检查记录：`diagnostics/every-reply-reminder-20261031/verification.json`。
+- Work 插件源、Codex/DSH 技能和设置中心文案已同步；当前客户端进程占用插件缓存，卸载重装未强制执行，重启客户端后按新规则加载。外部宿主自然任务的可见性仍需新会话观察。
+
 ## 2026-10-31 标准 Windows 安装器
 
 - 已发布私有仓库 Release `v0.1.6`：https://github.com/CY-YI/nijika-desktop-pet/releases/tag/v0.1.6 。实际附件名为 `NijikaDesktopPet-Setup-0.1.6.exe`；GitHub CLI 上传中文文件名时丢失了前缀，因此使用 ASCII 附件名保证链接可识别。下载复核为 72,630,838 字节，SHA-256 `15cce50ff95ae6dd24460abef5460f0597c615480a0f5833a74aa0bcff91cc15`，与本地完全一致。
@@ -20,13 +28,13 @@
 
 ## 提醒可靠性与 DSH 来源加固（2026-10-30，正式安装）
 
-- 本轮修复针对自动配置后复发的两类回归：Codex 只剩无信息量 Stop 兜底，以及 DSH 出现 `Codex · DSH`。源码范围包括安全结果摘要、服务端多模型来源守卫、DSH 孤立标记修复、三个宿主持久规则与 Work 插件 0.1.6。
+- 本轮修复针对自动配置后复发的两类回归：Codex 只剩无信息量 Stop 兜底，以及 DSH 出现 `Codex · DSH`。源码范围包括安全结果摘要、服务端多模型来源守卫、DSH 孤立标记修复、三个宿主持久规则与 Work 插件 0.1.7。
 - 冻结构建位于 `build/reminder-source-hardening-20261030/`。正式桌宠 SHA256 `DE3553927024511445E57D57B510249B77B1CF73B7D75872BB4D2FC7BA7E5F77`，MCP `BA8A70AA0CB594B936917CCDD3AF01B9F45DC219B4DEAD1AD5C55B5765EFD9E5`，审批提醒 `571DFD53D021814556071C352CF362829236719247614E50B7EDB20C5389BDA2`；工作区 `dist` 与标准安装目录逐字节一致。
 - 更新前三个 EXE、SQLite 一致性快照、Codex 规则/技能、正式 Work 插件源、DSH 实际配置和正式运行资源均已备份到 `backups/reminder-source-hardening-20261030/`。正式目录不存在 `AGENTS.md` 的旧错误假设已移除，运行资源按实际存在文件单独记录摘要。
 - 全量验证为 Python 147 项通过、1 项可选 PyYAML 跳过，JavaScript 20 项通过；Python/JavaScript 语法和 `git diff --check` 通过。正式安装版另通过 19 种 MCP 来源、显式编辑器元数据与 4 个并发客户端独立回执、审批 Hook、DSH 安装器、Work 插件和接入指引隔离冒烟。
 - 正式用户库真实气泡验收：故意提交 `Codex/DSH` 时落库显示 `Agent/DSH`，真实 `DeepSeek/DSH` 保持原身份；两次均确认窗口实际可见后才清理测试通知。证据在 `diagnostics/reminder-source-hardening-20261030/live-bubble-acceptance.json`。
 - 正式用户库模拟 `PermissionRequest` 后，命令审批提醒气泡实际可见，随后以 `PostToolUse` 收起测试项；整个过程不授予或拒绝权限。`config.toml` 中四个虹夏 Hook 的 `trusted_hash` 仍在且路径未变。证据在 `diagnostics/reminder-source-hardening-20261030/approval-bubble-acceptance.json`。
-- Codex 全局规则与技能、DSH desktop/web 实际配置和 Work 插件 0.1.6 已同步；MAGPIE 的 `magpie-mcp-nijika-pet` 服务、Hook 信任、消息和设置保持不变。服务端来源守卫会保护仍在发送旧参数的新连接；已打开客户端要加载新的主动提醒规则，仍需重连 MCP 或新建任务。
+- Codex 全局规则与技能、DSH desktop/web 实际配置和 Work 插件 0.1.7 已同步；MAGPIE 的 `magpie-mcp-nijika-pet` 服务、Hook 信任、消息和设置保持不变。服务端来源守卫会保护仍在发送旧参数的新连接；已打开客户端要加载新的主动提醒规则，仍需重连 MCP 或新建任务。
 - 本轮仍为 Windows 本机回环试用范围，不自动提交、推送、合并 `main` 或创建公开 Release。真实 DSH/Work 宿主自然任务、公开发布素材权利和干净 Windows 验收继续作为独立边界。
 
 ## VS Code 具体 Agent 正式纳入（2026-10-30）

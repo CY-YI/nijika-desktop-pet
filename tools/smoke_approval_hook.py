@@ -106,6 +106,18 @@ def main() -> None:
         run_hook("Stop")
         assert store.next_pending() is None
 
+        # A one-line question without any tool use still receives a fallback.
+        event["turn_id"] = "question-turn"
+        event["prompt"] = "你好吗？"
+        event["tool_name"] = "Bash"
+        event["tool_response"] = None
+        run_hook("UserPromptSubmit")
+        event["last_assistant_message"] = "我很好，谢谢。"
+        run_hook("Stop")
+        question_notice = store.next_pending()
+        assert question_notice is not None and question_notice.message == "我很好，谢谢。"
+        store.dismiss(question_notice.id)
+
         # A successful direct tool notice suppresses the generic fallback.
         event["turn_id"] = "explicit-notice-turn"
         run_hook("UserPromptSubmit")

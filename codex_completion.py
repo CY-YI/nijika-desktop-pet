@@ -85,8 +85,10 @@ def prompt_class(value: object) -> str:
 
 
 def result_class(value: object) -> str:
+    # Stop may omit or blank the latest assistant text. Treat that as a
+    # completed turn with a generic preview so short replies are not lost.
     if not isinstance(value, str) or not value.strip():
-        return "empty"
+        return "brief"
     clean = " ".join(value.split())
     if len(clean) < 240 and _WAITING.search(clean) and not _RESULT.search(clean):
         return "waiting"

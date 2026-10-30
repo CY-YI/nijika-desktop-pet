@@ -1,5 +1,14 @@
 # 当前待办
 
+## 当前任务：每轮回复提醒（2026-10-31）
+
+- 用户决定：不再区分“简单事实问答”和实质任务；只要有效轮次结束，就通过虹夏显示一次具体提醒。用户不需要在每次对话前重复提醒 Agent。
+- [x] 删除 Codex Stop 对 `question + brief`、`substantive_tool_count=0`、`waiting` 和正文暂缺结果的静默过滤；保留内部标题和缺少有效轮次状态的保护。
+- [x] 更新项目规则、Codex/DSH/Work 技能与设置中心生成的持久提醒文案；Work 插件版本提升为 0.1.7。
+- [x] 补充“无工具简单问答”和正文暂缺回归；项目虚拟环境全量 Python 163 项通过、1 项可选依赖跳过，JavaScript 20/20、语法和 `git diff --check` 通过。
+- [x] 重建并同步审批提醒程序；候选 `dist-next/every-reply-reminder-20261031/虹夏审批提醒.exe` SHA-256 `59934E1A38A0207F18FB1D3A5EB80D6A9145F655A9FC034D64595E1DA277439A`。隔离 Codex CLI question/work 各产生 1 条兜底提醒，主动 MCP 1 条且兜底 0 条；异步 Hook 冒烟加入短暂排空等待。
+- [x] 备份后同步本机 Codex/DSH/Work 规则与 Hook；`tools/audit_agent_integrations.py` 状态为 `clean`，用户 config/notify/trust 在 CLI 冒烟中保持不变。正式真实气泡仍需客户端重连或新会话后观察；不改 MAGPIE、消息库和用户 Agent 配置。
+
 ## 当前任务：Windows 标准安装器与 GitHub 交付（2026-10-31）
 
 - 范围：Full + Web；只做安装/卸载与发布收尾，不新增桌宠或 Agent 功能，不覆盖正式安装，不替换用户客户端配置。
@@ -14,7 +23,7 @@
 ## 配置一致性与跨电脑路径审计（2026-10-30）
 
 - 沿用 Full + Web、既有分支 `codex/interaction-settings-20261017` 和全部未提交差异；本轮不提交、不推送、不替换正式 EXE、不改真实 Agent 服务。
-- [x] 核对当前 Codex 主技能、DSH 技能、Work 0.1.6 技能和 MAGPIE 归属；Codex 权威技能与源码一致，DSH/Work 副本一致且各只有一个。
+- [x] 核对当前 Codex 主技能、DSH 技能、Work 0.1.7 技能和 MAGPIE 归属；Codex 权威技能与源码一致，DSH/Work 副本一致且各只有一个。
 - [x] `tools/audit_agent_integrations.py` 新增冲突/重复判定和非零退出码；3 个隔离审计测试通过。实际本机审计准确只报告 `.agents` 旧技能副本一处内容冲突。
 - [x] `tools/repair_nijika_sources.py` 对 MAGPIE 管理客户端改为只报告、不直接写入，并把仅格式变化排除出 `changed`；新增 2 项回归，避免维护脚本与管理器覆盖同一配置。
 - [x] 新增自定义安装目录冒烟：带空格、中文的收件人路径安装后，Work `mcp.json` 指向该目录的 `dist/虹夏MCP-v2.exe`，不残留解压源路径；测试通过。
@@ -37,7 +46,7 @@
 - [x] 针对性 Python 回归、Python 语法、PowerShell 解析、DSH 安装器冒烟和旧冻结 MCP 协议冒烟已通过。旧冻结 MCP 结果不代表重建后的新程序。
 - [x] 全量 Python 147 项通过、1 项可选 PyYAML 跳过；JavaScript 20 项、Python/JavaScript 语法和 `git diff --check` 通过。
 - [x] 构建前备份正式三个 EXE、SQLite 一致性快照和实际运行资源；重建桌宠、MCP、审批提醒，并通过正式 App/MCP/Hook、19 种来源、4 并发客户端、DSH 安装器、Work 插件和接入指引冒烟。
-- [x] 同步工作区与标准安装目录；更新真实 Codex 技能/规则块、Work 插件 0.1.6 和 DSH 已修复配置，保留既有 MCP、Hook 信任、MAGPIE、消息和设置。
+- [x] 同步工作区与标准安装目录；更新真实 Codex 技能/规则块、Work 插件 0.1.7 和 DSH 已修复配置，保留既有 MCP、Hook 信任、MAGPIE、消息和设置。
 - [x] 只停止并重启路径精确匹配的正式桌宠进程，没有批量终止其他 MCP 或客户端；新正式桌宠 PID 正常写心跳，旧消息库文件 ID 和设置版本保持不变。
 - [x] 发送带具体结果摘要的真实气泡；故意 `Codex/DSH` 落库为 `Agent/DSH`，真实 `DeepSeek/DSH` 保持 `DeepSeek/DSH`，两次均确认窗口可见后清理测试通知。证据 `diagnostics/reminder-source-hardening-20261030/live-bubble-acceptance.json`。
 - [x] 用正式审批程序向正式用户库提交模拟 `PermissionRequest`，确认命令授权提醒气泡实际可见，并以 `PostToolUse` 收起；未授予或拒绝任何命令。证据 `diagnostics/reminder-source-hardening-20261030/approval-bubble-acceptance.json`。
@@ -360,7 +369,7 @@
 - [x] MVU1：`codex_completion.py` 在内存分类，轮次元数据仅存会话/轮次 SHA256、类别、计数、通知标记与时间；完成通知与标记同事务提交。已发送的无正文去重行保留，其他旧状态 30 天清理。隔离测试覆盖并发、关闭/回答后重放、消息保留期后重放、失败回滚、输入容错及无原文落盘。
 - [x] MVU2：四事件安装器保留其他组与同组 handler、写前备份、重复安装不叠加；新增事件固定 --event 参数，畸形 Stop 仍返回 `{}`。新增 UserPromptSubmit / Stop 超时 15 秒，原审批两项定义（含 5 秒超时）保持原样。
 - [x] 56 项完整回归通过；打包 `tools/smoke_approval_hook.py` 通过（实际 EXE、特殊字符路径、四事件、stdin、notify 不变、幂等、Claude Code 原审批来源与去重）。
-- [x] `tools/smoke_codex_completion.py` 真实 CLI 验收：work 创建并读取临时文件后 1 条兜底；question 简短问答 0 条；notice 主动 MCP 1 条且兜底 0 条。均使用隔离队列，逐字节核对用户配置/notify/信任未变。并发首测曾漏掉 UserPromptSubmit 状态（原因未定位）；顺序复测通过，增加新增事件启动余量后并发两场景复测通过。分类为启发式，不把测试范围外的表达保证为绝无误判。
+- [历史基线，已由 2026-10-31 规则覆盖] `tools/smoke_codex_completion.py` 曾验证 work 兜底 1 条、question 简短问答 0 条、notice 主动 MCP 1 条且兜底 0 条；本轮已改为 question 也必须产生 1 条提醒。
 - [x] 最终 Hook 已重建并复制到 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏审批提醒.exe`，SHA256 `288489dcd5a7325fcbf367a0f99df927cbc68937234b8ae38a94bb89c7af1e30`，与源码 dist 相同；用确切安装路径启动、stdin→隔离完成队列验证通过。仅同步 Hook EXE 与 Codex 安装器/模板，桌宠/MCP 及前端未替换。
 - [x] 正式 hooks.json 已合并；PermissionRequest / PostToolUse 原定义和 config.toml 原字节均未变，没有代写信任。原 Hook/脚本/模板/用户 hooks 备份在 `backups/20261017-codex-stop-183410/`，清单与回退见 ROLLBACK.md。
 - [x] 需求、架构、接口、安装、接入、回退及变更记录已同步；新版试用包与文档包单独命名为 `2026-10-17-codex-stop.zip`，保留原分享包。20 项试用包白名单、SHA256 清单与三个 EXE 核对通过；Work 路径为 AUTO_LOCAL_MCP，占位配置不含本机队列/私人备份/真实客户端配置。文档包新增 ROLLBACK.md；19 个本轮修改文件的凭据特征扫描、打包模块检查与 git diff --check 通过。

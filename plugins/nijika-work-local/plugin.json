@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "nijika-work-local",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Send local desktop pet notices and short decisions from ChatGPT Work on this Windows computer.",
   "extensions": {
     "com.openai": {

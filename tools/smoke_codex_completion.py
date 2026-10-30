@@ -16,6 +16,7 @@ import shutil
 import sqlite3
 import subprocess
 import tempfile
+import time
 import tomllib
 from pathlib import Path
 
@@ -33,7 +34,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--case", choices=("work", "question", "notice"), default="work")
     parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--approval-exe", type=Path,
+                        default=ROOT / "dist" / "虹夏审批提醒.exe")
+    parser.add_argument("--event-log", type=Path,
+                        help="Write redacted hook event metadata for diagnosing a failed isolated run")
     options = parser.parse_args()
+    options.approval_exe = options.approval_exe.resolve()
+    if options.event_log:
+        options.event_log = options.event_log.resolve()
     cli = shutil.which("codex")
     if not cli:
         raise RuntimeError("Codex CLI not found")
@@ -56,11 +64,23 @@ def main() -> None:
         if settings.get("model_provider", "openai") != "openai":
             raise RuntimeError("Custom providers require a separately reviewed isolated setup")
         for event in ("UserPromptSubmit", "PermissionRequest", "PostToolUse", "Stop"):
-            invocation = (
-                "$env:NIJIKA_PET_DB_PATH = '" + str(database).replace("'", "''") + "'; & '"
-                + str(ROOT / "dist" / "虹夏审批提醒.exe").replace("'", "''") + "'"
-                + (" --event " + event if event in {"Stop", "UserPromptSubmit"} else "")
-            )
+            invocation = "$env:NIJIKA_PET_DB_PATH = '" + str(database).replace("'", "''") + "'; "
+            if options.event_log:
+                event_log = str(options.event_log).replace("'", "''")
+                invocation += (
+                    "$payload=[Console]::In.ReadToEnd(); "
+                    "$obj=$payload | ConvertFrom-Json; "
+                    "$record=[ordered]@{event=$obj.hook_event_name; "
+                    "has_message=($null -ne $obj.last_assistant_message); "
+                    "message_length=$(if($null -eq $obj.last_assistant_message){-1}else{$obj.last_assistant_message.Length}); "
+                    "has_prompt=($null -ne $obj.prompt); "
+                    "prompt_length=$(if($null -eq $obj.prompt){-1}else{$obj.prompt.Length})}; "
+                    "[IO.File]::AppendAllText('" + event_log + "', "
+                    "(($record | ConvertTo-Json -Compress) + [Environment]::NewLine)); "
+                    "$payload | "
+                )
+            invocation += "& '" + str(options.approval_exe).replace("'", "''") + "'"
+            invocation += (" --event " + event if event in {"Stop", "UserPromptSubmit"} else "")
             command = 'powershell.exe -NoLogo -NoProfile -NonInteractive -Command "' + invocation + '"'
             timeout = 15 if event in {"Stop", "UserPromptSubmit"} else 5
             group = ('{ hooks = [{ type = "command", timeout = ' + str(timeout)
@@ -91,6 +111,14 @@ def main() -> None:
         # lists; avoid composing a cmd.exe script out of user-provided text.
         result = subprocess.run(arguments + ["-"], input=prompts[options.case].encode("utf-8"),
                                 capture_output=True, env=environment, timeout=options.timeout)
+        if options.event_log:
+            with options.event_log.open("a", encoding="utf-8") as log:
+                log.write(json.dumps({
+                    "runner": "codex",
+                    "returncode": result.returncode,
+                    "stdout_length": len(result.stdout),
+                    "stderr_length": len(result.stderr),
+                }) + "\n")
         if config_path.read_bytes() != before:
             raise AssertionError("Real user config unexpectedly changed")
         if result.returncode:
@@ -105,6 +133,20 @@ def main() -> None:
                 pass
         assert any(event.get("type") == "turn.completed" for event in events), "No completed CLI turn"
         assert database.is_file(), "Lifecycle hooks did not create isolated queue"
+        # Hook processes are launched asynchronously by the CLI. Give the
+        # completion hook a short drain window before asserting the queue.
+        for _ in range(40):
+            with contextlib.closing(sqlite3.connect(database)) as connection:
+                state = connection.execute(
+                    "SELECT COUNT(*), SUM(has_user_prompt), SUM(completion_notice_sent) "
+                    "FROM codex_turn_state",
+                ).fetchone()
+                notices = connection.execute("SELECT agent, title FROM notifications").fetchall()
+            if options.case == "notice" and notices:
+                break
+            if options.case != "notice" and state[2]:
+                break
+            time.sleep(0.25)
         with contextlib.closing(sqlite3.connect(database)) as connection:
             state = connection.execute(
                 "SELECT COUNT(*), SUM(has_user_prompt), SUM(completion_notice_sent) FROM codex_turn_state",
@@ -118,11 +160,16 @@ def main() -> None:
         )
         if options.case == "work":
             assert (temporary / "proof.txt").read_text(encoding="utf-8-sig").strip() == "nijika-codex-stop-test"
-            assert notices == [("Codex", "任务完成")] and state[2] == 1, "Expected one fallback notice"
+            assert notices == [("ChatGPT", "任务完成")] and state[2] == 1, "Expected one fallback notice"
         elif options.case == "question":
-            assert not notices and not state[2], "Factual question should stay quiet"
+            assert notices == [("ChatGPT", "任务完成")] and state[2] == 1, (
+                "Every non-empty reply should create one completion notice: "
+                f"notices={notices!r}, state={state!r}"
+            )
         else:
-            assert notices == [("Codex", "Codex独立提醒测试")] and not state[2], "Explicit notice duplicated"
+            assert notices == [("ChatGPT", "Codex独立提醒测试")] and not state[2], (
+                f"Explicit notice duplicated: notices={notices!r}, state={state!r}"
+            )
         print(f"Real Codex CLI {options.case}: turn completed, valid prompt state, "
               f"{len(notices)} total notices ({state[2]} fallback); user config/notify/trust unchanged "
               f"(SHA256 {hashlib.sha256(before).hexdigest()[:12]}).")

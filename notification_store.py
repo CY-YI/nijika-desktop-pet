@@ -366,13 +366,9 @@ class NotificationStore:
             ).fetchone()
             if (row is None or not row["has_user_prompt"]
                     or row["user_prompt_class"] == "internal"
-                    or result_class in {"empty", "waiting"}
+                    or result_class == "empty"
                     or row["nijika_notice_sent"]
                     or row["completion_notice_sent"]):
-                return None
-            if row["user_prompt_class"] == "question" and result_class == "brief":
-                return None
-            if row["substantive_tool_count"] < 1 and result_class != "deliverable":
                 return None
             connection.execute(
                 "INSERT INTO notifications VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?)",

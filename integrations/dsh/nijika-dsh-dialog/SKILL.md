@@ -6,11 +6,11 @@ whenToUse: Load this skill at the end of every DSH assistant turn to check the c
 
 # Nijika desktop dialogue for DSH
 
-The tools are `mcp__nijika_pet__request_decision`, `mcp__nijika_pet__show_completion`, `mcp__nijika_pet__get_reply`, and `mcp__nijika_pet__wait_for_reply`. Use them for DSH work that needs the user's attention. A brief factual answer with no deliverable or next action does not need a desktop notice.
+The tools are `mcp__nijika_pet__request_decision`, `mcp__nijika_pet__show_completion`, `mcp__nijika_pet__get_reply`, and `mcp__nijika_pet__wait_for_reply`. Use them at the end of every reply in a valid DSH turn, including a brief factual answer or a blank/omitted final text; only internal title generation and missing valid turn state stay quiet.
 
 ## End-of-turn notice
 
-Before sending every final DSH response, check this section. If the turn changed files, completed setup or tests, produced a multi-step recommendation, reached a diagnostic conclusion, or created any result the user should acknowledge, call `show_completion` once with the concrete outcome. A brief factual answer with no result or next action may remain quiet. Do not send a content-free “任务完成” notice and do not assume the lack of a DSH Stop hook creates a fallback.
+Before sending every final DSH response, check this section. For every non-empty final DSH reply, call `show_completion` once with the concrete outcome, including a one-sentence factual answer. Internal title generation and missing valid turn state may remain quiet. Do not send a content-free “任务完成” notice and do not assume the lack of a DSH Stop hook creates a fallback.
 
 For a decision, put the facts needed to choose in `question`. Give two or three meaningful labels rather than “方案 A / B”; each option needs one sentence describing its effect. Labels fit within 20 display columns (about 10 Chinese characters), task titles within 30 characters, questions within 80 characters, and descriptions within 6–48 characters. Mark at most one option `recommended: true`, only when its description explains a concrete advantage. If `status=invalid`, correct the stated input issue and retry once.
 
