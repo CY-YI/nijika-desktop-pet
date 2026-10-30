@@ -2,9 +2,13 @@
 
 ## 当前正式安装状态（2026-10-30）
 
-本机发现、冲突预览、分客户端接入和 VS Code 扩展识别已纳入正式程序。正式安装路径仍为 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏桌宠.exe`；设置中心会显示 `VS Code · Codex`、`VS Code · Claude Code`、`VS Code · DSH`、`VS Code · CodeBuddy` 等具体扩展入口。
+提醒可靠性、DSH 来源隔离、本机发现、冲突预览、分客户端接入和 VS Code 扩展识别均已纳入正式程序。正式安装路径仍为 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏桌宠.exe`；设置中心会显示 `VS Code · Codex`、`VS Code · Claude Code`、`VS Code · DSH`、`VS Code · CodeBuddy` 等具体扩展入口。
 
-正式安装的三个程序已从验收候选同步更新，原有消息数据库、4 个 Agent 档案、MAGPIE 归属和客户端配置均保留。安装前程序与一致性数据库快照在 `backups/vscode-agents-formal-20261030/`；安装后冻结冒烟和 MCP 来源/并发回归通过。扫描只读取已知扩展清单，不读取账号、聊天或密钥；MAGPIE 管理的目标不会由虹夏重复写入。最新私下试用包是 `dist-next/vscode-agents-formal-20261030/虹夏桌宠-VS-Code-Agent正式试用-20261030.zip`，SHA256 `314d8c2589278e30b721366fc9aa3dc7b886e438f559ebb7a440abd07f8145d2`。准确测试边界和剩余自然任务验收见 [PUBLISHING.md](PUBLISHING.md) 与 [TODO.md](TODO.md)。
+正式安装的三个程序已从本轮冻结构建同步更新，现有消息、设置、8 个 Agent 档案、MAGPIE 归属和客户端配置均保留。正式桌宠 SHA256 为 `DE3553927024511445E57D57B510249B77B1CF73B7D75872BB4D2FC7BA7E5F77`，MCP 为 `BA8A70AA0CB594B936917CCDD3AF01B9F45DC219B4DEAD1AD5C55B5765EFD9E5`，审批提醒为 `571DFD53D021814556071C352CF362829236719247614E50B7EDB20C5389BDA2`。
+
+安装前程序、运行资源和 SQLite 一致性快照在 `backups/reminder-source-hardening-20261030/`。正式安装后，19 种 MCP 来源、4 个并发客户端、审批 Hook、DSH 安装器、Work 插件和接入指引冻结冒烟通过；真实桌面气泡分别验证了 `Agent · DSH`、`DeepSeek · DSH`，并实际显示了一次不授予权限的命令审批提醒。证据见 `diagnostics/reminder-source-hardening-20261030/`。扫描只读取已知扩展清单，不读取账号、聊天或密钥；MAGPIE 管理的目标不会由虹夏重复写入。既有客户端需重连 MCP 或新建任务以加载本轮规则；最新私下试用包尚未重新打包本轮安装补丁。准确边界见 [PUBLISHING.md](PUBLISHING.md) 与 [TODO.md](TODO.md)。
+
+2026-10-30 的配置复审已清理旧 `.agents` 重复技能、旧技能备份和零字节审批探针，备份在 `backups/config-cleanup-20261030/safe-tool-apply/`。当前 Codex/DSH/Work 技能审计为 `clean`，5 个皮肤（含默认）和 8 个 Agent 档案可读且无完整键重复；具体命令与证据见 [AGENT_SETUP.md](AGENT_SETUP.md) 和 `diagnostics/config-cleanup-20261030/`。
 
 ## 本机发现候选（2026-10-29）
 
@@ -70,7 +74,7 @@ Windows 桌面上的 Q 版坐姿虹夏：完整双腿、透明背景、八种表
 
 对外分享文档可运行 `.\.venv\Scripts\python.exe tools\package_docs.py` 从当前源码生成压缩包；旧压缩包不作为最新工程状态的依据。
 
-给熟人私下试用可运行 `.\.venv\Scripts\python.exe tools\package_release.py` 生成 Windows 安装 ZIP；收件人按包内 `distribution/README.md` 安装。该包包含可执行程序和可选的 Codex、Work、DSH 与 Claude Code 接入文件（`-Codex -Work -CodexHooks -ClaudeHooks -Dsh -AutoStart` 开关），安装目标为 `%LOCALAPPDATA%\NijikaDesktopPet\app`，不包含个人消息库。公开发布的素材权利仍需另行确认。
+给熟人私下试用优先运行 `powershell -ExecutionPolicy Bypass -File tools\build_installer.ps1` 生成单个 Windows Setup EXE。收件人双击安装器即可选择安装目录、桌面快捷方式和开机自启，默认安装到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，无需管理员权限或 PowerShell。安装、覆盖升级和卸载保留用户消息、皮肤与 Agent 档案，不自动改外部客户端配置。`tools\package_release.py` 保留为旧 ZIP/脚本安装通道。公开发布的素材权利仍需另行确认。
 
 **Agent 接入配置集中见 [AGENT_SETUP.md](AGENT_SETUP.md)**：分别说明私下试用包、Codex、桌面客户端 Work、DSH、Claude Code，以及其他支持 stdio MCP 的本机客户端如何配置和验证。设置中心的“接入步骤”可直接复制自动配置提示词，内含本机 MCP 程序路径、完整 JSON 和提醒规则；发给有本机文件操作能力的 AI，由它配置与验证。接入文件自动保存至用户数据目录下 `integrations/agents/<档案ID>/`，界面显示准确路径，无需手动下载。客户端重载或本人权限确认仍按实际要求完成。
 
@@ -78,7 +82,7 @@ Windows 桌面上的 Q 版坐姿虹夏：完整双腿、透明背景、八种表
 
 桌面客户端 Work 的本机接入包在 `plugins/nijika-work-local/`，本机已通过 `.agents/plugins/marketplace.json` 安装并启用。它把同一 `虹夏MCP-v2.exe` 作为插件工具提供，并附带 Work 对话用的简短决策 skill。独立 Codex 会话关闭原有直连后仍通过插件实际调用成功；这证明插件工具链可用，但不等于 Work 会话已经连接。首次使用需重启桌面客户端、在**本机运行的 Work 新任务**中确认工具可见并完成一次桌面点击回传。云端 Work 对话不能直接运行这个 Windows 本机 stdio 程序；那种接入需要另行设计可安全访问的远程 MCP 服务。详见 `INSTALL.md`。
 
-Codex 全局技能和本机 Work 插件 0.1.5 均已加入“同一请求连续等待、恢复会话先读旧回复”的规则。较晚的点击会保存，但一旦 Agent 任务结束，现有 stdio MCP 无法单靠桌面点击重新唤醒任务；在原会话发送“继续”可触发读取。当前打开的会话不保证热更新，新的 Work 插件还需重启 ChatGPT 桌面客户端后在新任务中验收。
+Codex 全局技能和本机 Work 插件 0.1.6 均要求最终回复前主动检查完成提醒，并加入“同一请求连续等待、恢复会话先读旧回复”的规则。较晚的点击会保存，但一旦 Agent 任务结束，现有 stdio MCP 无法单靠桌面点击重新唤醒任务；在原会话发送“继续”可触发读取。当前打开的会话不保证热更新，新的 Work 插件还需重启 ChatGPT 桌面客户端后在新任务中验收。
 
 DSH 本机接入脚本在 `integrations/dsh/install.ps1`，默认注册 desktop 和 web 两个配置，安装专用技能及全局触发规则。本机已写入配置并通过 DSH web 合成配置检查、打包 MCP 握手及隔离选择回传测试。DSH 新会话已自主调用虹夏并显示带 DSH 来源的气泡；用户较晚点击后，回复保存在消息库，但 DSH 原任务已结束，未自动读回。技能现要求重复等待并在会话恢复时读取旧请求；无时限自动唤醒尚未实现。操作和限制见 `integrations/dsh/README.md`。
 

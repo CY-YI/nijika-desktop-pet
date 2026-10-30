@@ -1,5 +1,51 @@
 # 当前待办
 
+## 当前任务：Windows 标准安装器与 GitHub 交付（2026-10-31）
+
+- 范围：Full + Web；只做安装/卸载与发布收尾，不新增桌宠或 Agent 功能，不覆盖正式安装，不替换用户客户端配置。
+- [x] 对照 Inno Setup、NSIS、MSIX 与既有 PyInstaller+ZIP，选定单文件 Inno Setup 用户级安装。
+- [x] 实现显式白名单暂存、中文安装向导、目录/快捷方式/开机自启选择、Work 路径改写、覆盖升级和标准卸载。
+- [x] 增加真实 Setup 安装/升级/卸载测试；中文空格目录、用户数据保留、23 项文件及快捷方式通过，正式安装未覆盖。
+- [x] Python 全量 161 项：160 通过、1 项可选 PyYAML 跳过；真实 MCP 和审批/完成提醒冒烟通过。
+- [x] 更新安装后教程、发布文档，重打最终包并做冻结应用/前端、JavaScript 20/20、敏感信息和 Git 差异检查。
+- [ ] 将本轮与上一轮已验证改动分组提交，推送当前分支；二进制按发布渠道上传，不混入源码 Git。
+- 临时工具：`build\installer-tools` 是已签名官方编译器及语言文件缓存，忽略入 Git；`build\installer-staging` 是可再生暂存，保留供最终包核对。`installer/ChineseSimplified.isl` 是可复现构建所需正式资源。
+
+## 配置一致性与跨电脑路径审计（2026-10-30）
+
+- 沿用 Full + Web、既有分支 `codex/interaction-settings-20261017` 和全部未提交差异；本轮不提交、不推送、不替换正式 EXE、不改真实 Agent 服务。
+- [x] 核对当前 Codex 主技能、DSH 技能、Work 0.1.6 技能和 MAGPIE 归属；Codex 权威技能与源码一致，DSH/Work 副本一致且各只有一个。
+- [x] `tools/audit_agent_integrations.py` 新增冲突/重复判定和非零退出码；3 个隔离审计测试通过。实际本机审计准确只报告 `.agents` 旧技能副本一处内容冲突。
+- [x] `tools/repair_nijika_sources.py` 对 MAGPIE 管理客户端改为只报告、不直接写入，并把仅格式变化排除出 `changed`；新增 2 项回归，避免维护脚本与管理器覆盖同一配置。
+- [x] 新增自定义安装目录冒烟：带空格、中文的收件人路径安装后，Work `mcp.json` 指向该目录的 `dist/虹夏MCP-v2.exe`，不残留解压源路径；测试通过。
+- [x] 修正安装器：`-CodexHome` 同步到 Codex CLI 子进程；新增隔离假 CLI 测试，确认 MCP 注册使用收件人自定义配置根。
+- [x] 皮肤/Agent 只读审计：5 个皮肤（含默认）均可解析，当前选择存在；8 个档案中两个旧 `custom` 档案缺少身份/软件，保留不删，也不按名称猜测。其他档案的客户端/位置/身份键未发现真实重复。
+- [x] 清理前备份 `.agents` 旧技能、Codex 旧技能 `.bak` 和 0 字节审批探针到 `backups/config-cleanup-20261030/`；证据在 `diagnostics/config-cleanup-20261030/`。
+- [x] 新增默认预演、`-Apply` 才写入的精确清理工具；实际备份到 `backups/config-cleanup-20261030/safe-tool-apply/` 并删除 `.agents` 旧技能、旧技能 `.bak` 和 0 字节审批探针。清理后技能审计与本机状态审计均为 `clean`。
+- [x] 新增 `tools/audit_local_state.py` 及其 2 项测试；以只读 SQLite 模式检查当前皮肤、全部图片/待机帧、旧 `custom` 档案和完整 Agent 键重复。
+- [ ] 两个旧 `custom` 档案只有在用户确认其实际 Agent/软件后才重新生成来源完整的档案；当前不覆盖、不删除。
+- [x] 最新全量 Python 159 项（158 通过、1 项可选依赖跳过）、系统 Python 来源修复 8/8、JavaScript 20/20、DSH/Work/接入指引冒烟、语法和 `git diff --check` 通过；合并证据在 `diagnostics/config-cleanup-20261030/final-verification.json`。
+- [ ] 外部客户端的自然任务观察仍需在各自重连或新任务后完成；本机文件、路径和清理审计不替代真实宿主调用验收。
+
+## 提醒可靠性与 DSH 来源加固（2026-10-30）
+
+- 用户观察：“这些问题在没完成完善自动配置之前是没有这些问题的”。基线 `76a692a`、分支 `codex/interaction-settings-20261017`；本轮相关未提交修改按实际范围保留，没有回退、批量提交或混入无关功能。
+- [x] 定位 Codex 只剩通用提醒的代码根因：Stop 曾硬编码无信息量文案；新增最终回复的安全派生摘要与 120 字接口上限，保留同轮去重、失败重试和敏感原文不落库。
+- [x] 强化 Codex/DSH/Work 持久规则：需要审阅的成果在最终回复前主动调用 `show_completion`；Stop 只作截断摘要兜底，不把 pending 当成已显示或已批准。
+- [x] 定位 DSH `Codex · DSH` 为来源参数与多模型宿主身份混用；服务端增加身份守卫，保留真实 DeepSeek/自定义名，同时修正自动配置向导和安装器。
+- [x] 修复 DSH desktop/web 中自动配置留下的孤立开始标记；备份真实文件后只删除该行，MAGPIE 服务逐字保留。源码向导与 PowerShell 安装器均有同等受限修复。
+- [x] 针对性 Python 回归、Python 语法、PowerShell 解析、DSH 安装器冒烟和旧冻结 MCP 协议冒烟已通过。旧冻结 MCP 结果不代表重建后的新程序。
+- [x] 全量 Python 147 项通过、1 项可选 PyYAML 跳过；JavaScript 20 项、Python/JavaScript 语法和 `git diff --check` 通过。
+- [x] 构建前备份正式三个 EXE、SQLite 一致性快照和实际运行资源；重建桌宠、MCP、审批提醒，并通过正式 App/MCP/Hook、19 种来源、4 并发客户端、DSH 安装器、Work 插件和接入指引冒烟。
+- [x] 同步工作区与标准安装目录；更新真实 Codex 技能/规则块、Work 插件 0.1.6 和 DSH 已修复配置，保留既有 MCP、Hook 信任、MAGPIE、消息和设置。
+- [x] 只停止并重启路径精确匹配的正式桌宠进程，没有批量终止其他 MCP 或客户端；新正式桌宠 PID 正常写心跳，旧消息库文件 ID 和设置版本保持不变。
+- [x] 发送带具体结果摘要的真实气泡；故意 `Codex/DSH` 落库为 `Agent/DSH`，真实 `DeepSeek/DSH` 保持 `DeepSeek/DSH`，两次均确认窗口可见后清理测试通知。证据 `diagnostics/reminder-source-hardening-20261030/live-bubble-acceptance.json`。
+- [x] 用正式审批程序向正式用户库提交模拟 `PermissionRequest`，确认命令授权提醒气泡实际可见，并以 `PostToolUse` 收起；未授予或拒绝任何命令。证据 `diagnostics/reminder-source-hardening-20261030/approval-bubble-acceptance.json`。
+- [x] Codex `config.toml` 中 PermissionRequest、PostToolUse、UserPromptSubmit、Stop 四项 `trusted_hash` 保留；DSH desktop/web 各保留一个 `magpie-mcp-nijika-pet`，孤立开始标记为 0，技能和全局标记与源码逐字一致。
+- [x] 回填正式 EXE SHA256、备份路径、证据目录和初步验收边界；删除本轮误生成的根目录单文件 `$null`。
+- [ ] 已打开的外部 DSH/Work 会话按各自生命周期重连 MCP 或新建任务后，再做一次自然任务观察。服务端来源守卫已阻止旧参数产生 `Codex · DSH`，此待办只用于确认客户端已加载新版主动提醒规则。
+- 本轮不提交/推送，不重新打包旧试用 ZIP，不把整个项目标记为 `ALL_FINISH`。
+
 ## VS Code 具体 Agent 正式纳入（2026-10-30）
 
 - [x] 将已通过冻结验收的候选正式安装到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，同步工作区 `dist`；保留原消息库、设置和 4 个 Agent 档案。

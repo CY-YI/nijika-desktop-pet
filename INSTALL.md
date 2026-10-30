@@ -1,5 +1,26 @@
 # 安装与运行
 
+## 2026-10-30 路径可移植性与配置审计
+
+安装脚本默认写入 `%LOCALAPPDATA%\NijikaDesktopPet\app`，也可用 `-InstallRoot` 指定其他本机绝对路径。它会使用收件人的实际安装位置重写 Work `mcp.json`，不会沿用在原作者电脑上的路径；Codex 配置目录由 `-CodexHome`（默认 `%USERPROFILE%\.codex`）生成，DSH 目录由 `-DshRoot`（默认 `%USERPROFILE%\.dsh`）生成。设置中心的接入向导使用当前实际用户目录和当前 MCP 可执行文件位置，不写死项目目录。
+
+已用带空格和中文的自定义安装目录验证：完整解压包安装后，Work 的 MCP 参数等于该安装目录下的 `dist\虹夏MCP-v2.exe`，且不包含原解压目录；收件人传入的 `-CodexHome` 也会同步到实际 Codex CLI 进程，不能再出现技能写在自定义目录、MCP 却注册到默认目录的分裂状态。安装/向导继续采用备份、预览后变化检查和同名冲突停止；不要为了“修好”而同时保留两个管理同一个客户端的虹夏服务。
+
+维护者检查技能、当前皮肤和 Agent 档案：
+
+```powershell
+python tools\audit_agent_integrations.py
+python tools\audit_local_state.py
+```
+
+若输出内容不一致、重复、当前皮肤缺失或完整 Agent 键重复，命令返回非零；按 `issues` 中的准确路径人工核对。Codex 的权威用户技能位置是 `%USERPROFILE%\.codex\skills\nijika-desktop-dialog`，不要再向 `%USERPROFILE%\.agents\skills` 安装同名副本。维护者可用 `tools\cleanup_legacy_nijika_integration.ps1` 先做默认预演，再决定是否以 `-Apply` 备份并清理三个已知旧文件。当前皮肤目录仍按原 PNG/ZIP 格式读取，不需要迁移；旧 Agent 档案也不批量删除，重新扫描后由当前向导补全新配置。
+
+## 2026-10-30 提醒可靠性与 DSH 来源正式版
+
+当前正式安装的桌宠、MCP 和审批提醒已更新到提醒可靠性加固构建。三个程序位于 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\`，桌面与开机自启快捷方式继续使用同一路径；现有消息库、设置、Agent 档案和 Hook 信任未被初始化或覆盖。更新前程序、实际运行资源和 SQLite 一致性快照在 `backups/reminder-source-hardening-20261030/`。
+
+已打开的外部 Agent 会话需要重连 `nijika-pet` 或新建任务，才能加载新版“主动发送具体完成摘要”的持久规则。DSH 来源隔离由共享 MCP 服务端执行，因此即使旧连接仍发送 `agent_name=Codex` 也会规范为 `Agent · DSH`；只有明确的 DeepSeek 等真实模型名会保留。
+
 ## 2026-10-30 本机发现与 VS Code Agent 正式版
 
 当前正式程序已更新到 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\`，桌面与开机自启快捷方式继续使用同一路径。打开“虹夏桌宠设置”→“Agent 接入”→“扫描本机”，可查看六种可自动接入客户端、五种指引入口，以及已安装的 VS Code Codex、Claude Code、DSH、CodeBuddy 和 GitHub Copilot Chat 扩展。
@@ -78,7 +99,13 @@ VS Code 扩展只在明确条件成立时使用 `VS Code · Agent` 来源；共�
 
 本机 2026-10-16 核对：桌宠已按标准流程统一安装到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，桌面与开机自启快捷方式、Codex 审批钩子、Work 插件清单、DSH desktop/web 配置、Claude Code 的 MCP 注册与审批钩子均指向安装目录中的程序；三款 EXE 与仓库 `dist/` 逐字节相同。修改 `pet.py` 等源码后必须重新运行 `build.ps1` 重建，再按 `distribution/install.ps1` 重新安装到上述目录并重启桌宠；Git 中的源码变化不会自动更新运行中的程序，各客户端配置里的开发目录字样只属历史记录。
 
-给其他 Windows 用户私下试用时，运行 `.\.venv\Scripts\python.exe tools\package_release.py` 生成不含个人配置和消息库的安装 ZIP。收件人解压后按 `distribution/README.md` 运行安装脚本；脚本复制程序到其本机用户目录（默认 `%LOCALAPPDATA%\NijikaDesktopPet\app`），并可选接入 Codex、Work、DSH 或 Claude Code（`-Codex -Work -CodexHooks -ClaudeHooks -Dsh -AutoStart` 开关）。试用包内的 Work MCP 路径由安装脚本按收件人路径写入，不直接复制本机硬编码路径。角色素材没有公开再分发许可证，不应将此试用包公开发布。
+给其他 Windows 用户私下试用时，优先运行 `powershell -ExecutionPolicy Bypass -File tools\build_installer.ps1`。需要同时重建三个应用时加 `-BuildApplications`；版本可用 `-Version 0.1.7`，已有 Inno Setup 不在默认位置时用 `-Compiler <ISCC.exe>`。工具先从白名单生成独立暂存区，再在 `dist-release\installer` 输出单个中文 Setup EXE 与 SHA-256 清单。该 EXE 不提交 Git。
+
+收件人双击 Setup EXE，按向导选择安装目录、桌面快捷方式和可选开机自启，默认安装到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，不需要管理员权限、Python 或 PowerShell。首次启动后打开“虹夏桌宠设置”配置 Agent。覆盖安装会更新 Work MCP 路径，但不会改外部客户端；升级和卸载保留 `%USERPROFILE%\.nijika-desktop-pet` 的消息、皮肤和 Agent 档案。通过 Windows“已安装的应用”卸载，外部 Agent 配置需另行管理。
+
+维护者执行 `python tools\smoke_windows_installer.py <Setup EXE>`，在临时中文目录验证安装、升级、Work 路径、数据保留和卸载。测试临时重定向并恢复当前用户的桌面、开始菜单和启动目录，不覆盖正式安装。静默安装支持 `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER /DIR=<目录>`；卸载器同样支持这些静默参数。当前安装器未签名，Windows 可能显示 SmartScreen 发布者提示，应通过来源和 SHA-256 核对，不要求关闭安全防护。
+
+旧 `tools\package_release.py` ZIP 通道继续保留；脚本可选接入 Codex、Work、DSH 或 Claude Code（`-Codex -Work -CodexHooks -ClaudeHooks -Dsh -AutoStart`）。角色素材没有公开再分发许可证，不应将包含这些素材的试用包公开上架。
 
 更新触发：2026-10-07 增加 Codex 本机 MCP 服务和带简介的选择题。
 
@@ -122,7 +149,7 @@ Codex 完成兜底（2026-10-17）：重建 Hook 后运行 `integrations\codex\i
 
 ## 桌面客户端 Work 本机接入
 
-本机插件目录为 `plugins/nijika-work-local/`，项目插件清单为 `.agents/plugins/marketplace.json`。源码中的 `mcp.json` 不再包含开发者电脑路径；Python 启动脚本优先查找同一项目根目录的 `dist/虹夏MCP-v2.exe`，也可读取 `NIJIKA_MCP_EXE` 或正式安装目录。插件运行仍需要能从 PATH 找到 `python.exe`。私下试用包的安装脚本会按收件人目录写入确定的 EXE 路径。当前电脑已安装并启用 0.1.5 版，技能要求短决策连续等待、恢复会话时先读取旧请求。安装命令为：
+本机插件目录为 `plugins/nijika-work-local/`，项目插件清单为 `.agents/plugins/marketplace.json`。源码中的 `mcp.json` 不再包含开发者电脑路径；Python 启动脚本优先查找同一项目根目录的 `dist/虹夏MCP-v2.exe`，也可读取 `NIJIKA_MCP_EXE` 或正式安装目录。插件运行仍需要能从 PATH 找到 `python.exe`。私下试用包的安装脚本会按收件人目录写入确定的 EXE 路径。当前源码为 0.1.6 版，技能要求每轮主动检查完成提醒、短决策连续等待、恢复会话时先读取旧请求。安装命令为：
 
 ```powershell
 codex plugin marketplace add . --json
@@ -132,7 +159,7 @@ codex plugin list --marketplace nijika-local --json
 
 确认插件显示 `installed: true`、`enabled: true` 后，保持 `虹夏桌宠.exe` 运行，**重启 ChatGPT 桌面客户端**，从本机运行的 Work 新任务发起一条简短测试选择题，检查气泡能显示、点击后 Work 能读回选择。普通聊天或云端 Work 不会因为本机 Codex 配置而自动拥有这个 stdio 工具。插件说明仅指导 Agent 何时调用；模型是否主动调用仍需以新任务实测，不能由安装状态推断。需要将云端 Work 接入时，必须提供经过鉴权的远程 HTTPS MCP 端点，本机插件不能代替公网连接。请勿把本机消息库直接暴露到网络。
 
-Codex 全局技能和 Work 插件技能均要求在一次 45 秒等待返回 `pending` 后复用原请求 ID 继续等待，最多约九分钟；若任务已结束，较晚的点击仍保存在消息库，但不会自动唤醒 Agent。在原会话发送“继续”后，技能要求先调用 `get_reply` 读取该请求。此规则已安装，当前打开的 Codex/Work 任务不保证热更新；Work 0.1.5 版的隔离 MCP 启动测试通过，真实 Work 会话中的长等待和晚到回复仍待验收。
+Codex 全局技能和 Work 0.1.6 插件技能均要求在最终回复前主动检查完成提醒，并在一次 45 秒等待返回 `pending` 后复用原请求 ID 继续等待，最多约九分钟；若任务已结束，较晚的点击仍保存在消息库，但不会自动唤醒 Agent。在原会话发送“继续”后，技能要求先调用 `get_reply` 读取该请求。当前打开的 Codex/Work 任务不保证热更新；真实 Work 会话中的主动提醒、长等待和晚到回复仍按现场调用验收。
 
 可用 `.\.venv\Scripts\python.exe tools\smoke_work_plugin.py` 在隔离消息库下验证插件启动入口及四个 MCP 工具，不会给正在运行的桌宠发送测试通知。
 

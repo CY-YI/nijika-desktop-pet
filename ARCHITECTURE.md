@@ -1,5 +1,29 @@
 # 架构
 
+## 标准 Windows 安装（2026-10-31）
+
+- `tools/package_release.py --stage` 从与 ZIP 相同的显式文件白名单生成全新安装暂存区；安装器不扫描工作区，因此不会把数据库、备份、诊断或客户端配置带入产物。
+- `tools/build_installer.ps1` 调用 Inno Setup 6 编译 `installer/nijika.iss`。安装目录、开始菜单、桌面和 Startup 快捷方式由 Setup 管理，默认当前用户安装；应用本体继续使用 `application_root()` 的定位约定。
+- Work 的 `AUTO_LOCAL_MCP` 在安装/升级的 `ssPostInstall` 阶段替换为 JSON 转义后的实际 `{app}\dist\虹夏MCP-v2.exe`；不重写其他客户端，不接管 MAGPIE 配置。
+- `%USERPROFILE%\.nijika-desktop-pet` 不属于安装目录，Setup/Uninstall 不删除其中任何内容。卸载只清理安装时登记的文件和生成的通知日志，不清理外部 Agent 配置。
+- `tools/smoke_windows_installer.py` 在临时中文路径中运行真实 Setup/Uninstall，临时重定向并恢复当前用户桌面、开始菜单与启动目录，验证升级、Work 路径和用户数据保留；不覆盖正式安装。
+
+## 配置审计与可移植安装（2026-10-30）
+
+- 权威 Codex 技能只应位于 `CODEX_HOME/skills`；旧 `~/.agents/skills` 同名目录会由审计判为冲突或重复。`audit_agent_integrations.py` 只读检查源码与各宿主安装副本，不读取会话或凭据。
+- `repair_nijika_sources.py` 先判断 MAGPIE 归属；管理器拥有的客户端即使 `--apply` 也只返回 `skipped`。非管理器写入要求备份、预览后原字节摘要复核和语义变化比较。
+- 安装器的 `InstallRoot`、`CodexHome`、`DshRoot` 均规范为收件人绝对路径，并把 `CodexHome` 导出到 Codex CLI 子进程，保证技能、MCP、插件使用同一个根。
+- `audit_local_state.py` 用 SQLite 只读 URI 读取设置与 Agent 档案，并独立验证皮肤表情和待机帧；数据库缺失时只报告，不创建。旧 `custom` 档案缺少身份时保留，不做名称推断。
+- `cleanup_legacy_nijika_integration.ps1` 默认预演，`-Apply` 仅处理三个精确目标；先验证权威技能摘要，再逐文件复制、校验和删除。备份失败时不继续。
+
+## 提醒兜底与 DSH 身份隔离（2026-10-30）
+
+- Codex `Stop` 事件仍属于尽力兜底。`codex_completion.py` 在内存中删除围栏代码，按段落选择首个可读结果，清理 URL、本机路径、邮箱、Bearer 与常见密钥赋值后，派生最多 120 字预览；`approval_hook.py` 只把预览、分类和哈希后的轮次身份交给消息库。没有主动 `show_completion` 时仍可能产生兜底，但它必须传递具体结果而不是固定“任务完成”。
+- 主动提醒由持久协作规则保证：Codex 全局技能、DSH 专用技能和 Work 插件在每轮最终回复前检查成果；修改文件、测试、安装、诊断和多步骤建议应调用一次 `show_completion`。Stop 不能替代 Agent 对复杂成果的主动审阅提醒。
+- `notice_source.resolve_source` 先合并显式单次参数、宿主配置和协议握手，再执行多模型宿主守卫。`MULTIMODEL_SOFTWARE={dsh,workbuddy,workbuddy-ai}` 中若 Agent 字段是宿主/产品名，则降为 `Agent`；`DeepSeek`、业务自定义名、`VS Code · Codex` 等可核实身份不受影响。该逻辑位于共享服务端，所有 MCP 调用经过同一入口。
+- DSH 自动配置先解析 MAGPIE 归属。归 MAGPIE 管理时只保存档案、列只读验证提示词并修复唯一孤立开始标记，不新增第二个虹夏服务；非 MAGPIE 路径沿用严格块合并。`repair_orphan_dsh_marker` 仅接受“一个开始标记、零结束标记、无 `id: mcp-nijika-pet`”的窄条件，PowerShell 安装器实现同一规则。
+- 预览记录原始字节摘要，应用前复核，避免把固定函数与自动配置覆盖用户预览后的改动。缺文件、多个标记、已闭合块、存在真实服务或未知布局都不自动猜测。
+
 ## VS Code 扩展来源（2026-10-29）
 
 - `vscode_agents.py` 只读取已知 stable/Insiders 扩展根目录中的限量 package.json，核对 publisher/name，合并残留版本；不读扩展设置、账户、工作区或会话。安装证据不代表扩展启用。

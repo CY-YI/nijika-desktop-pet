@@ -1,5 +1,15 @@
 # 版本回退与本机备份
 
+## 2026-10-30 配置旧文件清理
+
+安全清理工具把三个旧目标备份到 `backups/config-cleanup-20261030/safe-tool-apply/`，`manifest.json` 记录原路径、类型、文件大小和 SHA-256。需要回退时按清单恢复：`01-nijika-desktop-dialog/` 回到 `%USERPROFILE%\.agents\skills\nijika-desktop-dialog`，另外两个单文件恢复原文件名；默认不要恢复旧技能副本，否则审计会再次判为冲突或重复。
+
+## 2026-10-30 提醒可靠性与 DSH 来源加固
+
+正式安装前备份位于 `backups/reminder-source-hardening-20261030/`：`formal-dist/` 保存三个旧 EXE，`formal-app-runtime/` 保存更新前文档、DSH/Work/Codex 运行资源及摘要，`notifications-snapshot.sqlite3` 是更新前 SQLite 一致性快照。`manifest.json` 记录来源提交、分支、程序和数据库摘要。
+
+回退时先关闭路径为 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏桌宠.exe` 的正式桌宠与设置窗口，再按需恢复三个旧程序；默认保留更新后的消息、回执、皮肤、设置、Agent 档案和 Hook 信任，不整份覆盖用户数据库。正式目录里的 `*.running-reminder-source-hardening-20261030.bak` 只是更新时占用中的旧映像，不是启动入口；等对应旧连接退出后再清理。
+
 ## 2026-10-30 VS Code 具体 Agent 正式安装
 
 更新前三个程序与 SQLite 一致性快照位于 `backups/vscode-agents-formal-20261030/`。需要回退时先关闭桌面角色与设置窗口，再恢复所需旧程序；默认保留更新后的消息、回执、皮肤、设置和 Agent 档案，不整份恢复旧数据库。

@@ -1,5 +1,12 @@
 # 内部接口
 
+## 2026-10-30 Stop 摘要与来源规范化
+
+- `Stop` 输入中的 `last_assistant_message` 仅在 `approval_hook.py` 进程内分类和派生预览；`create_codex_completion_notice(..., message_preview=...)` 只接收 1–120 个可打印字符。空摘要回退为“已完成本轮任务，请查看结果。”，完整回复、prompt、命令和工具输出不写入 SQLite。
+- 摘要在落库前去除围栏代码、URL、Windows/Unix 用户路径、邮箱、Bearer、常见密钥赋值和 token 形态；该过滤降低意外显示风险，但不替代原 Agent 对最终回复的脱敏责任。Stop 仍始终向 Codex 返回合法 no-op JSON，不输出审批决定。
+- `resolve_source(...)` 输出仍为 `(agent, software)` 显示字段。对 software=`DSH`/`WorkBuddy` 等多模型宿主，agent 若是 Codex、ChatGPT、Claude Code、DSH、WorkBuddy 或编辑器产品名，服务端统一改为 `Agent`；`DeepSeek`、`Qwen`、自定义助手名不受影响。请求 ID、`pending/answered/dismissed/expired` 回执和四个 MCP 工具参数不变。
+- 配置转换纳入 `repair_orphan_dsh_marker(text) -> text`：只删除唯一的未闭合 `# BEGIN NIJIKA-DSH-MCP`，前提是无结束标记且不存在 `id: mcp-nijika-pet`。它不解析或重写 MAGPIE 服务，向 API 返回的计划文件携带原字节摘要，应用时仍执行预览后变更保护。
+
 ## 2026-10-29 编辑器扩展发现与来源
 
 - scan 结果可包含 `extension_id`、`identity`、`backend`、`rules_path`；已知扩展仍用 guided 的专属资料流程，按钮为“接入此扩展”。未确认接口的扩展不得承诺自动写入 MCP。

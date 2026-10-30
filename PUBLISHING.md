@@ -1,5 +1,33 @@
 # 本机候选与发布检查单
 
+## 2026-10-31 标准 Windows 安装器
+
+- 构建：`powershell -ExecutionPolicy Bypass -File tools\build_installer.ps1`。产物 `dist-release\installer\虹夏桌宠-Setup-0.1.6.exe`，配套 `installer-manifest.json` 记录字节数和 SHA-256。生成物不提交 Git。
+- Inno Setup 6.7.3 便携编译器从官方 GitHub Release 下载，数字签名验证有效。简体中文语言文件来自官方 `jrsoftware/issrc` 的 `Files/Languages/ChineseSimplified.isl`，随 `installer/` 保存来源说明。
+- 真实 Setup EXE 在临时中文空格目录完成安装、覆盖升级和卸载，23 项白名单文件、Work MCP 路径、快捷方式、用户数据保留和卸载进程退出全部通过。证据在 `diagnostics\installer-20261031\install-checks.json`。
+- 默认只安装程序，不自动写 Codex/Work/DSH 等客户端；用户从设置中心预览并确认接入。卸载不删除消息库、皮肤、Agent 档案或外部配置。
+- 本安装器没有代码签名证书，发布时提供 SHA-256，并如实说明 Windows SmartScreen 可能显示未知发布者；不要求关闭安全防护。角色/图标再分发权仍未解决，当前二进制只供私下试用，不作为公开上架许可。
+
+## 配置一致性与可移植性审计（2026-10-30）
+
+- 维护审计工具把技能内容不一致、同一客户端重复副本、选中皮肤缺失、皮肤帧损坏和完整 Agent 键重复判为阻塞，CLI 非零退出。旧来源修复工具会跳过 MAGPIE 管理的客户端，且不再把纯序列化格式变化列为待修改。
+- 安装测试同时覆盖空格、中文和自定义 `CodexHome`：Work MCP 路径、Codex CLI 的配置根和收件人安装目录都由实际参数生成，不沿用发送者路径。
+- 本机只读检查未发现皮肤损坏或皮肤 ID 重复；当前默认皮肤和 4 个自制皮肤有效，8 个 Agent 档案可读且没有完整键重复。两个身份字段缺失的旧 `custom` 档案保留，避免把名称猜测成模型或软件。
+- 本机三个已确认无用目标已由安全清理工具实际删除，回退副本在 `backups/config-cleanup-20261030/safe-tool-apply/`。清理后 `agent-integrations-after-cleanup.json` 与本机状态审计均为 `clean`，证据在 `diagnostics/config-cleanup-20261030/`。
+- 最新完整回归为 Python 159 项（158 通过、1 项可选 PyYAML 跳过）；补跑系统 Python 的完整来源修复测试 8/8 通过；JavaScript 20/20 通过；Python/JavaScript/PowerShell 语法与 `git diff --check` 通过。合并证据见 `diagnostics/config-cleanup-20261030/final-verification.json`。
+- 本轮没有替换正式 EXE、没有改真实客户端 MCP、MAGPIE、Hook 信任、消息库或皮肤数据；因此既有候选 SHA256 不变。
+
+## 提醒可靠性与 DSH 来源加固（2026-10-30，正式安装）
+
+- 本轮修复针对自动配置后复发的两类回归：Codex 只剩无信息量 Stop 兜底，以及 DSH 出现 `Codex · DSH`。源码范围包括安全结果摘要、服务端多模型来源守卫、DSH 孤立标记修复、三个宿主持久规则与 Work 插件 0.1.6。
+- 冻结构建位于 `build/reminder-source-hardening-20261030/`。正式桌宠 SHA256 `DE3553927024511445E57D57B510249B77B1CF73B7D75872BB4D2FC7BA7E5F77`，MCP `BA8A70AA0CB594B936917CCDD3AF01B9F45DC219B4DEAD1AD5C55B5765EFD9E5`，审批提醒 `571DFD53D021814556071C352CF362829236719247614E50B7EDB20C5389BDA2`；工作区 `dist` 与标准安装目录逐字节一致。
+- 更新前三个 EXE、SQLite 一致性快照、Codex 规则/技能、正式 Work 插件源、DSH 实际配置和正式运行资源均已备份到 `backups/reminder-source-hardening-20261030/`。正式目录不存在 `AGENTS.md` 的旧错误假设已移除，运行资源按实际存在文件单独记录摘要。
+- 全量验证为 Python 147 项通过、1 项可选 PyYAML 跳过，JavaScript 20 项通过；Python/JavaScript 语法和 `git diff --check` 通过。正式安装版另通过 19 种 MCP 来源、显式编辑器元数据与 4 个并发客户端独立回执、审批 Hook、DSH 安装器、Work 插件和接入指引隔离冒烟。
+- 正式用户库真实气泡验收：故意提交 `Codex/DSH` 时落库显示 `Agent/DSH`，真实 `DeepSeek/DSH` 保持原身份；两次均确认窗口实际可见后才清理测试通知。证据在 `diagnostics/reminder-source-hardening-20261030/live-bubble-acceptance.json`。
+- 正式用户库模拟 `PermissionRequest` 后，命令审批提醒气泡实际可见，随后以 `PostToolUse` 收起测试项；整个过程不授予或拒绝权限。`config.toml` 中四个虹夏 Hook 的 `trusted_hash` 仍在且路径未变。证据在 `diagnostics/reminder-source-hardening-20261030/approval-bubble-acceptance.json`。
+- Codex 全局规则与技能、DSH desktop/web 实际配置和 Work 插件 0.1.6 已同步；MAGPIE 的 `magpie-mcp-nijika-pet` 服务、Hook 信任、消息和设置保持不变。服务端来源守卫会保护仍在发送旧参数的新连接；已打开客户端要加载新的主动提醒规则，仍需重连 MCP 或新建任务。
+- 本轮仍为 Windows 本机回环试用范围，不自动提交、推送、合并 `main` 或创建公开 Release。真实 DSH/Work 宿主自然任务、公开发布素材权利和干净 Windows 验收继续作为独立边界。
+
 ## VS Code 具体 Agent 正式纳入（2026-10-30）
 
 - 正式安装已更新：`%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏桌宠.exe`、`虹夏MCP-v2.exe`、`虹夏审批提醒.exe` 与冻结候选对应文件一致。工作区 `dist` 已同步。

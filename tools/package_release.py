@@ -69,7 +69,38 @@ def build(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None
         )
 
 
-if __name__ == "__main__":
+def stage(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None,
+          support_bundle: Path | None = None) -> None:
+    """Create a clean installer source tree from the same explicit allowlist."""
+    overrides = {"dist/虹夏桌宠.exe": app_exe, "dist/虹夏MCP-v2.exe": mcp_exe}
+    sources = {name: overrides.get(name) or ROOT / name for name in FILES}
+    missing = [name for name, source in sources.items() if not source.is_file()]
+    if missing:
+        raise FileNotFoundError("Missing release files: " + ", ".join(missing))
+    if output.exists():
+        raise FileExistsError(f"Installer staging directory already exists: {output}")
+    public = read_bundle(support_bundle.read_bytes()) if support_bundle else {}
+    manifest: dict[str, str] = {}
+    for name, source in sources.items():
+        data = source.read_bytes()
+        if name == "plugins/nijika-work-local/mcp.json":
+            plugin = json.loads(data)
+            plugin["mcpServers"]["nijika-work-pet"]["args"][-1] = "AUTO_LOCAL_MCP"
+            data = (json.dumps(plugin, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+        manifest[name] = hashlib.sha256(data).hexdigest()
+        target = output / Path(name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    for name, data in public.items():
+        manifest[name] = hashlib.sha256(data).hexdigest()
+        target = output / Path(name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    (output / "SHA256SUMS.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path,
                         default=ROOT / f"{PREFIX}-{date.today().isoformat()}.zip")
@@ -79,8 +110,20 @@ if __name__ == "__main__":
                         help="Use the matching candidate MCP server without replacing installed/dist files")
     parser.add_argument("--support-bundle", type=Path,
                         help="Include explicitly exported public sponsor information; never read a user database")
+    parser.add_argument("--stage", type=Path,
+                        help="Create a new clean installer source directory instead of a ZIP")
     args = parser.parse_args()
+    if args.stage:
+        if args.output != ROOT / f"{PREFIX}-{date.today().isoformat()}.zip":
+            parser.error("--stage and --output are mutually exclusive")
+        stage(args.stage, args.app_exe, args.mcp_exe, args.support_bundle)
+        print(args.stage)
+        return
     destination = args.output
     build(destination, args.app_exe, args.mcp_exe, args.support_bundle)
     print(destination)
     print("SHA256:", hashlib.sha256(destination.read_bytes()).hexdigest())
+
+
+if __name__ == "__main__":
+    main()

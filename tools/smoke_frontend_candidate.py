@@ -146,7 +146,7 @@ def verify(executable: Path) -> None:
             result = json.loads(call("/api/agents/batch-apply", {"batch_id": batch["batch_id"]}))
             assert all(item["status"] == "configured" for item in result["results"])
             assert all(not item["host_activity"]["called"] for item in json.loads(call("/api/state"))["agents"])
-            assert json.loads((client_home / ".copilot/mcp-config.json").read_text())["mcpServers"]["nijika-pet"]["type"] == "local"
+            assert json.loads((client_home / ".copilot/mcp-config.json").read_text(encoding="utf-8"))["mcpServers"]["nijika-pet"]["type"] == "local"
             manager = client_home / ".config/magpie/library.json"
             manager.parent.mkdir(parents=True)
             manager.write_text(json.dumps({"mcp":[{"command":mcp_path,"agents":["gemini"]}]}), encoding="utf-8")

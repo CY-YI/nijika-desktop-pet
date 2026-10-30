@@ -1,5 +1,24 @@
 # 变更记录
 
+## 2026-10-30 配置一致性与可移植性审计
+- `tools/audit_agent_integrations.py` 现在输出 `clean/conflict`、缺失/匹配状态，并将技能内容不一致或同一客户端两份匹配技能视为阻塞问题，CLI 返回非零退出码；新增隔离测试覆盖正常、旧副本冲突和重复副本。
+- 全量来源修复审计会对 MAGPIE 管理的客户端只报告 `skipped`，不再提议直接改其配置文件；JSON/TOML/YAML 仅序列化格式变化也不再显示为待修复。新增两项隔离回归，避免维护脚本与当前管理器争抢配置。
+- 新增 Windows 安装路径冒烟测试：把包安装到带空格和中文的自定义目录，确认 Work `mcp.json` 自动改写为该目录内的 MCP，解压源路径不会残留。另修正安装器：显式 `-CodexHome` 现在会设置到 Codex CLI 子进程，技能、MCP 与插件不再可能落到两个不同配置根。
+- 新增只读 `tools\audit_local_state.py`，检查现有设置库中的选中皮肤、每个皮肤的表情/待机帧和完整 Agent 键；不会初始化数据库或覆盖档案。新增 `tools\cleanup_legacy_nijika_integration.ps1`，默认只列计划，`-Apply` 时先逐文件备份并校验 SHA-256，再删除三个精确旧目标。
+- 本机审计确认 Codex 当前技能、DSH 技能、Work 0.1.6 技能、MAGPIE 配置、5 个皮肤（含默认）、当前选择和 8 个 Agent 档案均可读取；没有皮肤损坏或完整 Agent 键重复，旧的两个 `custom` 档案因身份字段缺失而保留，未按名称猜测或批量改写。
+- 已实际清理旧 `.agents` 重复技能、旧技能 `.bak` 和零字节审批探针。可回退备份位于 `backups/config-cleanup-20261030/safe-tool-apply/`；清理后技能审计和本机状态审计均为 `clean`。
+- 最新完整验证为 Python 159 项（158 通过，1 项仅在虚拟环境缺 PyYAML 时跳过）、JavaScript 20 项全部通过；系统 Python 的 YAML 来源修复测试另为 8 项全部通过。
+
+## 2026-10-30 提醒可靠性与 DSH 来源加固
+
+- Codex Stop 兜底从固定“Codex 任务已完成”改为从最终回复派生最多 120 字的安全摘要；先移除代码块、链接、本机绝对路径、邮箱、Bearer/常见密钥形态，再写入本机消息库。原文、完整对话、命令和工具输出仍不落库。
+- 自动接入的 Codex/DSH/Work 持久规则统一要求每轮最终回复前主动检查完成提醒；文件修改、测试结果、安装步骤和诊断结论等成果必须主动发送一次具体 `show_completion`，Stop 只处理漏调用。
+- `resolve_source` 增加多模型宿主身份守卫：DSH/WorkBuddy 中把 Codex、ChatGPT、DSH 等宿主产品名当作 Agent 的旧参数统一降为 `Agent`；明确的 DeepSeek、自定义 Agent 与编辑器来源保持。
+- 自动配置与 DSH 安装器会删除唯一、未闭合且没有真实 `mcp-nijika-pet` 的孤立开始标记；MAGPIE 的 `magpie-mcp-nijika-pet` 服务和其他配置不改，非 MAGPIE 写入继续校验预览后的原始文件摘要。
+- 修复测试自身在 Windows 默认 GBK 下读取 UTF-8 备份的问题；实现与验证状态见 TODO.md。
+- 三个正式 EXE 已升级并备份，现有消息库、设置、Agent 档案、MAGPIE 归属和 Hook 信任保留；全量回归与正式冻结程序的来源、并发、审批、DSH、Work 和接入指引验收通过。
+- 正式桌面气泡分别显示 `Agent · DSH` 与 `DeepSeek · DSH`；模拟命令审批也实际显示授权提醒后收起测试项，整个过程不授予或拒绝权限。测试通知在证据写入后清理。已打开客户端需重连或新建任务以加载新版主动提醒规则。
+
 ## 2026-10-30 VS Code 具体 Agent 正式纳入
 
 - 将冻结验收候选正式安装到标准目录并同步工作区程序；备份三个旧程序和 SQLite 一致性快照，保留消息、设置、4 个 Agent 档案、MAGPIE 配置和客户端信任。
@@ -180,3 +199,9 @@
 - 2026-10-07：用户发起现场测试；桌宠实际显示“桌宠直接决策测试”，用户在气泡点选“效果满意”，打包版 MCP 的 `wait_for_reply` 返回 `answered`、选项名称和简介。通知离开待处理队列，桌宠继续运行。
 - 2026-10-07：按用户选择接入桌面客户端 Work 本机环境，新增项目级本地插件清单和 `nijika-work-local` 插件，复用现有 MCP 程序及消息库，并为 Work 增加决策交互 skill。发现插件规范不允许把绝对路径直接写在 stdio `command` 中，改为插件内 Python 启动脚本后，已安装缓存副本可启动并发现四个工具，隔离提醒成功入库。独立 Codex 会话关闭原有直连后，仍通过插件的 `nijika-work-pet.show_completion` 真正写入隔离队列。插件在本机已安装、启用；Work 新任务的实际调用与桌面点击回传仍待客户端重启后验收。
 - 2026-10-08：继续本机插件实测：启动打包版桌宠后，当前 Codex 会话经 `nijika-work-pet.request_decision` 发出真实气泡；用户在桌面选“显示正常”，`wait_for_reply` 返回 `answered`、选项名称及简介。证明已安装插件到桌宠的本机点击回传完整可用；Work 新任务能否自动发现并调用该插件仍待单独验收。
+## 2026-10-31 Windows 标准安装器
+
+- 新增 Inno Setup 单文件中文安装器，提供当前用户目录选择、桌面/开始菜单快捷方式、可选开机自启、安装后启动和标准卸载。沿用三个 PyInstaller 运行程序，不要求收件人使用 PowerShell。
+- `tools/package_release.py --stage` 与 `tools/build_installer.ps1` 共用显式白名单；安装/升级按实际路径安全改写 Work JSON，保留用户数据与外部 Agent 配置。
+- 新增真实 Setup 安装、覆盖升级、卸载、快捷方式与数据保留验收；中文空格目录和 23 项文件通过。修复冻结前端验收工具在 Windows 默认 GBK 下读取 UTF-8 Copilot 配置的问题。
+- Python 161 项（160 通过、1 项可选 PyYAML 跳过）、JavaScript 20 项、冻结应用/MCP/Hook、安装器与敏感信息检查通过。安装器未签名，提供 SHA-256；二进制不进入 Git，素材公开再分发权仍未解决。

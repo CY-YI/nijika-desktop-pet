@@ -5,6 +5,7 @@ __pycache__/
 build/
 dist/
 dist-next/
+dist-release/
 diagnostics/
 backups/
 /虹夏桌宠-项目文档与预览-*.zip

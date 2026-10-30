@@ -1,4 +1,6 @@
-# 虹夏桌宠 · Windows 私下试用包
+# 虹夏桌宠 · Windows 安装与进阶说明
+
+单文件 Setup 用户先读安装目录下的 `00-安装后先看.txt`。双击 Setup EXE 即可安装，无需运行 PowerShell；安装后从“虹夏桌宠设置”接入 Agent。下面的 PowerShell 命令仅适用于旧 ZIP 包或维护者。
 
 第一次使用请先看包根目录的 `00-解压后先看.txt`：包含安装命令、界面接入步骤和可直接复制的 AI 验证提示词。本文保留进阶选项和完整使用边界。
 
@@ -36,7 +38,7 @@ Codex 和 Work 接入需要 `codex` 命令可从 PowerShell 找到；**现有 Wo
 
 默认安装到固定用户目录，因此解压出来的文件夹以后可以移走。搬动或更新正式安装目录后需重跑 Agent 接入步骤。消息记录保存在本机 `%USERPROFILE%\.nijika-desktop-pet\notifications.sqlite3`，避免 AppData 被打包客户端重定向成另一份队列；新版桌宠兼容旧会话的待处理消息。此试用包不含发送者的消息库或聊天历史。
 
-`-CodexHooks` 安装 UserPromptSubmit、PermissionRequest、PostToolUse、Stop 四类定义，必须在 Codex CLI 的 `/hooks` 中本人审阅并信任，再开新任务才会执行；升级用户尤其需审阅新增的 UserPromptSubmit 与 Stop。实质任务漏调用桌宠时会补发完成提醒，同轮已有有效桌宠通知则不重复，简短问答尽量保持安静。既有 Computer Use notify 原样保留。气泡只是提醒，点击“知道了”不等于命令授权；请在 Codex 原审批卡处理。若任务采用不请求审批的策略，就不会有审批事件。完整验收步骤见 `AGENT_SETUP.md`。
+`-CodexHooks` 安装 UserPromptSubmit、PermissionRequest、PostToolUse、Stop 四类定义，必须在 Codex CLI 的 `/hooks` 中本人审阅并信任，再开新任务才会执行；升级用户尤其需审阅新增的 UserPromptSubmit 与 Stop。实质任务漏调用桌宠时会从最终回复生成最多 120 字的安全结果摘要，不再只写“任务完成”；同轮已有有效桌宠通知则不重复，简短问答尽量保持安静。既有 Computer Use notify 原样保留。气泡只是提醒，点击“知道了”不等于命令授权；请在 Codex 原审批卡处理。若任务采用不请求审批的策略，就不会有审批事件。完整验收步骤见 `AGENT_SETUP.md`。
 
 桌宠收到选择但 Agent 任务已经结束时，点击结果会保存，**不会自动唤醒已结束的任务**。回原会话发送“继续”，Agent 应先读取此前的回复。`pending` 只表示消息进入本机队列，不代表气泡已显示或用户已同意。
 
