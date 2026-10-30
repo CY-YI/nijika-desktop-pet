@@ -2,6 +2,7 @@
 
 ## 2026-10-31 标准 Windows 安装器
 
+- 已发布私有仓库 Release `v0.1.6`：https://github.com/CY-YI/nijika-desktop-pet/releases/tag/v0.1.6 。实际附件名为 `NijikaDesktopPet-Setup-0.1.6.exe`；GitHub CLI 上传中文文件名时丢失了前缀，因此使用 ASCII 附件名保证链接可识别。下载复核为 72,630,838 字节，SHA-256 `15cce50ff95ae6dd24460abef5460f0597c615480a0f5833a74aa0bcff91cc15`，与本地完全一致。
 - 构建：`powershell -ExecutionPolicy Bypass -File tools\build_installer.ps1`。产物 `dist-release\installer\虹夏桌宠-Setup-0.1.6.exe`，配套 `installer-manifest.json` 记录字节数和 SHA-256。生成物不提交 Git。
 - Inno Setup 6.7.3 便携编译器从官方 GitHub Release 下载，数字签名验证有效。简体中文语言文件来自官方 `jrsoftware/issrc` 的 `Files/Languages/ChineseSimplified.isl`，随 `installer/` 保存来源说明。
 - 真实 Setup EXE 在临时中文空格目录完成安装、覆盖升级和卸载，23 项白名单文件、Work MCP 路径、快捷方式、用户数据保留和卸载进程退出全部通过。证据在 `diagnostics\installer-20261031\install-checks.json`。
