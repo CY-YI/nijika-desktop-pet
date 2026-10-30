@@ -36,6 +36,9 @@ async def verify(executable: Path) -> None:
         ("auto", "obsidian", "Agent", "Obsidian", "auto"),
         ("auto", "dsh-mcp-client", "Agent", "DSH", "auto"),
         ("Agent", "dsh-mcp-client", "Agent", "DSH", "legacy"),
+        ("Codex", "dsh-mcp-client", "Agent", "DSH", "auto"),
+        ("Codex", "dsh-mcp-client", "Agent", "DSH", "legacy"),
+        ("DeepSeek", "dsh-mcp-client", "DeepSeek", "DSH", "auto"),
     )
     with tempfile.TemporaryDirectory(prefix="nijika-source-smoke-") as directory:
         for index, (configured, caller, expected, software, mode) in enumerate(cases):
@@ -78,6 +81,12 @@ async def verify(executable: Path) -> None:
                     "agent_name": "ChatGPT", "software": "Obsidian"})
                 notice = store.get(detailed.structured_content["request_id"])
                 assert (notice.agent, notice.software) == ("ChatGPT", "Obsidian")
+                for dsh_agent, dsh_expected in (("Codex", "Agent"), ("DeepSeek", "DeepSeek")):
+                    dsh_result = await client.call_tool("show_completion", {
+                        "task": "dsh-source-check", "summary": "Isolated DSH source check.",
+                        "agent_name": dsh_agent, "software": "DSH"})
+                    dsh_notice = store.get(dsh_result.structured_content["request_id"])
+                    assert (dsh_notice.agent, dsh_notice.software) == (dsh_expected, "DSH")
                 for editor_agent in ("Codex", "Claude Code", "DSH", "CodeBuddy"):
                     editor_result = await client.call_tool("show_completion", {
                         "task": "editor-agent-check", "summary": "Isolated editor route.",

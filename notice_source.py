@@ -26,6 +26,12 @@ HOSTS = {
     "obsidian": ("Agent", "Obsidian"),
 }
 GENERIC = {"", "auto", "agent"}
+MULTIMODEL_SOFTWARE = {"dsh", "workbuddy", "workbuddy ai"}
+HOST_PRODUCT_LABELS = {
+    "chatgpt", "chatgpt work", "codex", "work", "dsh", "deepseek harness",
+    "claude code", "claude desktop", "workbuddy", "workbuddy ai",
+    "vs code", "vs code insiders", "obsidian",
+}
 
 
 @dataclass(frozen=True)
@@ -38,6 +44,13 @@ class NoticeSource:
         if self.software.casefold() in {"vs code", "vs code insiders"}:
             return f"{self.software} · {self.agent}" if self.agent else self.software
         return f"{self.agent} · {self.software}" if self.software else self.agent
+
+
+def _safe_agent_for_host(agent: str, software: str) -> str:
+    """Do not present a host/engine product as the Agent of a cloud multimodel host."""
+    if software.casefold() in MULTIMODEL_SOFTWARE and agent.casefold() in HOST_PRODUCT_LABELS:
+        return "Agent"
+    return agent or "Agent"
 
 
 def clean(value: str | None, maximum: int) -> str:
@@ -66,19 +79,20 @@ def resolve_source(configured: str = "auto", host: str = "", caller: str = "",
         # New explicit agent labels are preserved; a legacy product name is not
         # mistaken for the Agent name.
         agent = agent_name or (configured if configured.casefold() not in GENERIC and not legacy else "")
-        return NoticeSource(agent or (defaults[0] if defaults else "Agent"),
-                            defaults[1] if defaults else selected_host)
+        software_value = defaults[1] if defaults else selected_host
+        return NoticeSource(_safe_agent_for_host(agent or (defaults[0] if defaults else "Agent"),
+                                                 software_value), software_value)
     if known:
         if configured.casefold() in {"work", "chatgpt work"} and known[1] == "Codex":
             known = HOSTS["work"]
         custom = configured if configured.casefold() not in GENERIC and not legacy else ""
-        return NoticeSource(agent_name or custom or known[0], known[1])
+        return NoticeSource(_safe_agent_for_host(agent_name or custom or known[0], known[1]), known[1])
     if legacy:
         # No trustworthy caller: retain a legacy host label, without guessing
         # that DSH/WorkBuddy is necessarily running DeepSeek.
-        return NoticeSource(agent_name or legacy[0], legacy[1])
-    return NoticeSource(agent_name or (configured if configured.casefold() not in GENERIC else "Agent"),
-                        "未识别软件")
+        return NoticeSource(_safe_agent_for_host(agent_name or legacy[0], legacy[1]), legacy[1])
+    agent = agent_name or (configured if configured.casefold() not in GENERIC else "Agent")
+    return NoticeSource(_safe_agent_for_host(agent, "未识别软件"), "未识别软件")
 
 
 def notification_source(agent: str, software: str = "") -> NoticeSource:

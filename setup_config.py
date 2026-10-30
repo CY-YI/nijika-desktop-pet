@@ -9,6 +9,27 @@ import tomllib
 from pathlib import Path
 
 
+def repair_orphan_dsh_marker(original: str) -> str:
+    """Remove a lone Nijika start marker when no managed service follows.
+
+    Older auto-setup paths could leave this comment before MAGPIE-owned entries.
+    Treating it as a valid block would make the next managed write unsafe. A
+    marker paired with an actual managed ``mcp-nijika-pet`` entry is left alone
+    for the regular strict parser to handle.
+    """
+    begin = list(re.finditer(r"(?m)^[ \t]*# BEGIN NIJIKA-DSH-MCP[ \t]*\r?$", original))
+    end = list(re.finditer(r"(?m)^[ \t]*# END NIJIKA-DSH-MCP[ \t]*\r?$", original))
+    if len(begin) != 1 or end or re.search(r"(?m)^\s*-?\s*id:\s*mcp-nijika-pet\s*(?:#.*)?$", original):
+        return original
+    start = begin[0].start()
+    finish = begin[0].end()
+    if original[finish:finish + 2] == "\r\n":
+        finish += 2
+    elif original[finish:finish + 1] in ("\n", "\r"):
+        finish += 1
+    return original[:start] + original[finish:]
+
+
 def json_service_update(document: dict, mcp: Path, environment: dict[str, str],
                         client: str) -> dict:
     """Merge owned stdio services only; preserve unrelated fields and options."""

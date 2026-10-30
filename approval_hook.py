@@ -12,7 +12,7 @@ import sys
 from pathlib import PureWindowsPath
 
 from notification_store import NotificationStore
-from codex_completion import prompt_class, result_class, tool_flags
+from codex_completion import completion_preview, prompt_class, result_class, tool_flags
 
 
 def event_key(event: dict) -> str:
@@ -53,6 +53,7 @@ def handle_event(event: dict, store: NotificationStore, source: str = "codex") -
             notice = store.create_codex_completion_notice(
                 event.get("session_id"), event.get("turn_id"),
                 result_class=result_class(event.get("last_assistant_message")),
+                message_preview=completion_preview(event.get("last_assistant_message")),
             )
         except (ValueError, TypeError):
             notice = None

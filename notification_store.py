@@ -343,10 +343,13 @@ class NotificationStore:
 
     def create_codex_completion_notice(self, session_id: str,
                                        turn_id: str,
-                                       *, result_class: str) -> Notification | None:
-        """Atomically create at most one generic completion notice for a turn."""
+                                       *, result_class: str,
+                                       message_preview: str | None = None) -> Notification | None:
+        """Atomically create at most one safe completion notice for a turn."""
         if result_class not in {"empty", "brief", "deliverable", "waiting"}:
             raise ValueError("invalid result class")
+        message = ("已完成本轮任务，请查看结果。" if message_preview is None else
+                   _required_text(message_preview, "message_preview", 120))
         session_hash, turn_hash = self._turn_identity(session_id, turn_id)
         now = int(time.time())
         notice_id = uuid.uuid4().hex
@@ -373,7 +376,7 @@ class NotificationStore:
                 return None
             connection.execute(
                 "INSERT INTO notifications VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?)",
-                (notice_id, "ChatGPT", "任务完成", "Codex 任务已完成，请查看结果。",
+                (notice_id, "ChatGPT", "任务完成", message,
                  choices, now, now),
             )
             connection.execute("INSERT INTO notice_sources VALUES (?, ?)", (notice_id, "Codex"))

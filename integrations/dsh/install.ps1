@@ -88,6 +88,22 @@ function Remove-LegacyNijika {
     return ($output -join '')
 }
 
+function Remove-OrphanNijikaMarker {
+    param([string]$Text)
+    $begin = [regex]::Matches($Text, '(?m)^[ \t]*# BEGIN NIJIKA-DSH-MCP[ \t]*\r?$')
+    $end = [regex]::Matches($Text, '(?m)^[ \t]*# END NIJIKA-DSH-MCP[ \t]*\r?$')
+    if ($begin.Count -ne 1 -or $end.Count -ne 0 -or
+        $Text -match '(?m)^\s*-?\s*id:\s*mcp-nijika-pet\s*(?:#.*)?$') {
+        return $Text
+    }
+    $match = $begin[0]
+    $length = $match.Length
+    if ($Text.Substring($match.Index + $match.Length) -match '^(\r\n|\n|\r)') {
+        $length += $Matches[1].Length
+    }
+    return $Text.Remove($match.Index, $length)
+}
+
 function Update-MarkedBlock {
     param([string]$Path, [string]$Block, [string]$Start, [string]$End)
 
@@ -98,6 +114,7 @@ function Update-MarkedBlock {
     }
     $original = $current
     if ($Start -eq '# BEGIN NIJIKA-DSH-MCP') { $current = Remove-LegacyNijika $current }
+    if ($Start -eq '# BEGIN NIJIKA-DSH-MCP') { $current = Remove-OrphanNijikaMarker $current }
     $startIndex = $current.IndexOf($Start, [StringComparison]::Ordinal)
     $endIndex = $current.IndexOf($End, [StringComparison]::Ordinal)
     if (($startIndex -ge 0) -ne ($endIndex -ge 0)) {

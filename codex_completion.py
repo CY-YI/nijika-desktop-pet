@@ -10,6 +10,7 @@ import json
 import re
 
 
+_PREVIEW_LIMIT = 120
 _QUESTION = re.compile(
     r"^(?:请问|什么|为什么|为何|怎么|如何|能否|是否|可不可以|"
     r"what\b|why\b|how\b|can\b|could\b|is\b|are\b|do\b|does\b)", re.I,
@@ -42,6 +43,31 @@ _WAITING = re.compile(
     r"which .{0,60}\?)", re.I,
 )
 _STEP = re.compile(r"^\s*(?:\d+[.)、]|[-*]\s+)\s*\S", re.M)
+_FENCED_CODE = re.compile(r"```.*?(?:```|$)", re.S)
+_URL = re.compile(r"(?:https?|ftp)://[^\s<>\"]+|www\.[^\s<>\"]+", re.I)
+_WINDOWS_PATH = re.compile(
+    r"(?<![A-Za-z0-9])(?:[A-Za-z]:[\\/]|\\\\)[^\s，。；;！？!?]+"
+)
+_LOCAL_PATH = re.compile(
+    r"(?<![A-Za-z0-9])/(?:Users|home|var|tmp|opt|etc|mnt|srv)/[^\s，。；;！？!?]+",
+    re.I,
+)
+_EMAIL = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
+_BEARER = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{8,}", re.I)
+_SECRET_ASSIGNMENT = re.compile(
+    r"\b(api[_-]?key|access[_-]?token|auth[_-]?token|token|secret|password|"
+    r"passwd|authorization|cookie|session(?:[_-]?id)?|private[_-]?key)\b"
+    r"\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;，；]+)",
+    re.I,
+)
+_SECRET_TOKEN = re.compile(
+    r"\b(?:sk-|ghp_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]{8,}"
+    r"|\bAKIA[0-9A-Z]{16}\b"
+    r"|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"
+    r"|\b[A-Fa-f0-9]{32,}\b"
+    r"|\b[A-Z][A-Z0-9_]{7,}\b"
+)
+_REDACTION = "[已隐藏]"
 
 
 def prompt_class(value: object) -> str:
@@ -70,6 +96,52 @@ def result_class(value: object) -> str:
             or len(clean) >= 400 or "```" in value and len(clean) >= 120):
         return "deliverable"
     return "brief"
+
+
+def completion_preview(value: object) -> str:
+    """Derive a short, action-oriented preview without persisting the reply.
+
+    The lifecycle hook receives the final reply only in memory. This function
+    removes code, links, local paths and common secret shapes before selecting
+    the first useful paragraph for the local notification database.
+    """
+    fallback = "已完成本轮任务，请查看结果。"
+    if not isinstance(value, str) or not value.strip():
+        return fallback
+    text = value.replace("\r\n", "\n").replace("\r", "\n")
+    text = _FENCED_CODE.sub("\n", text)
+    paragraphs = re.split(r"\n\s*\n", text)
+    candidate = ""
+    for paragraph in paragraphs:
+        lines = []
+        for line in paragraph.splitlines():
+            line = line.strip()
+            if not line or re.fullmatch(r"[-*_=#>`\s]+", line):
+                continue
+            line = re.sub(r"^(?:#{1,6}\s+|(?:[-*]|\d+[.)、])\s+)", "", line)
+            lines.append(line)
+        if lines:
+            candidate = " ".join(lines)
+            if re.search(r"[\u3400-\u9fff]|[A-Za-z]{2}", candidate):
+                break
+    if not candidate:
+        return fallback
+    candidate = _URL.sub(_REDACTION, candidate)
+    candidate = _WINDOWS_PATH.sub(_REDACTION, candidate)
+    candidate = _LOCAL_PATH.sub(_REDACTION, candidate)
+    candidate = _EMAIL.sub(_REDACTION, candidate)
+    candidate = _BEARER.sub("Bearer " + _REDACTION, candidate)
+    candidate = _SECRET_ASSIGNMENT.sub(lambda match: match.group(1) + "=" + _REDACTION, candidate)
+    candidate = _SECRET_TOKEN.sub(_REDACTION, candidate)
+    candidate = re.sub(r"(?:\s*\[已隐藏\]\s*){2,}", " " + _REDACTION + " ", candidate)
+    candidate = re.sub(r"^(?:\[已隐藏\][\s,;，；:：]*)+", "", candidate)
+    candidate = re.sub(r"(?:[\s,;，；:：]*\[已隐藏\])+$", "", candidate)
+    candidate = re.sub(r"\s+", " ", candidate).strip(" \t-:：;；,，")
+    if not candidate or not re.search(r"[\u3400-\u9fff]|[A-Za-z]{2}", candidate):
+        return fallback
+    if len(candidate) > _PREVIEW_LIMIT:
+        candidate = candidate[: _PREVIEW_LIMIT - 1].rstrip() + "…"
+    return candidate
 
 
 def tool_flags(name: object, response: object) -> tuple[bool, bool]:

@@ -15,6 +15,8 @@
 $ErrorActionPreference = 'Stop'
 $sourceRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path.TrimEnd('\')
 $targetRoot = [IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
+$CodexHome = [IO.Path]::GetFullPath($CodexHome).TrimEnd('\')
+$DshRoot = [IO.Path]::GetFullPath($DshRoot).TrimEnd('\')
 if ($targetRoot.Equals($sourceRoot, [StringComparison]::OrdinalIgnoreCase) -or
     $targetRoot.StartsWith($sourceRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
     throw 'InstallRoot must be outside the extracted package.'
@@ -31,6 +33,12 @@ foreach ($relative in @('dist\虹夏桌宠.exe', 'dist\虹夏MCP-v2.exe', 'dist\
 }
 if (($Codex -or $Work) -and -not (Get-Command codex -ErrorAction SilentlyContinue)) {
     throw 'Codex CLI is not on PATH. Run without -Codex/-Work to install the pet, then connect an Agent later.'
+}
+if ($Codex -or $Work) {
+    New-Item -ItemType Directory -Path $CodexHome -Force | Out-Null
+    # codex.exe/codex.cmd resolves its MCP, plugin and hook state from
+    # CODEX_HOME. Keep a recipient-supplied -CodexHome authoritative.
+    $env:CODEX_HOME = $CodexHome
 }
 if ($Work -and -not (Get-Command python.exe -ErrorAction SilentlyContinue)) {
     throw 'The current Work plugin launcher requires python.exe on PATH. Install Python, or run without -Work.'

@@ -15,7 +15,12 @@ from pathlib import Path
 
 from control_store import ControlStore, IDENTIFIER
 from notice_source import resolve_source
-from setup_config import codex_service_update, remove_legacy_dsh_nijika_entry, json_service_update
+from setup_config import (
+    codex_service_update,
+    json_service_update,
+    remove_legacy_dsh_nijika_entry,
+    repair_orphan_dsh_marker,
+)
 from agent_discovery import CLIENTS, CANONICAL_NAMES, JSON_CLIENTS, client_home, json_paths, bounded_bytes, parse_json, magpie_state, scan
 from vscode_agents import instructions as vscode_instructions, route_for
 
@@ -48,7 +53,8 @@ INSTALL_RULES = """虹夏桌面提醒规则：
    pending 只表示已排队，不能声称已显示或获准；不要重复发送同一问题，dismissed 也不是批准。
 4. 收到 answered 后，在原聊天明确复述所选项再继续，无需再次确认。会话中断时保留原 ID，恢复后先 get_reply；较晚点击不会自动唤醒已结束的任务，只有这时才需用户回原会话说“继续”。
 5. status=invalid 时按错误修正并重试一次；读取技能失败不等于工具不可用。工具确实不可用或修正后仍失败时，如实报告并在聊天沟通。
-6. 以客户端实际暴露的工具名称为准（可能带 nijika_pet/nijika_work_pet 前缀），四个功能是 show_completion、request_decision、wait_for_reply、get_reply。气泡点击不代替客户端命令授权，不授予或绕过权限；注册 MCP 不等于已接通原生审批/完成事件钩子。
+6. 在每轮最终回复前主动执行第1–2条检查，不能故意依赖 Codex Stop 兜底；兜底只会生成截断摘要。正常配置已提供 Agent/软件来源，默认省略可选 agent_name/software；DSH、WorkBuddy 等多模型宿主尤其不能把 Codex/宿主产品名当模型名。
+7. 以客户端实际暴露的工具名称为准（可能带 nijika_pet/nijika_work_pet 前缀），四个功能是 show_completion、request_decision、wait_for_reply、get_reply。气泡点击不代替客户端命令授权，不授予或绕过权限；注册 MCP 不等于已接通原生审批/完成事件钩子。
 """
 
 GUIDES = {
@@ -555,11 +561,28 @@ class AgentSetup:
         if manager["error"]:
             raise ValueError("MAGPIE 配置无法安全读取，管理归属不明确；没有写入。")
         managed = manager["managed"]
+        dsh_profiles: dict[str, tuple[Path, bytes, str]] = {}
+        if client == "dsh":
+            for profile in ("desktop", "web"):
+                path = directory / "profiles" / profile / "cordis.patch.yml"
+                if not path.is_file():
+                    if managed:
+                        continue
+                    raise ValueError(f"没有找到 DSH {profile} 配置，请先启动 DSH 完成初始化或检查目录。")
+                raw = bounded_bytes(path)
+                original = raw.decode("utf-8-sig")
+                dsh_profiles[profile] = (path, raw, repair_orphan_dsh_marker(original))
         environment = self.export(source_name, agent_identity, software)["mcpServers"]["nijika-pet"]["env"]
         environment["NIJIKA_PROFILE_ID"] = agent_id
         notes.append("预期气泡头部：" + source.heading + "；伙伴昵称只用于管理，任务名另起一行。")
         if managed:
             notes.append("检测到 MAGPIE 管理：只保存虹夏档案，不写客户端配置或执行注册。保持 MAGPIE 分发，重载后用宿主实际调用验证。")
+            for profile, (path, raw, cleaned) in dsh_profiles.items():
+                if cleaned != raw.decode("utf-8-sig"):
+                    self._add_file(files, path, cleaned,
+                                   f"清理 DSH {profile} 遗留的孤立虹夏标记，保留其他配置",
+                                   digest(raw))
+                    notes.append(f"检测到 DSH {profile} 的孤立虹夏开始标记；只移除该标记，不改 MAGPIE 服务。")
         elif client == "custom" and software.casefold() in {"vs code", "vs code insiders"}:
             route = route_for(agent_identity)
             if route and route[3]:
@@ -634,10 +657,7 @@ class AgentSetup:
             notes.append("新开 Codex 任务后生效；命令审批 hook 的本人信任仍需在客户端完成。")
         elif client == "dsh":
             for profile in ("desktop", "web"):
-                path = directory / "profiles" / profile / "cordis.patch.yml"
-                if not path.is_file():
-                    raise ValueError(f"没有找到 DSH {profile} 配置，请先启动 DSH 完成初始化或检查目录。")
-                original = path.read_text(encoding="utf-8-sig")
+                path, raw, original = dsh_profiles[profile]
                 if "id: mcp-nijika-pet" in original and "# BEGIN NIJIKA-DSH-MCP" not in original:
                     raise ValueError("DSH 中已有不受虹夏标记管理的同名条目，请先人工核对。")
                 command = str(self.mcp).replace("'", "''")
@@ -651,7 +671,8 @@ class AgentSetup:
                          f"          NIJIKA_HOST_NAME: '{source.software}'\n"
                          f"          NIJIKA_PROFILE_ID: '{agent_id}'\n"
                          "# END NIJIKA-DSH-MCP")
-                self._add_file(files, path, marked_block(original, block, "# BEGIN NIJIKA-DSH-MCP", "# END NIJIKA-DSH-MCP"), f"配置 DSH {profile} 的 MCP")
+                updated = marked_block(original, block, "# BEGIN NIJIKA-DSH-MCP", "# END NIJIKA-DSH-MCP")
+                self._add_file(files, path, updated, f"配置 DSH {profile} 的 MCP", digest(raw))
             self._add_file(files, directory / "skills/nijika-dsh-dialog/SKILL.md",
                            (self.root / "integrations/dsh/nijika-dsh-dialog/SKILL.md").read_text(encoding="utf-8"), "安装 DSH 桌宠交互技能")
             path = directory / "AGENTS.md"

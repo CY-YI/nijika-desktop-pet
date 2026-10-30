@@ -1,5 +1,30 @@
 # 接入 Agent：Codex、ChatGPT Work、DSH、Claude Code 与其他本机客户端
 
+## 2026-10-30 配置一致性审计
+
+Codex 的虹夏技能只保留源码与 `CODEX_HOME`（通常为 `%USERPROFILE%\.codex`）中的一份。不要把同名技能再复制到 `%USERPROFILE%\.agents\skills`；技能发现位置同时存在两份且内容不同时，不同任务可能读取旧规则。相同内容装两份也只算重复，不视为双保险。
+
+维护者可运行：
+
+```powershell
+python tools\audit_agent_integrations.py
+python tools\audit_local_state.py
+```
+
+两个工具都只读。第一项输出技能路径、摘要、缺失/匹配/冲突状态；第二项读取现有设置库与皮肤目录，检查当前皮肤、帧文件和完整 Agent 键。它们不读取会话或凭据，发现冲突时返回非零退出码。审计通过后，再分别重载客户端并做一次真实工具调用；文件一致不能证明旧连接已经加载。
+
+2026-10-30 本机已先用 `tools\cleanup_legacy_nijika_integration.ps1` 预演目标，再以 `-Apply` 备份并删除旧 `.agents` 技能、旧技能 `.bak` 和零字节审批探针。清理工具只接受这三个精确路径，要求 `CODEX_HOME` 中的权威技能与源码摘要一致，并在删除前逐文件校验备份。重跑两项审计后状态均为 `clean`。
+
+已有 Agent 档案继续保留。旧 `custom` 档案缺少 `agent_identity/software` 时，不根据名称猜测模型或宿主；需要明确来源时，从设置中心重新扫描并用当前路径生成一条新档案。相同客户端路径、Agent 与软件组合会被复用；仅 `custom + 同一用户目录` 但身份不同，不是重复档案。皮肤格式无需因本次审计改变。
+
+## 2026-10-30 完成提醒与 DSH 来源加固
+
+Codex、DSH 和本机 Work 的新版持久规则都要求在最终回复前检查完成提醒。修改文件、完成测试、给出安装步骤、形成诊断结论或交付需要用户确认的内容时，Agent 应主动调用一次 `show_completion`，`summary` 写具体结果；简单事实问答可以不提醒。Codex Stop 只在漏调用时生成最多 120 字的安全摘要，不能作为 Agent 不写结果详情的正常路径。
+
+DSH 是可切换模型的工作台，不默认等于 DeepSeek 或 Codex。标准 DSH 连接省略 `agent_name/software`，通过官方配置和握手显示 `Agent · DSH`；明确模型时才传真实名称。共享 MCP 会拒绝把 Codex、ChatGPT、DSH 等宿主产品名当成 DSH 的 Agent，真实 `DeepSeek` 或自定义名称仍保留。自动接入会删除旧的孤立虹夏开始标记，但不会改由 MAGPIE 管理的实际服务。
+
+2026-10-30 本机正式安装已更新三个 EXE、Codex 全局规则/技能、DSH desktop/web 配置和 Work 插件 0.1.6。正式用户库真实气泡已验证 `Agent · DSH` 与 `DeepSeek · DSH`；已打开客户端仍要重连 MCP 或新建任务，新的持久提示词才会加载。服务端身份守卫不依赖客户端重连，旧参数也不会再显示 `Codex · DSH`。
+
 ## 2026-10-29 扫描本机与批量接入
 
 设置中心的“扫描本机”只检查已知命令和配置位置，不读取聊天、凭据、登录或额度，不扫描全盘。勾选后点“预览勾选项”，确认每项文件、预期气泡来源和外部操作，再“应用可接入项”。每个客户端独立备份、检查预览后的变更并返回结果；一项失败不回滚其他成功项。Work 注册可能部分完成或超时，需先核对插件状态，不能盲目重试。
@@ -55,7 +80,7 @@ DSH 桌面实际使用 `dsh-mcp-client` 握手名；现已覆盖该名称及旧�
 
 更新 EXE 和配置不会热更新已连接的 stdio 进程。保存当前工作后，在客户端重新连接虹夏或重开对应任务；共享管理器也应重新打开以读取已修正库。无需重建模型 API 配置。审批气泡仍只提醒，不能授予命令权限。
 
-维护审计：`python tools/repair_nijika_sources.py --output diagnostics/source-audit.json` 默认只读；本机 DSH YAML 审计需 PyYAML（工具依赖，不是桌宠运行依赖）。执行 `--apply --backup <本机目录>` 才修正已识别的虹夏条目；备份只保存虹夏片段，不复制完整账号配置。不要将本机备份或诊断上传。
+维护审计：`python tools/repair_nijika_sources.py --output diagnostics/source-audit.json` 默认只读；本机 DSH YAML 审计需 PyYAML（工具依赖，不是桌宠运行依赖）。MAGPIE 已管理的客户端会标记 `skipped`，即使执行 `--apply` 也不会直接修改，必须回到 MAGPIE 处理。执行 `--apply --backup <本机目录>` 只会修正非 MAGPIE 的已识别虹夏条目；备份只保存虹夏片段，不复制完整账号配置。不要将本机备份或诊断上传。技能安装位另用 `tools/audit_agent_integrations.py` 检查；它不会替用户删除重复目录，发现冲突时按输出的绝对路径人工核对。
 
 
 ## 优先使用设置中心（2026-10-16）
@@ -115,7 +140,7 @@ Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 de
 | DSH | `dist\虹夏MCP-v2.exe` | `<用户目录>\.dsh\profiles\desktop\cordis.patch.yml` 与 `profiles\web\cordis.patch.yml` | `<用户目录>\.dsh\AGENTS.md` | `<用户目录>\.dsh\skills\nijika-dsh-dialog\SKILL.md` |
 | 其他 MCP 客户端 | `dist\虹夏MCP-v2.exe` | 专属接入目录的 `nijika-mcp.json`；实际客户端目标由接收 AI 核实 | 同目录的 `nijika-agent-instructions.txt` | 同目录的 `SKILL.md`，由接收 AI 按客户端规则安装 |
 
-`config.toml` 与 `cordis.patch.yml` 中写入的服务名分别为 `nijika-pet` 和 `mcp-nijika-pet`，`NIJIKA_AGENT_NAME` 提供气泡的默认来源名。内置客户端使用固定来源名：Codex=`Codex`、Claude Code=`Claude code`、DSH=`DSH`、Work=`Work`；同一个安装版 MCP 可以被多个客户端共用，每个客户端仍应配置正确名称。一个客户端只保留自己的虹夏注册：Codex 用 `nijika-pet`，Claude Code 用 `nijika-pet`，DSH 用 `mcp-nijika-pet`，Work 用 `nijika-work-pet`。旧的 `nijika_pet`、`magpie-mcp-nijika-pet` 重复条目会造成顶部来源错配，接入脚本会清理已识别的旧副本。路径由向导自动填入，不需要手抄；上述表格用于手动排查。
+`config.toml` 与 `cordis.patch.yml` 中写入的服务名分别为 `nijika-pet` 和 `mcp-nijika-pet`。新版来源字段分开：Codex=`ChatGPT + Codex`、Claude Code=`Claude + Claude Code`、DSH=`Agent + DSH`、Work=`ChatGPT + Work`。同一个安装版 MCP 可以被多个客户端共用，每个客户端仍应配置正确来源。一个客户端只保留自己的虹夏注册：Codex 用 `nijika-pet`，Claude Code 用 `nijika-pet`，DSH 用 `mcp-nijika-pet`，Work 用 `nijika-work-pet`。旧的 `nijika_pet`、`magpie-mcp-nijika-pet` 重复条目会造成顶部来源错配，接入脚本只清理已识别且可核实的旧副本。路径由向导自动填入，不需要手抄；上述表格用于手动排查。
 
 2026-10-25 来源复发修复：新 MCP 在每次完成/选择请求中读取协议的客户端信息。明确识别为 Codex 的调用可纠正遗留的 DSH 内置标签；自定义助手名称保留，Work 使用 Codex 本地引擎时仍保留 Work。未知或未提供客户端信息时沿用已配置名称，不根据任务正文猜来源。来源名仅用于显示，不证明调用者身份或授权。
 
@@ -182,7 +207,7 @@ powershell -ExecutionPolicy Bypass -File .\integrations\codex\install-hooks.ps1
 
 当前 CLI 的 `/hooks` 页分别显示 `Installed / Active / Review`：仅安装而未信任时会有 `Active=0` / `Review=1`，不能视为已启用执行。回车可审阅选中的事件；若界面提供 `t trust all`，仅在核对所有列出的 hook 都愿意信任时使用。确认虹夏各事件 `Active` 为 `1`、`Review` 为 `0`。在桌宠选择“已设置信任”只是状态回传，不会修改 Codex 的信任配置；若仍显示 `untrusted`，请核对该 CLI 使用的配置目录与来源路径。
 
-完成兜底用于 Agent 漏调工具的情形：新一轮存在真实工作或多步骤成果时，Stop 写一条“Codex · 任务完成”固定文案气泡；简短事实问答、内部标题、无有效轮次状态及仍在等待选择的回复尽量保持安静。成功调用过虹夏 show_completion 或 request_decision 的同轮不再补发，点击/关闭后重放 Stop 也不重复。过滤采用启发式，少见表述可能误判；它不补造决策选项、不自动执行审批、不唤醒结束的会话。桌宠未运行时仍只是排队，pending 不表示桌面可见。Work/DSH/Claude Code 的完成事件桥接不在本次范围。
+完成兜底用于 Agent 漏调工具的情形：新一轮存在真实工作或多步骤成果时，Stop 从最终回复生成最多 120 字的安全结果摘要，并先去除代码、链接、本机路径和常见敏感形态；不能再只写“任务完成”。简短事实问答、内部标题、无有效轮次状态及仍在等待选择的回复尽量保持安静。成功调用过虹夏 show_completion 或 request_decision 的同轮不再补发，点击/关闭后重放 Stop 也不重复。过滤采用启发式，少见表述可能误判；它不补造决策选项、不自动执行审批、不唤醒结束的会话。桌宠未运行时仍只是排队，pending 不表示桌面可见。Work/DSH/Claude Code 的完成事件桥接不在本次范围。
 
 信任后在一个新 Codex 任务中验收：让它在临时目录创建并读取一个测试文件，明确这一次不要主动调用桌宠工具；完成时应收到一条“任务完成”。再问一次“1+1等于几，只回答数字”，应不补发。最后让它主动调用一次 show_completion，应只收到一条带任务名的通知。正式会话的自然触发仍须在本机按此验证，隔离 CLI 测试不代替本人信任。
 

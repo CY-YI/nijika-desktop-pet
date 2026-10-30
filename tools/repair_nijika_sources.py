@@ -16,6 +16,7 @@ import tomllib
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from agent_discovery import magpie_state
 from notice_source import resolve_source
 
 
@@ -78,12 +79,15 @@ def patch_library(text):
     entries = [v for v in after.get("mcp", []) if is_nijika(v)]
     if not entries:
         return text, []
+    first_index = next(i for i, value in enumerate(after.get("mcp", [])) if is_nijika(value))
     targets = sorted({c for entry in entries for c in entry.get("agents", [])})
     entry = copy.deepcopy(next((v for v in entries if v.get("name") == "nijika-pet"), entries[0]))
     entry["name"], entry["agents"] = "nijika-pet", targets
     entry["env"] = {**entry.get("env", {}), **env_for("auto")}
     entry["env"].pop("NIJIKA_HOST_NAME", None)
-    after["mcp"] = [v for v in after["mcp"] if not is_nijika(v)] + [entry]
+    remaining = [value for value in after["mcp"] if not is_nijika(value)]
+    remaining.insert(min(first_index, len(remaining)), entry)
+    after["mcp"] = remaining
     skills_before = [copy.deepcopy(v) for v in after.get("skills", [])
                      if v.get("name") in {"nijika-desktop-dialog", "nijika-dsh-dialog"}]
     # Keep original access scope; remove DSH-specific double instructions from
@@ -179,34 +183,59 @@ def patch_dsh(text, host):
 
 
 def targets(home):
-    yield "Shared Magpie", home / ".config/magpie/library.json", "auto", patch_library
-    for label, rel, host in (
-        ("Codex", ".codex/config.toml", "Codex"),
-        ("Claude Code", ".claude.json", "Claude Code"),
-        ("Gemini CLI", ".gemini/settings.json", "Gemini CLI"),
-        ("Copilot CLI", ".copilot/mcp-config.json", "Copilot CLI"),
-        ("WorkBuddy", ".workbuddy/mcp.json", "WorkBuddy"),
-        ("WorkBuddy AI", ".workbuddy-ai/mcp.json", "WorkBuddy AI"),
-        ("CodeBuddy", ".codebuddy/mcp.json", "VS Code"),
-        ("Claude Desktop", "AppData/Roaming/Claude/claude_desktop_config.json", "Claude Desktop"),
-        ("Claude Desktop 3p", "AppData/Roaming/Claude-3p/claude_desktop_config.json", "Claude Desktop"),
-        ("VS Code", "AppData/Roaming/Code/User/mcp.json", "VS Code"),
+    yield "Shared Magpie", home / ".config/magpie/library.json", "auto", None, patch_library
+    for label, rel, host, manager_client in (
+        ("Codex", ".codex/config.toml", "Codex", "codex"),
+        ("Claude Code", ".claude.json", "Claude Code", "claude"),
+        ("Gemini CLI", ".gemini/settings.json", "Gemini CLI", "gemini"),
+        ("Copilot CLI", ".copilot/mcp-config.json", "Copilot CLI", "copilot"),
+        ("WorkBuddy", ".workbuddy/mcp.json", "WorkBuddy", "workbuddy"),
+        ("WorkBuddy AI", ".workbuddy-ai/mcp.json", "WorkBuddy AI", "workbuddy-ai"),
+        ("CodeBuddy", ".codebuddy/mcp.json", "VS Code", "vscode"),
+        ("Claude Desktop", "AppData/Roaming/Claude/claude_desktop_config.json",
+         "Claude Desktop", "claude-desktop"),
+        ("Claude Desktop 3p", "AppData/Roaming/Claude-3p/claude_desktop_config.json",
+         "Claude Desktop", "claude-desktop"),
+        ("VS Code", "AppData/Roaming/Code/User/mcp.json", "VS Code", "vscode"),
     ):
-        yield label, home / rel, host, patch_toml if rel.endswith(".toml") else patch_json
+        yield label, home / rel, host, manager_client, (
+            patch_toml if rel.endswith(".toml") else patch_json)
     for profile in ("desktop", "web"):
-        yield f"DSH {profile}", home / f".dsh/profiles/{profile}/cordis.patch.yml", "DSH", patch_dsh
+        yield (f"DSH {profile}", home / f".dsh/profiles/{profile}/cordis.patch.yml",
+               "DSH", "dsh", patch_dsh)
     for package in sorted((home / "AppData/Local/Packages").glob("*Claude*")):
         for app in ("Claude", "Claude-3p"):
             path = package / f"LocalCache/Roaming/{app}/claude_desktop_config.json"
             if path.is_file():
-                yield "Claude Desktop Store", path, "Claude Desktop", patch_json
+                yield "Claude Desktop Store", path, "Claude Desktop", "claude-desktop", patch_json
+
+
+def semantically_changed(original: str, updated: str, path: Path, patcher) -> bool:
+    """Ignore serialization-only rewrites so the audit does not ask for needless writes."""
+    if patcher in (patch_json, patch_library) or path.suffix.casefold() == ".json":
+        return json.loads(updated) != json.loads(original)
+    if path.suffix.casefold() == ".toml":
+        return tomllib.loads(updated) != tomllib.loads(original)
+    if path.suffix.casefold() in (".yml", ".yaml"):
+        import yaml  # Optional audit-tool dependency; not a runtime dependency.
+        return yaml.safe_load(updated) != yaml.safe_load(original)
+    return updated.strip() != original.strip()
 
 
 def run(home, apply=False, backup=None):
     report = []
-    for index, (label, path, host, patcher) in enumerate(targets(home)):
-        item = {"client": label, "path": str(path), "exists": path.is_file()}
+    for index, (label, path, host, manager_client, patcher) in enumerate(targets(home)):
+        manager = magpie_state(home, manager_client) if manager_client else {
+            "managed": False, "error": False}
+        item = {"client": label, "path": str(path), "exists": path.is_file(),
+                "manager": "magpie" if manager["managed"] else "nijika"}
         report.append(item)
+        if manager["error"]:
+            item["error"] = "MAGPIE ownership state is unreadable"
+            continue
+        if manager["managed"]:
+            item["skipped"] = "MAGPIE managed; use the manager instead of direct edits"
+            continue
         if not path.is_file():
             continue
         original = path.read_bytes()
@@ -218,7 +247,7 @@ def run(home, apply=False, backup=None):
                 list(v["before"]) if isinstance(v["before"], dict) else
                 [x.get("name", x.get("insert", [{}])[0].get("id", "")) for x in v["before"]]
                 for v in fragments]
-            item["changed"] = bool(fragments) and updated.strip() != text.strip()
+            item["changed"] = bool(fragments) and semantically_changed(text, updated, path, patcher)
             if apply and item["changed"]:
                 # Back up public Nijika fragments only; reject surprise secrets
                 # rather than copying full credential-bearing client files.

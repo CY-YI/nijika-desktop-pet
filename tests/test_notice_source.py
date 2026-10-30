@@ -26,6 +26,32 @@ class NoticeSourceTests(unittest.TestCase):
         self.assertEqual(resolve_source("ChatGPT", "Obsidian", "dsh-mcp-client").heading,
                          "ChatGPT · Obsidian")
 
+    def test_multimodel_host_never_uses_host_product_as_agent_name(self):
+        for caller, software, agent_name in (
+            ("dsh-mcp-client", "", "Codex"),
+            ("dsh-mcp-client", "DSH", "Codex"),
+            ("dsh-mcp-client", "DSH", "DSH"),
+            ("workbuddy", "WorkBuddy", "Work"),
+            ("workbuddy", "WorkBuddy AI", "ChatGPT"),
+        ):
+            with self.subTest(caller=caller, software=software, agent_name=agent_name):
+                self.assertEqual(
+                    resolve_source("auto", "", caller, agent_name, software).agent,
+                    "Agent",
+                )
+        self.assertEqual(
+            resolve_source("auto", "", "dsh-mcp-client", "DeepSeek", "DSH").heading,
+            "DeepSeek · DSH",
+        )
+        self.assertEqual(
+            resolve_source("auto", "", "dsh-mcp-client", "研究助手", "DSH").heading,
+            "研究助手 · DSH",
+        )
+        self.assertEqual(
+            resolve_source("auto", "", "vscode", "Codex", "VS Code").heading,
+            "VS Code · Codex",
+        )
+
     def test_task_prefixes_removed_only_at_delimited_start(self):
         source = notification_source("ChatGPT", "Codex")
         for task in ("Codex · Codex: 修复问题", "ChatGPT · Codex：修复问题"):

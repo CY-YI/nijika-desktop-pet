@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,8 +53,12 @@ def verify(executable: Path) -> dict:
             def call(route, payload=None):
                 request = Request(origin + route, json.dumps(payload).encode("utf-8") if payload is not None else None,
                                   {"X-Nijika-Token": token, "Content-Type": "application/json"})
-                with urlopen(request, timeout=5) as response:
-                    return json.loads(response.read())
+                try:
+                    with urlopen(request, timeout=5) as response:
+                        return json.loads(response.read())
+                except HTTPError as error:
+                    detail = error.read().decode("utf-8", errors="replace")
+                    raise RuntimeError(f"{route} returned HTTP {error.code}: {detail}") from error
 
             assert call("/api/state")["agents"] == []
             codex = user / ".codex"
@@ -68,7 +73,10 @@ def verify(executable: Path) -> dict:
                 patch.write_text("# keep existing profile\n", encoding="utf-8")
             checked = []
             for client in ("codex", "dsh", "custom"):
-                plan = call("/api/agents/plan", {"client": client, "name": "隔离验收"})
+                payload = {"client": client, "name": "隔离验收"}
+                if client == "custom":
+                    payload.update({"agent_identity": "Claude", "software": "Obsidian"})
+                plan = call("/api/agents/plan", payload)
                 assert "wait_for_reply" in plan["instructions"]
                 assert "# BEGIN NIJIKA-CODEX-DIALOG" not in plan["instructions"]
                 result = call("/api/agents/apply", {"plan_id": plan["plan_id"]})["agent"]

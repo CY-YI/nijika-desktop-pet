@@ -43,6 +43,27 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                     notice = isolated.get(result.structured_content["request_id"])
                     self.assertEqual((notice.agent, notice.software), ("Agent", "DSH"))
 
+    async def test_dsh_rejects_stale_codex_agent_label_but_keeps_real_model(self):
+        with tempfile.TemporaryDirectory() as directory:
+            isolated = NotificationStore(Path(directory) / "notices.sqlite3")
+            with patch.object(mcp_server, "store", isolated), \
+                    patch.object(mcp_server, "EDITOR_HOST", ""), \
+                    patch.object(mcp_server, "AGENT_NAME", "auto"), \
+                    patch.object(mcp_server, "HOST_NAME", ""):
+                async with Client(mcp_server.mcp, client_info=Implementation(name="dsh-mcp-client", version="test")) as client:
+                    stale = await client.call_tool("show_completion", {
+                        "task": "来源修复", "summary": "验证错误来源会被纠正。",
+                        "agent_name": "Codex", "software": "DSH",
+                    })
+                    stale_notice = isolated.get(stale.structured_content["request_id"])
+                    self.assertEqual((stale_notice.agent, stale_notice.software), ("Agent", "DSH"))
+                    genuine = await client.call_tool("show_completion", {
+                        "task": "来源保留", "summary": "验证明确模型来源会保留。",
+                        "agent_name": "DeepSeek", "software": "DSH",
+                    })
+                    genuine_notice = isolated.get(genuine.structured_content["request_id"])
+                    self.assertEqual((genuine_notice.agent, genuine_notice.software), ("DeepSeek", "DSH"))
+
     async def test_profile_activity_is_recorded_only_by_successful_host_notice(self):
         with tempfile.TemporaryDirectory() as directory:
             isolated = NotificationStore(Path(directory) / "notices.sqlite3")

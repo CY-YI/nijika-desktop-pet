@@ -36,8 +36,9 @@ class SourceConfigRepairTests(unittest.TestCase):
                     "extra": {"value": "untouched"}}
         result, fragments = patch_library(json.dumps(original))
         parsed = json.loads(result)
-        self.assertEqual(parsed["mcp"][-1]["env"], {"NIJIKA_AGENT_NAME": "auto"})
-        self.assertEqual(parsed["mcp"][-1]["agents"], ["codex", "dsh", "gemini"])
+        merged = next(item for item in parsed["mcp"] if item.get("name") == "nijika-pet")
+        self.assertEqual(merged["env"], {"NIJIKA_AGENT_NAME": "auto"})
+        self.assertEqual(merged["agents"], ["codex", "dsh", "gemini"])
         self.assertEqual(parsed["skills"][0]["agents"], ["codex"])
         self.assertEqual(parsed["skills"][1]["agents"], ["dsh"])
         self.assertEqual(parsed["extra"], original["extra"])
@@ -94,5 +95,49 @@ class SourceConfigRepairTests(unittest.TestCase):
             backup = home / "backup"
             report = run(home, True, backup)
             self.assertFalse(any("error" in v for v in report))
-            self.assertNotIn("must-stay-local", "".join(p.read_text() for p in backup.iterdir()))
-            self.assertEqual(json.loads(target.read_text())["unrelated"]["private_setting"], "must-stay-local")
+            self.assertNotIn("must-stay-local", "".join(
+                p.read_text(encoding="utf-8") for p in backup.iterdir()))
+            self.assertEqual(
+                json.loads(target.read_text(encoding="utf-8"))["unrelated"]["private_setting"],
+                "must-stay-local",
+            )
+
+    def test_magpie_managed_client_is_reported_but_never_edited(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            library = home / ".config/magpie/library.json"
+            library.parent.mkdir(parents=True)
+            library.write_text(json.dumps({"mcp": [{
+                "name": "nijika-pet",
+                "command": str(home / "虹夏MCP-v2.exe"),
+                "agents": ["gemini"],
+                "env": {"NIJIKA_AGENT_NAME": "auto"},
+            }]}), encoding="utf-8")
+            target = home / ".gemini/settings.json"
+            target.parent.mkdir()
+            target.write_text(json.dumps({"mcpServers": {"nijika-pet": {
+                **self.server, "env": {"NIJIKA_AGENT_NAME": "auto"}}}}), encoding="utf-8")
+            original = target.read_bytes()
+
+            report = run(home, True, home / "backup")
+            item = next(value for value in report if value["client"] == "Gemini CLI")
+
+            self.assertEqual(item["manager"], "magpie")
+            self.assertIn("skipped", item)
+            self.assertEqual(target.read_bytes(), original)
+            self.assertFalse((home / "backup").exists())
+
+    def test_semantically_unchanged_json_is_not_reported_changed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            target = home / ".gemini/settings.json"
+            target.parent.mkdir()
+            target.write_text(json.dumps({"mcpServers": {"nijika-pet": {
+                **self.server,
+                "env": {"NIJIKA_AGENT_NAME": "Gemini", "NIJIKA_HOST_NAME": "Gemini CLI"},
+            }}}, ensure_ascii=False), encoding="utf-8")
+
+            report = run(home)
+            item = next(value for value in report if value["client"] == "Gemini CLI")
+
+            self.assertFalse(item["changed"])

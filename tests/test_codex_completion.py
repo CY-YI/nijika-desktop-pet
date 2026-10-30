@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from approval_hook import handle_event, main
-from codex_completion import prompt_class, tool_flags
+from codex_completion import completion_preview, prompt_class, tool_flags
 from notification_store import NotificationStore
 
 
@@ -42,14 +42,14 @@ class CodexCompletionTests(unittest.TestCase):
         with contextlib.closing(sqlite3.connect(self.path)) as connection:
             return connection.execute("SELECT COUNT(*) FROM notifications").fetchone()[0]
 
-    def test_task_creates_one_generic_notice(self):
+    def test_task_creates_one_result_preview_notice(self):
         self.begin()
         self.tool()
         request = self.stop()
         self.assertIsNotNone(request)
         notice = self.store.get(request)
         self.assertEqual((notice.agent, notice.title, notice.message, notice.choices), (
-            "ChatGPT", "任务完成", "Codex 任务已完成，请查看结果。", ("知道了",),
+            "ChatGPT", "任务完成", "已完成修复，回归测试通过。", ("知道了",),
         ))
         self.assertEqual(notice.software, "Codex")
         self.assertEqual(notice.kind, "agent")
@@ -170,15 +170,36 @@ class CodexCompletionTests(unittest.TestCase):
             self.assertIsNotNone(self.stop())
         self.assertEqual(self.count(), 3)
 
-    def test_turn_metadata_never_persists_prompt_command_response_or_raw_ids(self):
+    def test_turn_metadata_never_persists_prompt_command_full_response_or_raw_ids(self):
         self.identity = {"session_id": "PRIVATE_SESSION_SENTINEL", "turn_id": "PRIVATE_TURN_SENTINEL"}
         self.begin("请检查 PRIVATE_PROMPT_SENTINEL")
         handle_event(self.event("PostToolUse", tool_name="Bash", tool_input={
             "command": "PRIVATE_COMMAND_SENTINEL", "description": "PRIVATE_REASON_SENTINEL",
         }, tool_response="PRIVATE_TOOL_OUTPUT_SENTINEL"), self.store)
         self.stop("已完成检查。PRIVATE_RESPONSE_SENTINEL")
+        self.assertEqual(self.store.next_pending().message, "已完成检查。")
         for path in self.path.parent.glob("queue.sqlite3*"):
             self.assertNotIn(b"PRIVATE_", path.read_bytes())
+
+    def test_completion_preview_redacts_links_paths_and_common_secret_shapes(self):
+        preview = completion_preview(
+            "已修复登录问题。API_KEY=supersecretvalue\n"
+            "https://example.test/private C:\\Users\\person\\secret.txt "
+            "PRIVATE_RESPONSE_SENTINEL"
+        )
+        self.assertIn("已修复登录问题", preview)
+        for secret in ("supersecretvalue", "example.test", "Users", "PRIVATE_RESPONSE_SENTINEL"):
+            self.assertNotIn(secret, preview)
+        self.assertLessEqual(len(preview), 120)
+
+    def test_completion_preview_skips_code_and_selects_first_useful_paragraph(self):
+        self.assertEqual(
+            completion_preview("```powershell\nGet-Secret\n```\n\n"
+                               "1. 已修复本地提醒。\n2. 回归测试通过。\n\n后续信息不应进入预览。"),
+            "已修复本地提醒。 回归测试通过。",
+        )
+        self.assertEqual(completion_preview("```powershell\nGet-Secret\n```"),
+                         "已完成本轮任务，请查看结果。")
 
     def test_finished_tombstone_survives_notification_retention(self):
         with patch("notification_store.time.time", return_value=1_000_000):

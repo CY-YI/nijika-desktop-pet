@@ -8,6 +8,7 @@ import unittest
 
 from agent_setup import AgentSetup, remove_legacy_dsh_nijika_entry
 from control_store import ControlStore
+from setup_config import repair_orphan_dsh_marker
 
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY = ("    - id: magpie-mcp-nijika-pet\n"
@@ -45,6 +46,36 @@ class SetupSafetyTests(unittest.TestCase):
                      "- insert:\n" + LEGACY + "      description: |\n        literal\n"):
             with self.assertRaises(ValueError):
                 remove_legacy_dsh_nijika_entry(text)
+
+    def test_dsh_orphan_marker_is_removed_without_touching_managed_or_paired_blocks(self):
+        orphan = "# keep\n# BEGIN NIJIKA-DSH-MCP\n- insert:\n    - id: keep\n"
+        repaired = repair_orphan_dsh_marker(orphan)
+        self.assertNotIn("# BEGIN NIJIKA-DSH-MCP", repaired)
+        self.assertIn("- insert:\n    - id: keep", repaired)
+        managed = orphan + "      id: mcp-nijika-pet\n"
+        self.assertEqual(repair_orphan_dsh_marker(managed), managed)
+        paired = orphan + "# END NIJIKA-DSH-MCP\n"
+        self.assertEqual(repair_orphan_dsh_marker(paired), paired)
+
+    def test_magpie_managed_dsh_repairs_only_orphan_marker_and_never_rewrites_service(self):
+        manager = self.home / ".config/magpie/library.json"
+        manager.parent.mkdir(parents=True)
+        manager.write_text(json.dumps({"mcp": [{
+            "name": "nijika-pet", "command": str(self.setup.mcp), "args": [],
+            "agents": ["dsh"],
+        }]}), encoding="utf-8")
+        for profile in ("desktop", "web"):
+            path = self.home / ".dsh/profiles" / profile / "cordis.patch.yml"
+            path.parent.mkdir(parents=True)
+            path.write_text("# keep\n# BEGIN NIJIKA-DSH-MCP\n- insert:\n    - id: keep\n",
+                            encoding="utf-8")
+        plan = self.setup.plan("dsh", "助手")
+        self.assertEqual(plan["manager"], "magpie")
+        self.assertEqual(len(plan["files"]), 2)
+        self.setup.apply(plan["plan_id"])
+        for profile in ("desktop", "web"):
+            value = (self.home / ".dsh/profiles" / profile / "cordis.patch.yml").read_text(encoding="utf-8")
+            self.assertEqual(value, "# keep\n- insert:\n    - id: keep\n")
 
     def test_dsh_plan_and_apply_preserve_sibling_and_backup(self):
         text = "# user patch\n- insert:\n" + LEGACY + OTHER

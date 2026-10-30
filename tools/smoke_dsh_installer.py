@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+PROJECT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT
 MARKERS = ("# BEGIN NIJIKA-DSH-MCP", "# BEGIN NIJIKA-DSH-DIALOG")
 
 
@@ -28,11 +30,11 @@ def main() -> None:
             folder.mkdir(parents=True)
             (folder / "cordis.patch.yml").write_text("# preserved patch\n" + legacy + sibling, encoding="utf-8")
         command = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-                   "-File", str(ROOT / "integrations/dsh/install.ps1"), "-DshRoot", str(root)]
+                   "-File", str(PROJECT / "integrations/dsh/install.ps1"), "-DshRoot", str(root)]
         for _ in range(2):
             result = subprocess.run(command, capture_output=True, timeout=60)
             assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
-        expected = str(ROOT / "dist" / "虹夏MCP-v2.exe")
+        expected = str(PROJECT / "dist" / "虹夏MCP-v2.exe")
         for profile in ("desktop", "web"):
             text = (root / "profiles" / profile / "cordis.patch.yml").read_text(encoding="utf-8")
             assert expected in text, text

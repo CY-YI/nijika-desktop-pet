@@ -17,12 +17,15 @@ from notification_store import NotificationStore  # noqa: E402
 
 
 def main() -> None:
+    source = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "dist" / "虹夏审批提醒.exe"
+    if not source.is_file():
+        raise SystemExit(f"Missing packaged approval hook: {source}")
     with tempfile.TemporaryDirectory(prefix="nijika-hook-") as directory:
         root = Path(directory)
         # Apostrophes, Unicode and spaces must survive the fixed command quoting.
         executable = root / "space ' 中文" / "虹夏审批提醒.exe"
         executable.parent.mkdir()
-        shutil.copy2(ROOT / "dist" / executable.name, executable)
+        shutil.copy2(source, executable)
         home = root / "codex"
         home.mkdir()
         unrelated = {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo preserved"}]}
@@ -139,7 +142,9 @@ def main() -> None:
 
         run_cc("PermissionRequest")
         reminder = store.next_pending()
-        assert reminder is not None and reminder.agent == "Claude code"
+        assert reminder is not None, "Claude Code PermissionRequest did not create a notice"
+        assert (reminder.agent, reminder.software) == ("Claude", "Claude Code"), (
+            reminder.agent, reminder.software, reminder.title)
         assert "Claude Code 的权限提示" in reminder.message
         store.answer(reminder.id, 0)
         run_cc("PermissionRequest")
