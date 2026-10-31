@@ -58,7 +58,11 @@ def verify(executable: Path) -> None:
                     return response.read()
 
             for name in ("form-state.js", "app.js", "interaction.js", "styles.css"):
-                assert call("/" + name) == (ROOT / "control-ui" / name).read_bytes(), name
+                # Git archives use LF; reviewed Windows builds may embed CRLF.
+                # Compare text with only that transport difference normalized.
+                assert call("/" + name).replace(b"\r\n", b"\n") == (
+                    ROOT / "control-ui" / name
+                ).read_bytes().replace(b"\r\n", b"\n"), name
             try:
                 urlopen(origin + "/api/state", timeout=10)
             except HTTPError as error:
