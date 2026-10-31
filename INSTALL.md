@@ -107,7 +107,7 @@ VS Code 扩展只在明确条件成立时使用 `VS Code · Agent` 来源；共�
 
 收件人双击 Setup EXE，按向导选择安装目录、桌面快捷方式和可选开机自启，默认安装到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，不需要管理员权限、Python 或 PowerShell。首次启动后打开“虹夏桌宠设置”配置 Agent。覆盖安装会更新 Work MCP 路径，但不会改外部客户端；升级和卸载保留 `%USERPROFILE%\.nijika-desktop-pet` 的消息、皮肤和 Agent 档案。通过 Windows“已安装的应用”卸载，外部 Agent 配置需另行管理。
 
-维护者执行 `python tools\smoke_windows_installer.py <Setup EXE>`，在临时中文目录验证安装、升级、Work 路径、数据保留和卸载。测试临时重定向并恢复当前用户的桌面、开始菜单和启动目录，不覆盖正式安装。静默安装支持 `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER /DIR=<目录>`；卸载器同样支持这些静默参数。当前安装器未签名，Windows 可能显示 SmartScreen 发布者提示，应通过来源和 SHA-256 核对，不要求关闭安全防护。
+维护者仅在可丢弃的 Windows Sandbox 或虚拟机内执行 `python tools\smoke_windows_installer.py <Setup EXE> --disposable-windows-session`，验证中文安装目录、升级、Work 路径、数据保留和卸载。测试默认拒绝执行；即使加参数，只要检测到已有虹夏安装、卸载登记或快捷方式，也会拒绝。测试不再改写 Windows 桌面、开始菜单或启动目录的注册表路径，不能在日常使用账户中运行。静默安装支持 `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER /DIR=<目录>`；卸载器同样支持这些静默参数。当前安装器未签名，Windows 可能显示 SmartScreen 发布者提示，应通过来源和 SHA-256 核对，不要求关闭安全防护。
 
 旧 `tools\package_release.py` ZIP 通道继续保留；脚本可选接入 Codex、Work、DSH 或 Claude Code（`-Codex -Work -CodexHooks -ClaudeHooks -Dsh -AutoStart`）。角色素材没有公开再分发许可证，不应将包含这些素材的试用包公开上架。
 

@@ -46,5 +46,51 @@ class InstallerPackagingTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
+@unittest.skipUnless(os.name == "nt", "Windows installer safety guards")
+class InstallerSmokeSafetyTests(unittest.TestCase):
+    def setUp(self):
+        from tools import smoke_windows_installer
+        self.smoke = smoke_windows_installer
+
+    def test_default_rejection_happens_before_any_installer_or_file_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory) / "must-not-be-created"
+            with patch.object(self.smoke, "run") as run:
+                with self.assertRaisesRegex(RuntimeError, "disposable"):
+                    self.smoke.verify(Path("unused.exe"), work)
+            run.assert_not_called()
+            self.assertFalse(work.exists())
+
+    def test_explicit_flag_still_refuses_existing_production_installation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "NijikaDesktopPet").mkdir()
+            with patch.dict(os.environ, {"LOCALAPPDATA": directory}):
+                with self.assertRaisesRegex(RuntimeError, "Existing Nijika installation"):
+                    self.smoke.require_disposable_session(True)
+
+    def test_existing_registration_is_protected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"LOCALAPPDATA": directory}), \
+                    patch.object(self.smoke.winreg, "OpenKey") as open_key:
+                with self.assertRaisesRegex(RuntimeError, "uninstall registration"):
+                    self.smoke.require_disposable_session(True)
+                open_key.return_value.Close.assert_called_once()
+
+    def test_existing_shortcuts_are_protected_even_with_custom_install_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            desktop = base / "Desktop"
+            desktop.mkdir()
+            shortcut = desktop / "虹夏桌宠.lnk"
+            shortcut.write_bytes(b"existing shortcut")
+            paths = {0x10: desktop, 0x02: base / "Programs", 0x07: base / "Startup"}
+            with patch.dict(os.environ, {"LOCALAPPDATA": directory}), \
+                    patch.object(self.smoke.winreg, "OpenKey", side_effect=FileNotFoundError), \
+                    patch.object(self.smoke, "known_folder", side_effect=paths.__getitem__):
+                with self.assertRaisesRegex(RuntimeError, "Existing Nijika shortcuts"):
+                    self.smoke.require_disposable_session(True)
+            self.assertEqual(shortcut.read_bytes(), b"existing shortcut")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,4 @@
-"""Exercise the actual Setup EXE in an isolated, user-owned directory."""
+"""Exercise Setup only in a disposable Windows Sandbox or VM session."""
 from __future__ import annotations
 
 import argparse
@@ -46,15 +46,63 @@ def wait_for_uninstall_log(path: Path) -> None:
     raise TimeoutError("Uninstall worker still has its log open")
 
 
-def verify(setup: Path, work: Path) -> dict:
-    desktop = work / "Desktop"
-    start_menu = work / "Start Menu/Programs"
-    startup = work / "Startup"
+def known_folder(identifier: int) -> Path:
+    buffer = ctypes.create_unicode_buffer(32768)
+    result = ctypes.windll.shell32.SHGetFolderPathW(None, identifier, None, 0, buffer)
+    if result != 0 or not buffer.value:
+        raise RuntimeError("Cannot resolve Windows shell folder; refusing installer test")
+    path = Path(buffer.value)
+    if not path.is_absolute() or "nijika-setup-smoke-" in str(path).lower():
+        raise RuntimeError("Invalid Windows shell folder; refusing installer test")
+    return path
+
+
+def require_disposable_session(confirmed: bool) -> dict[str, Path]:
+    if not confirmed:
+        raise RuntimeError(
+            "Installer smoke tests require a disposable Windows Sandbox or VM. "
+            "Inside that session only, pass --disposable-windows-session. "
+            "This test must not run in your everyday Windows account."
+        )
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if not local_app_data:
+        raise RuntimeError("LOCALAPPDATA is unavailable; refusing installer test")
+    if (Path(local_app_data) / "NijikaDesktopPet").exists():
+        raise RuntimeError("Existing Nijika installation detected; refusing installer test")
+    uninstall_key = (
+        r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
+        r"\{D72B6BFA-8D47-46B7-8F5D-CBBF16BB68A0}_is1"
+    )
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, uninstall_key)
+    except FileNotFoundError:
+        pass
+    else:
+        key.Close()
+        raise RuntimeError("Existing Nijika uninstall registration detected")
+    folders = {
+        "desktop": known_folder(0x10),
+        "start_menu": known_folder(0x02),
+        "startup": known_folder(0x07),
+    }
+    existing = [
+        folders["desktop"] / "虹夏桌宠.lnk",
+        folders["desktop"] / "虹夏桌宠设置.lnk",
+        folders["start_menu"] / "虹夏桌宠",
+        folders["startup"] / "虹夏桌宠.lnk",
+    ]
+    if any(path.exists() for path in existing):
+        raise RuntimeError("Existing Nijika shortcuts detected; refusing installer test")
+    return folders
+
+
+def verify(setup: Path, work: Path, *, disposable_session: bool = False) -> dict:
+    folders = require_disposable_session(disposable_session)
+    desktop = folders["desktop"]
+    start_menu = folders["start_menu"]
+    startup = folders["startup"]
     for directory in (desktop, start_menu, startup):
         directory.mkdir(parents=True, exist_ok=True)
-    (desktop / "DUMMY").write_text("known folder", encoding="ascii")
-    (start_menu / "DUMMY").write_text("known folder", encoding="ascii")
-    (startup / "DUMMY").write_text("known folder", encoding="ascii")
     install = work / "收件人 AppData/Nijika Desktop Pet/app"
     home = work / "收件人 User"
     user_data = home / ".nijika-desktop-pet"
@@ -64,28 +112,9 @@ def verify(setup: Path, work: Path) -> dict:
     log = work / "install.log"
     common = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER",
               "/TASKS=desktopicon,autostart", f"/DIR={install}", f"/LOG={log}"]
-    # HKCU overrides are restored in finally below. This avoids shortcuts on
-    # the maintainer's actual desktop during the real installer test.
-    known_folders = {"Desktop": str(desktop), "Start Menu": str(work / "Start Menu"),
-                     "Programs": str(start_menu), "Startup": str(startup)}
-    registry_path = r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
-    saved_folders = {}
-    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, registry_path, 0,
-                        winreg.KEY_QUERY_VALUE | winreg.KEY_SET_VALUE) as key:
-        for name, value in known_folders.items():
-            saved_folders[name] = winreg.QueryValueEx(key, name)
-            winreg.SetValueEx(key, name, 0, winreg.REG_EXPAND_SZ, value)
-
-    def restore_known_folders() -> None:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, registry_path, 0, winreg.KEY_SET_VALUE) as key:
-            for name, (value, kind) in saved_folders.items():
-                winreg.SetValueEx(key, name, 0, kind, value)
-
-    try:
-        run([str(setup), *common])
-    except BaseException:
-        restore_known_folders()
-        raise
+    # Use real shell folders only inside a disposable Windows session. Never
+    # redirect the user's known folders through registry edits.
+    run([str(setup), *common])
     expected = {name for name in (*package_release.FILES, "SHA256SUMS.json")}
     for name in expected:
         assert (install / name).is_file(), name
@@ -107,31 +136,24 @@ def verify(setup: Path, work: Path) -> dict:
 
     # An in-place upgrade must retain both program integrity and user-owned data.
     (install / "dist/nijika-notice.log").write_text("generated diagnostic", encoding="utf-8")
-    try:
-        run([str(setup), *common])
-    except BaseException:
-        restore_known_folders()
-        raise
+    run([str(setup), *common])
     assert protected.read_bytes() == b"test data that an upgrade and uninstall must preserve"
     for name, digest in source_digests.items():
         assert hashlib.sha256((install / name).read_bytes()).hexdigest() == digest, name
 
-    try:
-        process = subprocess.Popen([str(uninstaller), "/VERYSILENT", "/SUPPRESSMSGBOXES",
-                                    "/NORESTART", f"/LOG={work / 'uninstall.log'}"])
-        deadline = time.monotonic() + 90
-        while (install / "dist/虹夏桌宠.exe").exists():
-            if time.monotonic() >= deadline:
-                process.kill()
-                raise TimeoutError("Uninstaller did not finish")
-            time.sleep(0.2)
-        # Inno uninstallers can relocate themselves to TEMP before returning.
-        process.wait(timeout=90)
-        if process.returncode:
-            raise RuntimeError(f"Uninstaller failed: {process.returncode}")
-        wait_for_uninstall_log(work / "uninstall.log")
-    finally:
-        restore_known_folders()
+    process = subprocess.Popen([str(uninstaller), "/VERYSILENT", "/SUPPRESSMSGBOXES",
+                                "/NORESTART", f"/LOG={work / 'uninstall.log'}"])
+    deadline = time.monotonic() + 90
+    while (install / "dist/虹夏桌宠.exe").exists():
+        if time.monotonic() >= deadline:
+            process.kill()
+            raise TimeoutError("Uninstaller did not finish")
+        time.sleep(0.2)
+    # Inno uninstallers can relocate themselves to TEMP before returning.
+    process.wait(timeout=90)
+    if process.returncode:
+        raise RuntimeError(f"Uninstaller failed: {process.returncode}")
+    wait_for_uninstall_log(work / "uninstall.log")
     assert not (install / "dist/虹夏桌宠.exe").exists()
     assert protected.read_bytes() == b"test data that an upgrade and uninstall must preserve"
     assert not (desktop / "虹夏桌宠.lnk").exists()
@@ -145,7 +167,8 @@ def verify(setup: Path, work: Path) -> dict:
         "user_data_preserved": True,
         "silent_uninstall": True,
         "shortcuts_removed": True,
-        "production_install_unchanged": True,
+        "disposable_windows_session": True,
+        "known_folder_registry_not_modified": True,
     }
 
 
@@ -153,10 +176,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("setup", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--disposable-windows-session", action="store_true",
+        help="Confirm this runs in a disposable Windows Sandbox/VM, not your daily account",
+    )
     args = parser.parse_args()
+    require_disposable_session(args.disposable_windows_session)
     temporary = tempfile.TemporaryDirectory(prefix="nijika-setup-smoke-")
     try:
-        result = verify(args.setup.resolve(), Path(temporary.name))
+        result = verify(
+            args.setup.resolve(), Path(temporary.name),
+            disposable_session=args.disposable_windows_session,
+        )
     finally:
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
