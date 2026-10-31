@@ -12,6 +12,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SETUP = ROOT / "dist-release" / "installer-0.1.7" / "虹夏桌宠-Setup-0.1.7.exe"
 DEFAULT_MANIFEST = ROOT / "dist-release" / "installer-0.1.7" / "installer-manifest.json"
+DEFAULT_AGENT_SETUP = ROOT / "AGENT_SETUP.md"
 DEFAULT_OUTPUT = ROOT / "dist-release" / "friend-trial-0.1.7" / "虹夏桌宠-v0.1.7-朋友私下试用.zip"
 ARCHIVE_ROOT = "虹夏桌宠-v0.1.7-朋友私下试用"
 
@@ -46,11 +47,13 @@ Work 仅支持本机任务，普通云端聊天不能直接访问本机程序。
 """
 
 
-def build(output: Path, setup: Path, manifest: Path) -> dict[str, object]:
+def build(output: Path, setup: Path, manifest: Path, agent_setup: Path) -> dict[str, object]:
     if not setup.is_file():
         raise FileNotFoundError(f"Missing Setup EXE: {setup}")
     if not manifest.is_file():
         raise FileNotFoundError(f"Missing installer manifest: {manifest}")
+    if not agent_setup.is_file():
+        raise FileNotFoundError(f"Missing Agent setup guide: {agent_setup}")
     manifest_data = json.loads(manifest.read_text(encoding="utf-8-sig"))
     actual_digest = sha256(setup)
     expected_digest = str(manifest_data.get("sha256", "")).lower()
@@ -62,6 +65,7 @@ def build(output: Path, setup: Path, manifest: Path) -> dict[str, object]:
     with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
         archive.write(setup, f"{ARCHIVE_ROOT}/{setup.name}")
         archive.write(manifest, f"{ARCHIVE_ROOT}/{manifest.name}")
+        archive.write(agent_setup, f"{ARCHIVE_ROOT}/{agent_setup.name}")
         archive.writestr(f"{ARCHIVE_ROOT}/朋友试用说明.txt", guide_bytes)
     return {
         "status": "built",
@@ -69,7 +73,7 @@ def build(output: Path, setup: Path, manifest: Path) -> dict[str, object]:
         "bytes": output.stat().st_size,
         "sha256": sha256(output),
         "setup_sha256": actual_digest,
-        "files": [setup.name, manifest.name, "朋友试用说明.txt"],
+        "files": [setup.name, manifest.name, agent_setup.name, "朋友试用说明.txt"],
     }
 
 
@@ -77,9 +81,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--setup", type=Path, default=DEFAULT_SETUP)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--agent-setup", type=Path, default=DEFAULT_AGENT_SETUP)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
-    print(json.dumps(build(args.output, args.setup, args.manifest), ensure_ascii=False, indent=2))
+    print(json.dumps(build(args.output, args.setup, args.manifest, args.agent_setup),
+                     ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

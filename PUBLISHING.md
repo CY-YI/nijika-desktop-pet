@@ -9,8 +9,8 @@
 
 ## 2026-10-31 朋友私下试用包
 
-- 使用 `python tools/package_friend_trial.py` 生成三文件 ZIP：安装器、安装器清单和简明试用说明；不包含用户数据库、Agent 配置、备份、诊断或发送者路径。
-- 当前包：`dist-release/friend-trial-0.1.7/虹夏桌宠-v0.1.7-朋友私下试用.zip`，大小 72,122,456 字节，SHA-256 `6535f68e2f6f65c67ccf0d6341993bb8d79adcb5370e38764293d2bc903e80a9`。
+- 使用 `python tools/package_friend_trial.py` 生成四文件 ZIP：安装器、安装器清单、最新 `AGENT_SETUP.md` 和简明试用说明；不包含用户数据库、Agent 配置、备份、诊断或发送者路径。
+- 当前包：`dist-release/friend-trial-0.1.7/虹夏桌宠-v0.1.7-朋友私下试用.zip`，大小 72,138,853 字节，SHA-256 `c34098b822b2d48ff6339d804b21dbf007e559bc135d94dd6d6ef434d0166ccc`。
 - 这是私下测试包；收件人解压后双击 Setup，安装后从“虹夏桌宠设置 → Agent 接入”完成自己的客户端配置。角色和图标素材的公开再分发权仍未解决，不作为公开下载包。
 
 ## 2026-10-31 每轮回复提醒修复
