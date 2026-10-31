@@ -10,7 +10,7 @@
 - [x] 备份旧 Hook、规则、技能与 Work 0.1.7；重建并同步工作区 `dist/` 与正式安装目录的审批提醒 EXE。新 SHA-256 为 `5CD44E9F738D96AE68E0ECCFE25AD9467EEA18C48FC882BE2D254198B8C8F717`；桌宠、MCP、消息库、MAGPIE 项和 Hook 信任未覆盖。
 - [x] 跑冻结 Hook、MCP、标准目录前端、接入审计、Work 0.1.8 与 DSH 安装器冒烟，结果均通过。真实 Codex CLI 自定义 provider 隔离冒烟本轮未重跑，不记为通过。
 - [x] 验证证据已写入 `diagnostics/internal-task-guard-20261031-v2/verification.json`；Codex/DSH/Work 技能审计为 `clean`，Work 插件显示 `installed=true, enabled=true, version=0.1.8`。
-- [ ] 提交并推送现有开发分支。
+- [x] 已提交并推送现有开发分支（`2df4b2a`）。
 
 ## 当前任务：每轮回复提醒（2026-10-31）
 
