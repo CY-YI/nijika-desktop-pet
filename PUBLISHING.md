@@ -1,5 +1,14 @@
 # 本机候选与发布检查单
 
+## 2026-10-31 统一提醒核心私下试用
+
+- 本机部署只更新共享 Hook 和独立 DSH 事件块，保留旧 MCP/桌宠、MAGPIE 服务、权限及数据。用户在实际 DSH 桌面确认两条测试气泡和无重复；两次都主动调用工具。无工具补发由已安装的 rc.2/rc.3 真实 SessionStore → 转接 → 冻结程序隔离链路验证，仍保留自然会话视觉补验项。Work 等未适配宿主仅主动调用。
+- 最终构建：`dist-next/shared-notifications-final-20261031/`。`package_release.py` 的 `--app-exe`、`--mcp-exe`、`--approval-exe` 应同时指向这份构建；避免将新主程序和旧 Hook 混包，不需要替换本机正在使用的程序来打包。
+- 当前私下试用 ZIP：`dist-release/shared-notifications-0.1.8/虹夏桌宠-v0.1.8-统一提醒-私下试用.zip`，70,686,481 字节，SHA-256 `cb9a99f77184fde0cfb3cae24e50e42ceb71aa9fb8a9638a8367597883e8af0d`。含 25 项白名单文件与 `SHA256SUMS.json`；已逐项校验、检查无用户数据/配置，并运行从该 ZIP 解出的程序做隔离核心流程验证。随包包含 `00-解压后先看.txt`、`AGENT_SETUP.md`、`NOTIFICATION_PROTOCOL.md` 与 DSH 说明。
+- Setup 0.1.8 已从同一构建编译到 `dist-release/installer-0.1.8/`，SHA-256 `4aa2ceafde95d09347c6f09a79b502ddd5cfe3c9707d3f2ed6c4c4548db97fa5`。本轮不在日常账户执行安装/升级/卸载；干净 Windows Sandbox/VM 全流程尚待，不将其作为已完成验收的安装器发布。
+- 源码测试：Python 188 项（187 通过、1 项可选依赖跳过）、JavaScript 20/20、两个 DSH 版本各 5/5，冻结 Hook/MCP、DSH 安装幂等与配置保护、Work MCP 启动器、Agent 配置引导及冻结前端通过。证据在 `diagnostics/shared-notifications-20261031/`。协议与组件通过不等于所有宿主实机通过。
+- 分发仍限已授权的私下试用；不覆盖旧 Release，公开素材分发权与新版安装器验收未解决前不创建新的公开二进制发布。
+
 ## 2026-10-31 安装冒烟隔离勘误
 
 - 旧安装测试通过改写 User Shell Folders 来“隔离”快捷方式；异常时可遗留目录重定向，且宿主缓存可使安装器仍写入真实桌面。因此旧报告中的 `production_install_unchanged` 不能作为真实桌面、启动目录或卸载登记未受影响的证据。

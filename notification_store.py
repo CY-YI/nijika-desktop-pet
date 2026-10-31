@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import time
 import unicodedata
@@ -289,20 +290,31 @@ class NotificationStore:
             )
 
     @staticmethod
-    def _turn_identity(session_id: object, turn_id: object) -> tuple[str, str]:
+    def _turn_identity(session_id: object, turn_id: object,
+                       client_id: str = "codex") -> tuple[str, str]:
+        if not isinstance(client_id, str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", client_id):
+            raise ValueError("client_id must be a bounded lowercase identifier")
         if not isinstance(session_id, str) or not session_id.strip() or len(session_id) > 512:
             raise ValueError("session_id must be non-empty text")
         if not isinstance(turn_id, str) or not turn_id.strip() or len(turn_id) > 512:
             raise ValueError("turn_id must be non-empty text")
         # Hook payloads can contain private prompts and commands. Persist only
         # bounded opaque identities so repeated lifecycle events can be joined.
+        # Preserve old Codex tombstones. Namespace other clients so identical
+        # session and turn IDs from different hosts never collide.
         session_hash = hashlib.sha256(session_id.encode("utf-8")).hexdigest()
+        if client_id != "codex":
+            session_hash = hashlib.sha256(client_id.encode("ascii")).hexdigest() + ":" + session_hash
         turn_hash = hashlib.sha256(turn_id.encode("utf-8")).hexdigest()
         return session_hash, turn_hash
 
     def begin_codex_turn(self, session_id: str, turn_id: str,
                          prompt_class: str) -> None:
-        session_hash, turn_hash = self._turn_identity(session_id, turn_id)
+        self.begin_turn(session_id, turn_id, prompt_class, client_id="codex")
+
+    def begin_turn(self, session_id: str, turn_id: str, prompt_class: str,
+                   *, client_id: str) -> None:
+        session_hash, turn_hash = self._turn_identity(session_id, turn_id, client_id)
         if prompt_class not in {"question", "substantive", "unknown", "internal"}:
             raise ValueError("invalid prompt class")
         now = int(time.time())
@@ -329,7 +341,13 @@ class NotificationStore:
 
     def record_codex_tool(self, session_id: str, turn_id: str,
                           *, substantive: bool, notice_sent: bool) -> None:
-        session_hash, turn_hash = self._turn_identity(session_id, turn_id)
+        self.record_turn_tool(session_id, turn_id, substantive=substantive,
+                              notice_sent=notice_sent, client_id="codex")
+
+    def record_turn_tool(self, session_id: str, turn_id: str,
+                         *, substantive: bool, notice_sent: bool,
+                         client_id: str) -> None:
+        session_hash, turn_hash = self._turn_identity(session_id, turn_id, client_id)
         now = int(time.time())
         with self._connect() as connection:
             connection.execute(
@@ -345,12 +363,26 @@ class NotificationStore:
                                        turn_id: str,
                                        *, result_class: str,
                                        message_preview: str | None = None) -> Notification | None:
+        return self.create_completion_notice(
+            session_id, turn_id, result_class=result_class,
+            message_preview=message_preview, client_id="codex",
+            agent="ChatGPT", software="Codex",
+        )
+
+    def create_completion_notice(self, session_id: str, turn_id: str, *,
+                                 result_class: str, client_id: str,
+                                 agent: str, software: str,
+                                 message_preview: str | None = None) -> Notification | None:
         """Atomically create at most one safe completion notice for a turn."""
+        agent = _required_text(agent, "agent", 20)
+        software = _required_text(software, "software", 40)
+        if "\n" in software:
+            raise ValueError("software must be one line")
         if result_class not in {"empty", "brief", "deliverable", "waiting", "internal"}:
             raise ValueError("invalid result class")
         message = ("已完成本轮任务，请查看结果。" if message_preview is None else
                    _required_text(message_preview, "message_preview", 120))
-        session_hash, turn_hash = self._turn_identity(session_id, turn_id)
+        session_hash, turn_hash = self._turn_identity(session_id, turn_id, client_id)
         now = int(time.time())
         notice_id = uuid.uuid4().hex
         choices = json.dumps([{
@@ -380,10 +412,10 @@ class NotificationStore:
                 return None
             connection.execute(
                 "INSERT INTO notifications VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?)",
-                (notice_id, "ChatGPT", "任务完成", message,
+                (notice_id, agent, "任务完成", message,
                  choices, now, now),
             )
-            connection.execute("INSERT INTO notice_sources VALUES (?, ?)", (notice_id, "Codex"))
+            connection.execute("INSERT INTO notice_sources VALUES (?, ?)", (notice_id, software))
             connection.execute(
                 "UPDATE codex_turn_state SET completion_notice_sent=1, updated_at=? "
                 "WHERE session_hash=? AND turn_hash=?",

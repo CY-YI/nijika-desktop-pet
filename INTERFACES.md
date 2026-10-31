@@ -1,5 +1,13 @@
 # 内部接口
 
+## 通用生命周期 v1（2026-10-31）
+
+`虹夏审批提醒.exe --lifecycle` 从 stdin 读取一个最多 1 MiB 的 UTF-8 JSON；必须提供 version=1、event、client_id、session_id、turn_id 和 origin。事件为 `turn_started/tool_finished/turn_completed`，后台/子任务忽略，缺失身份拒绝。完整字段和约束见 `NOTIFICATION_PROTOCOL.md`。
+
+`handle_lifecycle(event, store)` 返回新通知 ID 或 None。CLI 返回 `queued/ignored/failed` 与 request_id；不回显原始正文或异常详情。旧 Codex Hook 仍返回 `{}`。MCP 四工具输入和点击回执完全兼容，API 不增加授权能力。
+
+`AgentSetup.describe` 新增 `notification_capability`；`prepare_files` 输出 `nijika-notification-capabilities.json`。`automatic_completion_verified=false` 是保守初始状态，不因配置写入或工具发现自动置真。自动 DSH 计划维护独立事件块；第三方配置所有权仍先于写入。
+
 ## 2026-10-30 Stop 摘要与来源规范化
 
 - `Stop` 输入中的 `last_assistant_message` 仅在 `approval_hook.py` 进程内分类和派生预览；`create_codex_completion_notice(..., message_preview=...)` 只接收 1–120 个可打印字符。空摘要回退为“已完成本轮任务，请查看结果。”，完整回复、prompt、命令和工具输出不写入 SQLite。

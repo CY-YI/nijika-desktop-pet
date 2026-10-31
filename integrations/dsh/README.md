@@ -1,5 +1,21 @@
 # DSH 本机接入
 
+## 实时结束事件（2026-10-31）
+
+完整新版包的安装脚本及设置中心自动计划会在每个 profile 添加独立 `NIJIKA-DSH-LIFECYCLE` 块，通过 `lifecycle-bridge.mjs` 把宿主实时事件交给 `虹夏审批提醒.exe --lifecycle`。Codex 与 DSH 共用安全摘要和去重，无需靠模型记住调用来触发该补发入口。核对宿主接口版本为 `0.2.1-rc.2`（本机桌面）和 `0.2.1-rc.3`（CLI），其他版本需独立验收。
+
+转接只处理本进程实时根会话的真实用户轮次正常结束，不扫描历史，不处理注入上下文或子任务。同轮收到成功的虹夏通知工具回执后不重复。DSH 重启、新会话后再验证；可用模块不等于用户当前配置已启用。MAGPIE 管理项由其维护者审阅，虹夏向导不擅自安装第二套服务或模块。
+
+已有 MCP 由 MAGPIE 等工具管理时，维护者可审阅完整包中的脚本后，只添加/更新独立事件块：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\integrations\dsh\install.ps1 -LifecycleOnly
+```
+
+此模式保留 MCP、MAGPIE 管理项、全局规则与技能；默认检查两个 profile，也可加 `-Profiles desktop`。重复运行只替换同一标记块，不新增副本。先备份、拒绝损坏/重复标记，重启宿主后再验收。不要为了接事件再安装一份 MCP。
+
+维护者测试：`node --test tests/dsh_lifecycle.test.mjs`（可通过 `NIJIKA_DSH_TEST_MODULES` 指向 DSH 内部模块目录验证真实 SessionStore）；`node tools/smoke_dsh_lifecycle.mjs <DSH内部模块目录> <审批程序.exe> <Python.exe>` 检查真实事件组件到冻结程序链路，仍不代替用户运行中的模型会话和气泡观察。
+
 本目录把现有 `dist/虹夏MCP-v2.exe` 注册为 DeepSeek Harness（DSH）的 stdio MCP 工具，并安装 `nijika-dsh-dialog` 技能。DSH Agent 需要用户做短决策或审阅成果时，可调用 `mcp__nijika_pet__request_decision`；长成果用 `mcp__nijika_pet__show_completion` 提醒。选择由桌宠气泡回传给发起请求的 DSH 会话。桌宠与 DSH 必须在同一台 Windows 用户会话中运行；无需新服务或网络端口。
 
 DSH 默认来源固定为 `Agent · DSH`，因为同一宿主可以切换多家模型。标准连接应省略 MCP 的单次 `agent_name` 和 `software` 参数；服务端也会把误传的 `Codex · DSH`、`DSH · DSH`、`WorkBuddy · DSH` 纠正为 `Agent · DSH`。明确知道真实模型时才使用具体名称，例如 `DeepSeek · DSH`。

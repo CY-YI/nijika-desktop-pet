@@ -1,9 +1,10 @@
 [CmdletBinding()]
 param(
-    [string]$Version = '0.1.7',
+    [string]$Version = '0.1.8',
     [string]$OutputDirectory = 'dist-release\installer',
     [string]$Compiler = '',
     [switch]$BuildApplications,
+    [string]$ApplicationDirectory = '',
     [string]$SupportBundle = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -12,7 +13,11 @@ if ($Version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
     throw 'Version must contain three or four numeric components.'
 }
 if ($BuildApplications) {
-    & (Join-Path $root 'build.ps1')
+    if ($ApplicationDirectory) {
+        & (Join-Path $root 'build.ps1') -OutputDirectory $ApplicationDirectory
+    } else {
+        & (Join-Path $root 'build.ps1')
+    }
     if ($LASTEXITCODE -ne 0) { throw 'Application build failed.' }
 }
 if (-not $Compiler) {
@@ -37,6 +42,14 @@ if (Test-Path -LiteralPath $stage) {
     throw "Staging directory already exists; choose a new version or remove this generated directory after review: $stage"
 }
 $packageArguments = @((Join-Path $root 'tools\package_release.py'), '--stage', $stage)
+if ($ApplicationDirectory) {
+    $reviewedApplications = (Resolve-Path -LiteralPath $ApplicationDirectory).Path
+    $packageArguments += @(
+        '--app-exe', (Join-Path $reviewedApplications '虹夏桌宠.exe'),
+        '--mcp-exe', (Join-Path $reviewedApplications '虹夏MCP-v2.exe'),
+        '--approval-exe', (Join-Path $reviewedApplications '虹夏审批提醒.exe')
+    )
+}
 if ($SupportBundle) { $packageArguments += @('--support-bundle', (Resolve-Path -LiteralPath $SupportBundle).Path) }
 & $python @packageArguments
 if ($LASTEXITCODE -ne 0) { throw 'Installer staging failed.' }

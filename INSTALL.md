@@ -1,5 +1,13 @@
 # 安装与运行
 
+## 本轮统一提醒更新
+
+使用本轮完整新版包，保留 `dist` 和 `integrations` 的相对结构。安装后在“Agent 接入”重新预览并应用 DSH，可同时更新 MCP 和独立的 `NIJIKA-DSH-LIFECYCLE` 块；实际模块及程序路径按接收方安装位置生成。缺少模块、标记冲突或预览后配置变化会停止写入，其他服务与权限保留。MAGPIE 管理的连接只登记，不会自动安装此模块，须由维护该配置的人审阅合并。
+
+Codex 已信任的原有四事件命令保持兼容，不需要重复重配 MCP。DSH 重启后在新会话验收；核对版本为 `0.2.1-rc.2 / 0.2.1-rc.3`，其他版本须另验。Work、其他客户端仍须主动调用，不因安装 skill 获得自动补发。桌宠本体不需要 Python；DSH 模块使用宿主自带 Node 能力，Work 插件继续要求 PATH 中的 `python.exe` 和 Codex CLI。
+
+每个客户端分开检查：主动通知和点击回传；不提示使用虹夏的短问答；主动通知后同轮无重复；并行任务不串线。面板测试不能替代外部宿主实测。协议与故障语义见 `NOTIFICATION_PROTOCOL.md`。
+
 ## 2026-10-31 Codex 内部后台任务误提醒修复
 
 正式安装的 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏审批提醒.exe` 已替换为 SHA-256 `5CD44E9F738D96AE68E0ECCFE25AD9467EEA18C48FC882BE2D254198B8C8F717`。新 Hook 不再把 Codex `ambient-suggestions` 或私有 helper 的 `{"exclude":[]}` 后台结果写入虹夏气泡；普通用户回复、简单问答和用户主动要求的 JSON 仍每轮提醒，JSON 使用固定安全摘要。桌宠、MCP、消息库、MAGPIE 服务与 Hook 信任未改变。Codex/DSH/Work 的持久规则已同步，Work 插件已升级并启用 0.1.8；已打开的客户端需要新任务或重连以加载新版规则。

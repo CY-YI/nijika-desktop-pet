@@ -26,7 +26,8 @@ if (-not [Environment]::Is64BitOperatingSystem) { throw 'Windows x64 is required
 foreach ($relative in @('dist\虹夏桌宠.exe', 'dist\虹夏MCP-v2.exe', 'dist\虹夏审批提醒.exe',
         'assets\icons\nijika-shortcut.ico', 'skills\nijika-desktop-dialog\SKILL.md',
         'plugins\nijika-work-local\mcp.json', 'integrations\claude-code\install-hooks.ps1',
-        'integrations\dsh\install.ps1')) {
+        'integrations\dsh\install.ps1', 'integrations\dsh\lifecycle-bridge.mjs',
+        'AGENT_SETUP.md', 'NOTIFICATION_PROTOCOL.md')) {
     if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot $relative) -PathType Leaf)) {
         throw "Incomplete package: $relative"
     }

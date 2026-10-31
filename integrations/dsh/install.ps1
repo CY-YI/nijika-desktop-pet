@@ -1,7 +1,8 @@
 ﻿param(
     [ValidateSet('desktop', 'web')]
     [string[]]$Profiles = @('desktop', 'web'),
-    [string]$DshRoot = (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.dsh')
+    [string]$DshRoot = (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.dsh'),
+    [switch]$LifecycleOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -9,7 +10,11 @@ $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Pat
 $mcpExe = Join-Path $projectRoot 'dist\虹夏MCP-v2.exe'
 $skillSource = Join-Path $PSScriptRoot 'nijika-dsh-dialog\SKILL.md'
 $instructionsSource = Join-Path $PSScriptRoot 'global-instructions.txt'
-foreach ($path in @($mcpExe, $skillSource, $instructionsSource)) {
+$lifecycleSource = Join-Path $PSScriptRoot 'lifecycle-bridge.mjs'
+$lifecycleExe = Join-Path $projectRoot 'dist\虹夏审批提醒.exe'
+$requiredPaths = @($lifecycleSource, $lifecycleExe)
+if (-not $LifecycleOnly) { $requiredPaths += @($mcpExe, $skillSource, $instructionsSource) }
+foreach ($path in $requiredPaths) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Required file is missing: $path"
     }
@@ -136,7 +141,29 @@ function Update-MarkedBlock {
     [IO.File]::WriteAllText($Path, $updated, [Text.UTF8Encoding]::new($false))
 }
 
+function Assert-Markers {
+    param([string]$Text, [string]$Start, [string]$End)
+    $starts = [regex]::Matches($Text, [regex]::Escape($Start))
+    $ends = [regex]::Matches($Text, [regex]::Escape($End))
+    if ($starts.Count -gt 1 -or $ends.Count -gt 1 -or
+        $starts.Count -ne $ends.Count -or
+        ($starts.Count -eq 1 -and $starts[0].Index -ge $ends[0].Index)) {
+        throw "Malformed Nijika markers; no profile was changed: $Start"
+    }
+}
+
 $quotedExe = $mcpExe.Replace("'", "''")
+$pluginUri = ([Uri]$lifecycleSource).AbsoluteUri.Replace("'", "''")
+$quotedLifecycleExe = $lifecycleExe.Replace("'", "''")
+$lifecycleBlock = @"
+# BEGIN NIJIKA-DSH-LIFECYCLE
+- insert:
+    - id: nijika-lifecycle-bridge
+      name: '$pluginUri'
+      config:
+        executable: '$quotedLifecycleExe'
+# END NIJIKA-DSH-LIFECYCLE
+"@
 $profileBlock = @"
 # BEGIN NIJIKA-DSH-MCP
 - insert:
@@ -155,7 +182,24 @@ $profileBlock = @"
 foreach ($profile in $Profiles) {
     $patch = Join-Path $DshRoot "profiles\$profile\cordis.patch.yml"
     if (-not (Test-Path -LiteralPath $patch -PathType Leaf)) { throw "DSH profile patch is missing: $patch" }
-    [void](Remove-LegacyNijika ([IO.File]::ReadAllText($patch)))
+    $checked = [IO.File]::ReadAllText($patch)
+    if (-not $LifecycleOnly) {
+        $checked = Remove-OrphanNijikaMarker (Remove-LegacyNijika $checked)
+        Assert-Markers $checked '# BEGIN NIJIKA-DSH-MCP' '# END NIJIKA-DSH-MCP'
+    }
+    Assert-Markers $checked '# BEGIN NIJIKA-DSH-LIFECYCLE' '# END NIJIKA-DSH-LIFECYCLE'
+    if (-not $LifecycleOnly -and $checked.Contains('id: mcp-nijika-pet') -and
+        -not $checked.Contains('# BEGIN NIJIKA-DSH-MCP')) {
+        throw "Unmanaged Nijika MCP entry; no profile was changed."
+    }
+    if ($checked.Contains('id: nijika-lifecycle-bridge') -and
+        -not $checked.Contains('# BEGIN NIJIKA-DSH-LIFECYCLE')) {
+        throw "Unmanaged Nijika lifecycle entry; no profile was changed."
+    }
+}
+$agentsPath = Join-Path $DshRoot 'AGENTS.md'
+if (-not $LifecycleOnly -and (Test-Path -LiteralPath $agentsPath)) {
+    Assert-Markers ([IO.File]::ReadAllText($agentsPath)) '# BEGIN NIJIKA-DSH-DIALOG' '# END NIJIKA-DSH-DIALOG'
 }
 foreach ($profile in $Profiles) {
     $patch = Join-Path $DshRoot "profiles\$profile\cordis.patch.yml"
@@ -163,13 +207,22 @@ foreach ($profile in $Profiles) {
         throw "DSH profile patch is missing: $patch"
     }
     $existing = [IO.File]::ReadAllText($patch)
-    if ($existing.Contains('id: mcp-nijika-pet') -and
+    if (-not $LifecycleOnly -and $existing.Contains('id: mcp-nijika-pet') -and
         -not $existing.Contains('# BEGIN NIJIKA-DSH-MCP')) {
         throw "Existing unmanaged Nijika MCP entry in $patch"
     }
-    Update-MarkedBlock -Path $patch -Block $profileBlock `
-        -Start '# BEGIN NIJIKA-DSH-MCP' -End '# END NIJIKA-DSH-MCP'
+    if (-not $LifecycleOnly) {
+        Update-MarkedBlock -Path $patch -Block $profileBlock `
+            -Start '# BEGIN NIJIKA-DSH-MCP' -End '# END NIJIKA-DSH-MCP'
+    }
+    Update-MarkedBlock -Path $patch -Block $lifecycleBlock `
+        -Start '# BEGIN NIJIKA-DSH-LIFECYCLE' -End '# END NIJIKA-DSH-LIFECYCLE'
     Write-Output "Configured DSH profile: $profile"
+}
+
+if ($LifecycleOnly) {
+    Write-Output 'Installed only the independent lifecycle block; MCP, skills and global rules preserved.'
+    return
 }
 
 $skillTarget = Join-Path $DshRoot 'skills\nijika-dsh-dialog\SKILL.md'

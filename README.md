@@ -1,5 +1,13 @@
 # 虹夏桌宠 · 2D 坐姿版
 
+## 统一提醒核心（2026-10-31）
+
+各客户端共用同一生命周期协议、安全摘要、来源解析和通知去重；详见 [NOTIFICATION_PROTOCOL.md](NOTIFICATION_PROTOCOL.md)。Codex 原生事件与 DSH 实时会话模块只负责转交事件。DSH 已核对 `0.2.1-rc.2 / 0.2.1-rc.3` 的接口；Work 等其他客户端目前仍只支持主动 MCP 调用，不承诺漏调时自动补发。
+
+设置中心“Agent 接入”及导出的 `nijika-notification-capabilities.json` 会显示能力和独立验收要求。更新后重新打开接入步骤以刷新资料，预览应用并重载客户端；配置存在、主动测试成功与真实结束事件通过分开记录。旧下载包不会自动获得本次代码。
+
+本机现用 DSH 已加载独立事件模块，用户确认两次自然会话的气泡与去重符合预期；两次均有主动工具调用，无工具补发已通过隔离真实事件组件到冻结程序测试，尚未完成自然会话视觉补验。原有服务、MAGPIE 归属和用户数据保留；安装指南见 [AGENT_SETUP.md](AGENT_SETUP.md)。
+
 ## 2026-10-31 内部后台任务误提醒修复
 
 Codex 的 Stop Hook 现在只静默两类已确认的后台输出：同时具备 `currentSuggestionIds`、`generatedAtMs` 和带 `appId`/`appIds` 建议项的 `ambient-suggestions` 结构，以及私有 Codex helper 在版本化 `bin` 目录返回的固定排除对象。普通用户任务即使要求返回 JSON，仍会得到一条完成提醒；气泡只显示“已返回结构化结果，请查看任务。”，不再截断并显示原始 JSON。工作路径只在 Hook 内存中用于分类，不写入轮次表或通知正文；内部任务在同一轮也只落一条静默去重标记。正式安装 Hook 已更新为 SHA-256 `5CD44E9F738D96AE68E0ECCFE25AD9467EEA18C48FC882BE2D254198B8C8F717`。

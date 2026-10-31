@@ -30,6 +30,9 @@ class PortableInstallTests(unittest.TestCase):
             "distribution/codex-global-instructions.txt",
             "integrations/claude-code/install-hooks.ps1",
             "integrations/dsh/install.ps1",
+            "integrations/dsh/lifecycle-bridge.mjs",
+            "AGENT_SETUP.md",
+            "NOTIFICATION_PROTOCOL.md",
         ):
             self.write(package, relative, relative.encode("utf-8"))
         manifest = {

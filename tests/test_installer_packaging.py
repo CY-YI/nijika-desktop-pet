@@ -1,10 +1,12 @@
 import json
+import hashlib
 import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from zipfile import ZipFile
 
 from tools import package_release
 
@@ -12,6 +14,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class InstallerPackagingTests(unittest.TestCase):
+    def test_friend_guide_uses_actual_version_and_describes_capability_limits(self):
+        from tools.package_friend_trial import build
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            setup, manifest, guide = root / "custom-setup.exe", root / "manifest.json", root / "AGENT_SETUP.md"
+            setup.write_bytes(b"isolated installer fixture")
+            manifest.write_text(json.dumps({"version": "9.8.7", "sha256":
+                hashlib.sha256(setup.read_bytes()).hexdigest()}), encoding="utf-8")
+            guide.write_text("current guide", encoding="utf-8")
+            output = root / "trial.zip"
+            build(output, setup, manifest, guide)
+            with ZipFile(output) as archive:
+                self.assertEqual(len(archive.namelist()), 4)
+                self.assertTrue(all(name.startswith("虹夏桌宠-v9.8.7-") for name in archive.namelist()))
+                text = archive.read("虹夏桌宠-v9.8.7-朋友私下试用/朋友试用说明.txt").decode("utf-8")
+                self.assertIn("custom-setup.exe", text)
+                self.assertIn("仅主动调用", text)
+                self.assertNotIn("0.1.7", text)
+
     def test_stage_uses_allowlist_and_recipient_placeholder(self):
         with tempfile.TemporaryDirectory(prefix="nijika installer stage ") as directory:
             base = Path(directory)
@@ -33,6 +54,33 @@ class InstallerPackagingTests(unittest.TestCase):
             self.assertFalse((output / "notifications.sqlite3").exists())
             with self.assertRaises(FileExistsError):
                 package_release.stage(output)
+
+    def test_candidate_package_keeps_all_three_reviewed_executables(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            source = base / "source"
+            for name in package_release.FILES:
+                target = source / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(b"old packaged fixture")
+            (source / "plugins/nijika-work-local/mcp.json").write_text(
+                json.dumps({"mcpServers": {"nijika-work-pet": {"args": ["AUTO_LOCAL_MCP"]}}}),
+                encoding="utf-8")
+            candidates = [base / name for name in ("app.exe", "mcp.exe", "hook.exe")]
+            for index, candidate in enumerate(candidates):
+                candidate.write_bytes(f"reviewed candidate {index}".encode())
+            with patch.object(package_release, "ROOT", source):
+                package_release.stage(base / "stage", *candidates[:2], approval_exe=candidates[2])
+                package_release.build(base / "trial.zip", *candidates[:2], approval_exe=candidates[2])
+            with ZipFile(base / "trial.zip") as archive:
+                sums = json.loads(archive.read(f"{package_release.PREFIX}/SHA256SUMS.json"))
+                for name, candidate in zip(
+                    ("dist/虹夏桌宠.exe", "dist/虹夏MCP-v2.exe", "dist/虹夏审批提醒.exe"), candidates
+                ):
+                    data = candidate.read_bytes()
+                    self.assertEqual((base / "stage" / name).read_bytes(), data)
+                    self.assertEqual(archive.read(f"{package_release.PREFIX}/{name}"), data)
+                    self.assertEqual(sums[name], hashlib.sha256(data).hexdigest())
 
     @unittest.skipUnless(os.name == "nt", "PowerShell syntax check")
     def test_build_script_has_valid_powershell_syntax(self):

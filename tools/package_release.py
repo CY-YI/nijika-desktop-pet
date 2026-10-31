@@ -31,19 +31,23 @@ FILES = (
     "plugins/nijika-work-local/skills/nijika-work-dialog/SKILL.md",
     ".agents/plugins/marketplace.json",
     "integrations/dsh/install.ps1",
+    "integrations/dsh/README.md",
+    "integrations/dsh/lifecycle-bridge.mjs",
     "integrations/dsh/global-instructions.txt",
     "integrations/dsh/nijika-dsh-dialog/SKILL.md",
     "distribution/install.ps1",
     "distribution/codex-global-instructions.txt",
     "distribution/README.md",
     "AGENT_SETUP.md",
+    "NOTIFICATION_PROTOCOL.md",
     "SKIN_FORMAT.md",
 )
 
 
 def build(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None,
-          support_bundle: Path | None = None) -> None:
-    overrides = {"dist/虹夏桌宠.exe": app_exe, "dist/虹夏MCP-v2.exe": mcp_exe}
+          support_bundle: Path | None = None, approval_exe: Path | None = None) -> None:
+    overrides = {"dist/虹夏桌宠.exe": app_exe, "dist/虹夏MCP-v2.exe": mcp_exe,
+                 "dist/虹夏审批提醒.exe": approval_exe}
     sources = {name: overrides.get(name) or ROOT / name for name in FILES}
     missing = [name for name, source in sources.items() if not source.is_file()]
     if missing:
@@ -70,9 +74,10 @@ def build(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None
 
 
 def stage(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None,
-          support_bundle: Path | None = None) -> None:
+          support_bundle: Path | None = None, approval_exe: Path | None = None) -> None:
     """Create a clean installer source tree from the same explicit allowlist."""
-    overrides = {"dist/虹夏桌宠.exe": app_exe, "dist/虹夏MCP-v2.exe": mcp_exe}
+    overrides = {"dist/虹夏桌宠.exe": app_exe, "dist/虹夏MCP-v2.exe": mcp_exe,
+                 "dist/虹夏审批提醒.exe": approval_exe}
     sources = {name: overrides.get(name) or ROOT / name for name in FILES}
     missing = [name for name, source in sources.items() if not source.is_file()]
     if missing:
@@ -108,6 +113,8 @@ def main() -> None:
                         help="Use a reviewed candidate app without replacing the installed/dist executable")
     parser.add_argument("--mcp-exe", type=Path,
                         help="Use the matching candidate MCP server without replacing installed/dist files")
+    parser.add_argument("--approval-exe", type=Path,
+                        help="Use the matching candidate lifecycle/approval program without mixing old dist files")
     parser.add_argument("--support-bundle", type=Path,
                         help="Include explicitly exported public sponsor information; never read a user database")
     parser.add_argument("--stage", type=Path,
@@ -116,11 +123,11 @@ def main() -> None:
     if args.stage:
         if args.output != ROOT / f"{PREFIX}-{date.today().isoformat()}.zip":
             parser.error("--stage and --output are mutually exclusive")
-        stage(args.stage, args.app_exe, args.mcp_exe, args.support_bundle)
+        stage(args.stage, args.app_exe, args.mcp_exe, args.support_bundle, args.approval_exe)
         print(args.stage)
         return
     destination = args.output
-    build(destination, args.app_exe, args.mcp_exe, args.support_bundle)
+    build(destination, args.app_exe, args.mcp_exe, args.support_bundle, args.approval_exe)
     print(destination)
     print("SHA256:", hashlib.sha256(destination.read_bytes()).hexdigest())
 

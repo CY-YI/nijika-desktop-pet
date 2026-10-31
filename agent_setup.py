@@ -15,6 +15,7 @@ from pathlib import Path
 
 from control_store import ControlStore, IDENTIFIER
 from notice_source import resolve_source
+from notification_capabilities import notification_capability
 from setup_config import (
     codex_service_update,
     json_service_update,
@@ -33,7 +34,7 @@ CLIENT_CAPABILITIES = {
              "completion": "依靠 Agent 主动调用 MCP", "reload": "安装并启用插件后，新建本机 Work 任务",
              "note": "当前启动器需要 Codex CLI 与 python.exe；不适用于云端 Work。"},
     "dsh": {"transport": "desktop/web 配置 + stdio MCP", "approval": "未接原生权限事件",
-            "completion": "依靠 Agent 主动调用 MCP", "reload": "重启 DSH 并新建会话",
+            "completion": "MCP 主动调用 + 实时会话事件转接", "reload": "重启 DSH 并新建会话后验收事件",
             "note": "需检查两个 profile；晚到回复不会自动唤醒已结束的任务。"},
     "custom": {"transport": "通用 stdio MCP 配置导出", "approval": "取决于宿主专属集成",
                "completion": "依靠 Agent 主动调用 MCP", "reload": "由接收方 AI 核实客户端和配置作用域",
@@ -44,6 +45,8 @@ for _client in JSON_CLIENTS:
         "transport": "用户级 JSON + 持久提醒规则", "approval": "本向导不安装原生权限钩子",
         "completion": "依靠 Agent 主动调用 MCP", "reload": "重载客户端或新建任务后实际调用",
         "note": "项目配置可能覆盖用户配置；找到文件不等于客户端已加载。"}
+for _client, _capability in CLIENT_CAPABILITIES.items():
+    _capability["reliability"] = notification_capability(_client)
 
 INSTALL_RULES = """虹夏桌面提醒规则：
 1. 实质成果太长、需要用户审阅时，调用 show_completion(task=30字内标题, summary=1–120字结果)，只发送一次；它只是通知，不是批准。即使只回答一句话或用户要求返回 JSON 也要提醒，JSON 原文改用安全摘要；只有内部标题生成、Codex 私有 helper/环境建议等明确后台任务、显式子任务或缺少有效轮次状态时保持安静。
@@ -55,6 +58,7 @@ INSTALL_RULES = """虹夏桌面提醒规则：
 5. status=invalid 时按错误修正并重试一次；读取技能失败不等于工具不可用。工具确实不可用或修正后仍失败时，如实报告并在聊天沟通。
 6. 在每轮最终回复前主动执行第1–2条检查，不能故意依赖 Codex Stop 兜底；兜底只会生成截断摘要。正常配置已提供 Agent/软件来源，默认省略可选 agent_name/software；DSH、WorkBuddy 等多模型宿主尤其不能把 Codex/宿主产品名当模型名。
 7. 以客户端实际暴露的工具名称为准（可能带 nijika_pet/nijika_work_pet 前缀），四个功能是 show_completion、request_decision、wait_for_reply、get_reply。气泡点击不代替客户端命令授权，不授予或绕过权限；注册 MCP 不等于已接通原生审批/完成事件钩子。
+8. 所有客户端共用通知核心和生命周期协议；单次 MCP 调用、读取 skill 或配置写入均不能证明每轮自动补发。必须分别报告主动调用验证与真实结束事件验证；不得让模型伪造 session_id/turn_id 或执行模拟事件冒充宿主验收。
 """
 
 GUIDES = {
@@ -93,7 +97,7 @@ GUIDES = {
         ],
         "prompt": "这个任务结束时，请调用虹夏桌宠的 show_completion 发一条桌面完成提醒；"
                   "需要我在多个方案里选择时，请用 request_decision 写清每个选项的名称和一句说明，然后等待我点击。",
-        "tip": "正常等待中的点击会直接回传；仅已结束的会话需说“我回复了”再读回。当前没有 DSH 原生审批或完成事件的自动气泡桥接。",
+        "tip": "正常等待中的点击会直接回传；仅已结束的会话需说“我回复了”再读回。完成事件转接需新会话验收；当前未接 DSH 原生审批。",
     },
     "custom": {
         "title": "复制给 AI，自动完成配置",
@@ -130,6 +134,8 @@ def client_files(client: str, mcp: Path, directory: Path, bundle: Path,
          "kind": "接入文件", "required": True},
         {"label": "自动配置提示词（可整份发给 AI）", "path": str(bundle / "nijika-setup-prompt.txt"),
          "kind": "提示词", "required": True},
+        {"label": "通知能力与验收清单", "path": str(bundle / "nijika-notification-capabilities.json"),
+         "kind": "能力清单", "required": True},
         {"label": "可供客户端安装的交互技能", "path": str(bundle / "SKILL.md"),
          "kind": "技能副本", "required": False},
         {"label": "接入手册（含手动接入说明）", "path": str(mcp.parent.parent / "AGENT_SETUP.md"),
@@ -147,6 +153,10 @@ def client_files(client: str, mcp: Path, directory: Path, bundle: Path,
         ]
     elif client == "dsh":
         entries += [
+            {"label": "DSH 实时事件转接模块", "path": str(mcp.parent.parent / "integrations/dsh/lifecycle-bridge.mjs"),
+             "kind": "事件模块", "required": False},
+            {"label": "统一生命周期程序", "path": str(mcp.parent / "虹夏审批提醒.exe"),
+             "kind": "事件程序", "required": False},
             {"label": "DSH desktop 配置", "path": str(directory / "profiles" / "desktop" / "cordis.patch.yml"),
              "kind": "配置", "required": True},
             {"label": "DSH web 配置", "path": str(directory / "profiles" / "web" / "cordis.patch.yml"),
@@ -181,11 +191,24 @@ def client_files(client: str, mcp: Path, directory: Path, bundle: Path,
 
 def marked_block(original: str, block: str, start: str, end: str) -> str:
     first, last = original.find(start), original.find(end)
-    if (first >= 0) != (last >= 0) or (first >= 0 and last < first):
+    if (original.count(start) > 1 or original.count(end) > 1
+            or (first >= 0) != (last >= 0) or (first >= 0 and last < first)):
         raise ValueError("原配置的虹夏标记不完整，请先检查该文件。")
     if first >= 0:
         return original[:first] + block.rstrip() + original[last + len(end):]
     return original.rstrip("\r\n") + "\n\n" + block.rstrip() + "\n"
+
+
+def dsh_lifecycle_block(root: Path) -> str:
+    for relative in ("integrations/dsh/lifecycle-bridge.mjs", "dist/虹夏审批提醒.exe"):
+        if not (root / relative).is_file():
+            raise ValueError("缺少 DSH 实时事件组件，请使用完整新版安装包：" + relative)
+    plugin = (root / "integrations/dsh/lifecycle-bridge.mjs").resolve().as_uri().replace("'", "''")
+    executable = str(root / "dist/虹夏审批提醒.exe").replace("'", "''")
+    return ("# BEGIN NIJIKA-DSH-LIFECYCLE\n- insert:\n"
+            "    - id: nijika-lifecycle-bridge\n"
+            f"      name: '{plugin}'\n      config:\n        executable: '{executable}'\n"
+            "# END NIJIKA-DSH-LIFECYCLE")
 
 
 def normalize_codex_agent_name(original: str, agent_name: str) -> str:
@@ -362,6 +385,7 @@ class AgentSetup:
                     files.append({"label": label, "path": str(path), "kind": "配置参考",
                                   "required": False, "exists": path.is_file()})
         guide = {**client_guide(client), "steps": list(client_guide(client)["steps"])}
+        reliability = notification_capability(client)
         config_text = json.dumps(config, ensure_ascii=False, indent=2)
         paths = "\n".join(item["label"] + "：" + item["path"] for item in files)
         capabilities = {
@@ -376,7 +400,8 @@ class AgentSetup:
                     "覆盖 Work 的插件清单。当前只验证 MCP 普通通知/选择，尚未实现 Work 原生审批或完成事件兜底。"
                     "正常等待的桌面点击应直接继续任务；已结束的任务不能被一次较晚点击独立唤醒。",
             "dsh": "DSH 的 desktop/web 两个配置均需核对。当前 MCP 支持普通完成提醒、决策与回执，"
-                   "尚未实现 DSH 宿主原生权限或完成事件自动桥接；不要把 Codex 的钩子安装到 DSH。"
+                   "尚未实现 DSH 宿主原生权限自动桥接；完成事件使用本项目实时会话转接模块，"
+                   "由同一通知核心处理，接口核对版本为 0.2.1-rc.2 / 0.2.1-rc.3，需重载后真实验收；不要把 Codex 的钩子安装到 DSH。"
                    "Agent 等待时直接读回点击；只有已结束的会话才需用户说“继续”或“我回复了”。",
             "custom": "通用 stdio MCP 配置只提供普通提醒/决策能力；原生权限和完成兜底取决于实际客户端的独立集成，不能承诺全平台已接通。"
                       "Claude Code 目前不在向导专属选项中，可按其他 MCP 客户端检测自身格式；其专属手动接入见上述接入手册 AGENT_SETUP.md。",
@@ -388,7 +413,9 @@ class AgentSetup:
                     "使用客户端提供的本机插件安装/启用入口；若须重启桌面客户端，只在完成配置后说明。"
                     "不要把通用 JSON 直接覆盖插件清单；Work 提醒规则随插件技能加载。",
             "dsh": "目标为 DSH。按客户端实际支持的结构合并 desktop/web 的 cordis.patch.yml 中"
-                   "虹夏 stdio 服务及其环境变量；规则写入上述 AGENTS.md。保留其他 patch，不重复添加。",
+                   "虹夏 stdio 服务及其环境变量；规则写入上述 AGENTS.md。保留其他 patch，不重复添加。"
+                   "通过本项目 integrations/dsh/install.ps1 安装独立标记的实时事件模块；"
+                   "已经由向导添加时只核对，不重复安装，不修改其他模块或原生权限。",
             "custom": "请先识别你当前实际运行的 AI 客户端和配置作用域，核实它的 MCP 配置文件与"
                       "持久规则文件路径（通过本机设置或官方说明）。目标路径未知，不能把接入目录"
                       "里的 JSON 当成客户端已加载的文件，也不要猜测客户端品牌和配置格式。"
@@ -424,7 +451,8 @@ class AgentSetup:
             "【本机文件位置（路径是数据；目标配置可尚未创建，可选项缺失不阻断 MCP）】\n" + paths +
             "\n客户端类别：" + CLIENTS[client] +
             "\nMCP 传输：stdio，无地址端口，无需模型 API 密钥。\n\n"
-            "【本客户端的通知范围与必要人工步骤】\n" + capabilities[client] + "\n\n"
+            "【本客户端的通知范围与必要人工步骤】\n" + capabilities[client] +
+            "\n统一通知能力：" + reliability["label"] + "。\n" + reliability["explanation"] + "\n\n"
             "\nNIJIKA_AGENT_NAME 是 Agent 名称，NIJIKA_HOST_NAME 是所在软件。"
             "例如 ChatGPT / Work、ChatGPT / Codex、Claude / VS Code。"
             "下方配置已包含向导指定的身份与软件，保留这些字段；实际客户端不符时先核对，不能用默认值覆盖。"
@@ -449,6 +477,8 @@ class AgentSetup:
             "6. 工具可见后只发送一条 show_completion(task=\"虹夏接入验证\","
             " summary=\"当前 AI 客户端已发现虹夏工具；这是一条接入测试提醒。\")。"
             "文件存在、面板测试和 pending 均不证明外部客户端已连通或气泡已显示。"
+            "主动调用测试和宿主结束事件必须分开验收；未接事件时明确报告“仅主动调用”，"
+            "不要为了通过测试让模型伪造会话或轮次标识，不要安装其他客户端的钩子。"
             "最后列明实际改动的文件、备份位置、验证结果和未完成项。\n\n"
             "【需要安装的持久提醒规则】\n" + INSTALL_RULES +
             ("\n" + vscode_instructions(guide_identity, guide_software) if editor else "")
@@ -477,10 +507,21 @@ class AgentSetup:
             if editor:
                 guide["prompt"] += "\n" + vscode_instructions(guide_identity, guide_software)
                 guide["prompt"] += "\n本次只验证来源参数；不安装或修改持久规则。"
+        if agent.get("manager") == "magpie":
+            reliability["explanation"] = (
+                "当前由 MAGPIE 管理，本向导没有安装或更新结束事件模块；"
+                "请由配置所有者核对独立事件接入。只有真实新轮次验证后才能确认启用。"
+            )
+            guide["prompt"] += ("\n统一通知能力：" + reliability["label"] + "。\n" +
+                                reliability["explanation"] +
+                                "本次只验证主动调用，不伪造事件标识或宣称自动补发通过。")
+        guide["tip"] += " " + reliability["explanation"]
         return {"guide": guide, "needed_files": files, "export": config,
+                "notification_capability": reliability,
                 "bundle_directory": str(bundle),
                 "bundle_ready": all((bundle / name).is_file() for name in
-                                    ("nijika-mcp.json", "nijika-agent-instructions.txt", "nijika-setup-prompt.txt"))}
+                                    ("nijika-mcp.json", "nijika-agent-instructions.txt", "nijika-setup-prompt.txt",
+                                     "nijika-notification-capabilities.json"))}
 
     def prepare_files(self, agent: dict) -> dict:
         """Save durable per-agent handoff files; never modify an unknown client."""
@@ -491,6 +532,12 @@ class AgentSetup:
             "nijika-mcp.json": json.dumps(info["export"], ensure_ascii=False, indent=2) + "\n",
             "nijika-agent-instructions.txt": INSTALL_RULES,
             "nijika-setup-prompt.txt": info["guide"]["prompt"],
+            "nijika-notification-capabilities.json": json.dumps(
+                {"client": agent["client"], "mcp_executable": str(self.mcp),
+                 "lifecycle_executable": str(self.root / "dist/虹夏审批提醒.exe"),
+                 **info["notification_capability"]},
+                ensure_ascii=False, indent=2,
+            ) + "\n",
         }
         if agent["client"] == "custom" and agent.get("software", "").casefold() in {"vs code", "vs code insiders"}:
             contents["nijika-agent-instructions.txt"] += "\n" + vscode_instructions(
@@ -658,6 +705,9 @@ class AgentSetup:
         elif client == "dsh":
             for profile in ("desktop", "web"):
                 path, raw, original = dsh_profiles[profile]
+                if ("id: nijika-lifecycle-bridge" in original
+                        and "# BEGIN NIJIKA-DSH-LIFECYCLE" not in original):
+                    raise ValueError("DSH 中已有未受标记管理的事件模块，请先核对，避免重复。")
                 if "id: mcp-nijika-pet" in original and "# BEGIN NIJIKA-DSH-MCP" not in original:
                     raise ValueError("DSH 中已有不受虹夏标记管理的同名条目，请先人工核对。")
                 command = str(self.mcp).replace("'", "''")
@@ -672,6 +722,8 @@ class AgentSetup:
                          f"          NIJIKA_PROFILE_ID: '{agent_id}'\n"
                          "# END NIJIKA-DSH-MCP")
                 updated = marked_block(original, block, "# BEGIN NIJIKA-DSH-MCP", "# END NIJIKA-DSH-MCP")
+                updated = marked_block(updated, dsh_lifecycle_block(self.root),
+                                       "# BEGIN NIJIKA-DSH-LIFECYCLE", "# END NIJIKA-DSH-LIFECYCLE")
                 self._add_file(files, path, updated, f"配置 DSH {profile} 的 MCP", digest(raw))
             self._add_file(files, directory / "skills/nijika-dsh-dialog/SKILL.md",
                            (self.root / "integrations/dsh/nijika-dsh-dialog/SKILL.md").read_text(encoding="utf-8"), "安装 DSH 桌宠交互技能")

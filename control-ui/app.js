@@ -185,6 +185,7 @@ function renderAgents() {
     row.append(node("h3","",client.label),node("p","",info.transport),
       node("p","","完成：" + info.completion),node("p","","权限：" + info.approval),
       node("p","","生效：" + info.reload),node("small","",info.note));
+    if (info.reliability) row.append(node("p","field-help","自动提醒：" + info.reliability.label));
     comparison.append(row);
   }
   for (const agent of state.agents) {
@@ -194,6 +195,9 @@ function renderAgents() {
     const title = node("div"); title.append(node("h3","",agent.name),node("small","",clientNames[agent.client]));
     heading.append(title,node("span","agent-status" + (agent.test?.status === "answered" ? " verified" : ""),testLabel(agent)));
     card.append(heading);
+    if (agent.notification_capability) {
+      card.append(node("p","field-help","自动提醒：" + agent.notification_capability.label));
+    }
     const sourceEnv = agent.export?.mcpServers?.["nijika-pet"]?.env;
     if (sourceEnv) card.append(node("p","field-help","气泡来源：" +
       (/^VS Code(?: Insiders)?$/i.test(sourceEnv.NIJIKA_HOST_NAME || "") ?

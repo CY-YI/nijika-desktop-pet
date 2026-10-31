@@ -1,6 +1,6 @@
-"""Notice-only lifecycle hooks for Codex and Claude Code.
+"""Thin native adapters and a shared local lifecycle JSON entry point.
 
-Codex hooks add a completion fallback for substantive main-thread turns.
+Codex hooks add a completion fallback for valid main-thread user turns.
 Claude Code keeps its existing approval-only behavior.
 """
 
@@ -12,7 +12,7 @@ import sys
 from pathlib import PureWindowsPath
 
 from notification_store import NotificationStore
-from codex_completion import completion_preview, prompt_class, result_class, tool_flags
+from notification_lifecycle import handle_lifecycle
 
 
 def event_key(event: dict) -> str:
@@ -38,38 +38,21 @@ def handle_event(event: dict, store: NotificationStore, source: str = "codex") -
     if source == "codex" and (event.get("agent_id") or event.get("agent_type")):
         return None
 
-    if name == "UserPromptSubmit":
+    lifecycle_name = {
+        "UserPromptSubmit": "turn_started", "PostToolUse": "tool_finished", "Stop": "turn_completed",
+    }.get(name)
+    notice_id = None
+    if source == "codex" and lifecycle_name:
         try:
-            store.begin_codex_turn(
-                event.get("session_id"), event.get("turn_id"),
-                prompt_class(event.get("prompt")),
+            notice_id = handle_lifecycle(
+                {**event, "version": 1, "event": lifecycle_name,
+                 "client_id": "codex", "origin": "user"},
+                store,
             )
         except (ValueError, TypeError):
             pass
-        return None
-
-    if name == "Stop":
-        try:
-            notice = store.create_codex_completion_notice(
-                event.get("session_id"), event.get("turn_id"),
-                result_class=result_class(
-                    event.get("last_assistant_message"), event.get("cwd"),
-                ),
-                message_preview=completion_preview(event.get("last_assistant_message")),
-            )
-        except (ValueError, TypeError):
-            notice = None
-        return notice.id if notice is not None else None
-
-    if source == "codex" and name == "PostToolUse":
-        substantive, notice_sent = tool_flags(event.get("tool_name"), event.get("tool_response"))
-        try:
-            store.record_codex_tool(
-                event.get("session_id"), event.get("turn_id"),
-                substantive=substantive, notice_sent=notice_sent,
-            )
-        except (ValueError, TypeError):
-            pass
+        if name in {"UserPromptSubmit", "Stop"}:
+            return notice_id
 
     key = event_key(event)
     if name == "PostToolUse":
@@ -91,6 +74,20 @@ def handle_event(event: dict, store: NotificationStore, source: str = "codex") -
 
 def main() -> None:
     arguments = sys.argv[1:]
+    if "--lifecycle" in arguments:
+        try:
+            payload = sys.stdin.buffer.read(1024 * 1024 + 1)
+            if len(payload) > 1024 * 1024:
+                raise ValueError("lifecycle input too large")
+            request_id = handle_lifecycle(
+                json.loads(payload.decode("utf-8-sig")), NotificationStore(),
+            )
+            print(json.dumps({"status": "queued" if request_id else "ignored",
+                              "request_id": request_id}))
+        except Exception:
+            # No payload or exception text: either may include private data.
+            print(json.dumps({"status": "failed", "request_id": None}))
+        return
     source = ("claude-code"
               if "claude-code" in arguments or "--source=claude-code" in arguments
               else "codex")

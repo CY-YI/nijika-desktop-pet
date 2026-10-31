@@ -84,6 +84,10 @@ def verify(executable: Path) -> dict:
                 bundle = Path(result["bundle_directory"])
                 assert bundle.is_relative_to(isolated)
                 config = json.loads((bundle / "nijika-mcp.json").read_text(encoding="utf-8"))
+                capability = json.loads((bundle / "nijika-notification-capabilities.json").read_text(encoding="utf-8"))
+                assert capability["automatic_completion_verified"] is False
+                assert capability["mode"] == ("active_only" if client == "custom" else "event_available")
+                assert capability["lifecycle_executable"] == str(executable.parent / "虹夏审批提醒.exe")
                 assert config["mcpServers"]["nijika-pet"]["command"] == str(executable.parent / "虹夏MCP-v2.exe")
                 prompt = (bundle / "nijika-setup-prompt.txt").read_text(encoding="utf-8")
                 assert prompt == result["guide"]["prompt"]
@@ -99,6 +103,8 @@ def verify(executable: Path) -> dict:
                     for profile in ("desktop", "web"):
                         saved = (user / ".dsh/profiles" / profile / "cordis.patch.yml").read_text(encoding="utf-8")
                         assert saved.startswith("# keep existing profile") and saved.count("id: mcp-nijika-pet") == 1
+                        assert saved.count("id: nijika-lifecycle-bridge") == 1
+                        assert (executable.parent.parent / "integrations/dsh/lifecycle-bridge.mjs").as_uri() in saved
                 checked.append(client)
             assert len(call("/api/state")["agents"]) == len(checked)
             return {"status": "passed", "clients_applied_in_isolation": checked,

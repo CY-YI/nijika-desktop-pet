@@ -1,12 +1,20 @@
 # 架构
 
+## 统一通知生命周期（2026-10-31）
+
+`notification_lifecycle.handle_lifecycle` 是唯一事件处理入口，`notification_policy` 统一分类、安全摘要和成功工具回执判定；旧 `codex_completion` 保留重导出兼容。Codex 原生 Hook 和 DSH 的实时 `session/event` 模块只做映射，均通过共享 SQLite 原子事务去重。旧 `codex_turn_state` 表和 Codex 哈希不变，其他客户端加独立命名空间。禁止关联“最近任务”。
+
+DSH 模块仅接受 `firstLiveSeq` 后的根会话，真实 `source.kind=user` 开始及正常完成；排除历史、注入上下文和子任务。按会话排队向同一 EXE 的 `--lifecycle` stdin 发送，不开放端口、不记录完整正文。关闭插件会杀掉在途子进程，崩溃或卸载期间不保证通知送达。Work 等无结束事件适配的客户端继续用 MCP，不承诺自动补发。
+
+`notification_capabilities` 同时供界面、自动提示词及导出清单使用；可用入口不等于安装、信任或实机验收。安装测试仅允许可丢弃 Windows 会话，日常用户不运行真实安装卸载冒烟，不改系统目录注册表。
+
 ## 标准 Windows 安装（2026-10-31）
 
 - `tools/package_release.py --stage` 从与 ZIP 相同的显式文件白名单生成全新安装暂存区；安装器不扫描工作区，因此不会把数据库、备份、诊断或客户端配置带入产物。
 - `tools/build_installer.ps1` 调用 Inno Setup 6 编译 `installer/nijika.iss`。安装目录、开始菜单、桌面和 Startup 快捷方式由 Setup 管理，默认当前用户安装；应用本体继续使用 `application_root()` 的定位约定。
 - Work 的 `AUTO_LOCAL_MCP` 在安装/升级的 `ssPostInstall` 阶段替换为 JSON 转义后的实际 `{app}\dist\虹夏MCP-v2.exe`；不重写其他客户端，不接管 MAGPIE 配置。
 - `%USERPROFILE%\.nijika-desktop-pet` 不属于安装目录，Setup/Uninstall 不删除其中任何内容。卸载只清理安装时登记的文件和生成的通知日志，不清理外部 Agent 配置。
-- `tools/smoke_windows_installer.py` 在临时中文路径中运行真实 Setup/Uninstall，临时重定向并恢复当前用户桌面、开始菜单与启动目录，验证升级、Work 路径和用户数据保留；不覆盖正式安装。
+- `tools/smoke_windows_installer.py` 只允许可丢弃 Windows 会话，并拒绝已有安装、卸载登记或虹夏快捷方式；不会修改系统目录注册表。旧重定向测试已废止，其结果不能证明日常桌面未受影响。
 
 ## 配置审计与可移植安装（2026-10-30）
 

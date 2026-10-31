@@ -22,6 +22,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".\distribution\install.ps1"
    需要 AI 协助时复制提示词；里面已带本机路径、配置和规则，无需填密钥。
 5. 按客户端要求重载连接或打开新任务；有本人授权/信任提示时亲自处理。
    配好后保持桌宠运行，不必每轮聊天重复配置。
+   “通知能力与验收清单”会显示实际路径及能力：Codex/DSH 可接结束事件；
+   DSH 接口核对版本为 0.2.1-rc.2 / 0.2.1-rc.3，需重启并用新会话验收。
+   Work 等其他客户端目前仅主动调用，skill 不保证漏调时自动补发。
+   MAGPIE 管理项不会代写事件模块，仍需配置所有者审阅合并。
 
 注意：Work 仅限本机任务，现有插件需要 Codex CLI 和 python.exe。
 扫描会分别列出 VS Code 中已安装的 Codex、Claude Code、DSH、CodeBuddy 和 GitHub Copilot Chat。
@@ -38,6 +42,9 @@ Obsidian、WorkBuddy 等同类入口也按相同方式生成指引。
 
 验收：桌面出现选择气泡→点击后 AI 读回你的选择→随后收到完成提醒。
 设置页的“发送测试提醒”只验证本机显示，不能代替上面的 AI 实测。
+另开一个新任务，只问“1+1等于几”，不要提示使用虹夏。
+已接结束事件的客户端应只出现一条提醒；主动通知后也应无重复。
+各客户端独立验收，详见 nijika-notification-capabilities.json 与 NOTIFICATION_PROTOCOL.md。
 在 VS Code 扩展中测试时，可在同一个新任务里补充：
 
 调用虹夏 show_completion 时，请设置 task="VS Code 来源验证"，
