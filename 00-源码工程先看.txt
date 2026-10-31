@@ -1,0 +1,17 @@
+虹夏桌宠｜完整工程学习包
+
+1. 完整解压，先读 DEVELOPMENT.md：有环境安装、源码运行、文件地图、测试和构建方法。
+2. 想先看效果：打开 dist\虹夏桌宠.exe，右键角色进入设置中心。
+3. 想修改：使用 Windows x64 + Python 3.12，按 DEVELOPMENT.md 创建自己的虚拟环境。
+   设置界面在 control-ui，桌宠窗口在 pet.py，Agent 接入在 agent_setup.py。
+4. 修改源码不会自动改变附带的 EXE；开发时运行源码，完成后用 build.ps1 重新构建。
+5. Agent 接入见 AGENT_SETUP.md；角色皮肤见 SKIN_FORMAT.md。
+   默认不附带作者的 Agent 配置、聊天记录、账号或密钥，需要在自己的电脑接入。
+6. 开发测试先使用隔离数据库和 --agent-home，具体命令在 DEVELOPMENT.md。
+7. 不要在日常 Windows 账户运行安装/卸载冒烟，也不要把 tools 下所有脚本一次性执行。
+
+包内保留完整源码、文档、测试、构建脚本和当前运行素材；
+不含 .git 历史、.venv、缓存、备份、诊断数据和旧安装包。
+SOURCE_MANIFEST.json 记录源码提交和文件校验值。
+
+此包供熟人私下学习修改，公开分发前仍需核对角色素材与代码授权范围。
