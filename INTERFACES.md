@@ -139,7 +139,7 @@ Agent 配置预览具有有效期；文件在预览后发生变化时拒绝覆�
 | `PostToolUse` | 同轮标识，`tool_name`、`tool_response` | 累加工作工具计数；只有成功创建虹夏通知的响应才标记已通知；保留审批收起行为；stdout 空 |
 | `Stop` | 同轮标识，非空 `last_assistant_message` | 通过分类与去重后写一条固定文案完成提醒；无论写入/跳过/异常均输出 `{}`、退出 0 |
 
-所有事件通过 stdin 单个 JSON 对象传输，上限 1 MiB。安装器只为新增事件增加固定 `--event UserPromptSubmit` / `--event Stop` 参数，便于畸形输入也能保持 Stop 协议。原审批调用命令保持原样，仍需核对客户端实际信任状态。`codex_turn_state` 不含原始 prompt、命令、工具输出、回复、工作路径或 transcript；完成去重标记不随通知清理。内部标题、子任务显式标识、无有效 UserPromptSubmit 的 Stop 不创建通知。启发式过滤有误判可能，不承诺所有 Agent 或宿主均提供相同事件；来源为 claude-code 时忽略新增生命周期事件。
+所有事件通过 stdin 单个 JSON 对象传输，上限 1 MiB。安装器只为新增事件增加固定 `--event UserPromptSubmit` / `--event Stop` 参数，便于畸形输入也能保持 Stop 协议。原审批调用命令保持原样，仍需核对客户端实际信任状态。`codex_turn_state` 不含原始 prompt、命令、工具输出、回复、工作路径或 transcript；完成去重标记不随通知清理。内部标题、子任务显式标识、无有效 UserPromptSubmit 的 Stop、已确认的 Codex 私有 helper 固定输出和 ambient-suggestions 结构不创建通知。普通用户要求返回结构化 JSON 时仍创建通知，但 `message_preview` 固定为“已返回结构化结果，请查看任务。”，不写入原始 JSON。启发式过滤有误判可能，不承诺所有 Agent 或宿主均提供相同事件；来源为 claude-code 时忽略新增生命周期事件。
 
 审批 hook 要求本人审阅并信任；当前任务不请求审批时不会有该事件。真实平台审批验收与模拟输入测试分开记录，配置步骤见 `AGENT_SETUP.md`。
 # 2026-10-26 发布准备接口增量

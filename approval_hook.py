@@ -52,7 +52,9 @@ def handle_event(event: dict, store: NotificationStore, source: str = "codex") -
         try:
             notice = store.create_codex_completion_notice(
                 event.get("session_id"), event.get("turn_id"),
-                result_class=result_class(event.get("last_assistant_message")),
+                result_class=result_class(
+                    event.get("last_assistant_message"), event.get("cwd"),
+                ),
                 message_preview=completion_preview(event.get("last_assistant_message")),
             )
         except (ValueError, TypeError):

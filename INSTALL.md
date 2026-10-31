@@ -1,5 +1,9 @@
 # 安装与运行
 
+## 2026-10-31 Codex 内部后台任务误提醒修复
+
+正式安装的 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏审批提醒.exe` 已替换为 SHA-256 `5CD44E9F738D96AE68E0ECCFE25AD9467EEA18C48FC882BE2D254198B8C8F717`。新 Hook 不再把 Codex `ambient-suggestions` 或私有 helper 的 `{"exclude":[]}` 后台结果写入虹夏气泡；普通用户回复、简单问答和用户主动要求的 JSON 仍每轮提醒，JSON 使用固定安全摘要。桌宠、MCP、消息库、MAGPIE 服务与 Hook 信任未改变。Codex/DSH/Work 的持久规则已同步，Work 插件已升级并启用 0.1.8；已打开的客户端需要新任务或重连以加载新版规则。
+
 ## 2026-10-30 路径可移植性与配置审计
 
 安装脚本默认写入 `%LOCALAPPDATA%\NijikaDesktopPet\app`，也可用 `-InstallRoot` 指定其他本机绝对路径。它会使用收件人的实际安装位置重写 Work `mcp.json`，不会沿用在原作者电脑上的路径；Codex 配置目录由 `-CodexHome`（默认 `%USERPROFILE%\.codex`）生成，DSH 目录由 `-DshRoot`（默认 `%USERPROFILE%\.dsh`）生成。设置中心的接入向导使用当前实际用户目录和当前 MCP 可执行文件位置，不写死项目目录。
@@ -149,7 +153,7 @@ Codex 完成兜底（2026-10-17）：重建 Hook 后运行 `integrations\codex\i
 
 ## 桌面客户端 Work 本机接入
 
-本机插件目录为 `plugins/nijika-work-local/`，项目插件清单为 `.agents/plugins/marketplace.json`。源码中的 `mcp.json` 不再包含开发者电脑路径；Python 启动脚本优先查找同一项目根目录的 `dist/虹夏MCP-v2.exe`，也可读取 `NIJIKA_MCP_EXE` 或正式安装目录。插件运行仍需要能从 PATH 找到 `python.exe`。私下试用包的安装脚本会按收件人目录写入确定的 EXE 路径。当前源码为 0.1.7 版，技能要求每轮主动检查完成提醒、短决策连续等待、恢复会话时先读取旧请求。安装命令为：
+本机插件目录为 `plugins/nijika-work-local/`，项目插件清单为 `.agents/plugins/marketplace.json`。源码中的 `mcp.json` 不再包含开发者电脑路径；Python 启动脚本优先查找同一项目根目录的 `dist/虹夏MCP-v2.exe`，也可读取 `NIJIKA_MCP_EXE` 或正式安装目录。插件运行仍需要能从 PATH 找到 `python.exe`。私下试用包的安装脚本会按收件人目录写入确定的 EXE 路径。当前源码为 0.1.8 版，技能要求每轮主动检查完成提醒、短决策连续等待、恢复会话时先读取旧请求。安装命令为：
 
 ```powershell
 codex plugin marketplace add . --json
@@ -159,7 +163,7 @@ codex plugin list --marketplace nijika-local --json
 
 确认插件显示 `installed: true`、`enabled: true` 后，保持 `虹夏桌宠.exe` 运行，**重启 ChatGPT 桌面客户端**，从本机运行的 Work 新任务发起一条简短测试选择题，检查气泡能显示、点击后 Work 能读回选择。普通聊天或云端 Work 不会因为本机 Codex 配置而自动拥有这个 stdio 工具。插件说明仅指导 Agent 何时调用；模型是否主动调用仍需以新任务实测，不能由安装状态推断。需要将云端 Work 接入时，必须提供经过鉴权的远程 HTTPS MCP 端点，本机插件不能代替公网连接。请勿把本机消息库直接暴露到网络。
 
-Codex 全局技能和 Work 0.1.7 插件技能均要求在最终回复前主动检查完成提醒，并在一次 45 秒等待返回 `pending` 后复用原请求 ID 继续等待，最多约九分钟；若任务已结束，较晚的点击仍保存在消息库，但不会自动唤醒 Agent。在原会话发送“继续”后，技能要求先调用 `get_reply` 读取该请求。当前打开的 Codex/Work 任务不保证热更新；真实 Work 会话中的主动提醒、长等待和晚到回复仍按现场调用验收。
+Codex 全局技能和 Work 0.1.8 插件技能均要求在最终回复前主动检查完成提醒，并在一次 45 秒等待返回 `pending` 后复用原请求 ID 继续等待，最多约九分钟；若任务已结束，较晚的点击仍保存在消息库，但不会自动唤醒 Agent。在原会话发送“继续”后，技能要求先调用 `get_reply` 读取该请求。当前打开的 Codex/Work 任务不保证热更新；真实 Work 会话中的主动提醒、长等待和晚到回复仍按现场调用验收。
 
 可用 `.\.venv\Scripts\python.exe tools\smoke_work_plugin.py` 在隔离消息库下验证插件启动入口及四个 MCP 工具，不会给正在运行的桌宠发送测试通知。
 

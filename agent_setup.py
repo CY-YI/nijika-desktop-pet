@@ -46,7 +46,7 @@ for _client in JSON_CLIENTS:
         "note": "项目配置可能覆盖用户配置；找到文件不等于客户端已加载。"}
 
 INSTALL_RULES = """虹夏桌面提醒规则：
-1. 实质成果太长、需要用户审阅时，调用 show_completion(task=30字内标题, summary=1–120字结果)，只发送一次；它只是通知，不是批准。即使只回答一句话也要提醒；只有内部标题生成或缺少有效轮次状态时保持安静。
+1. 实质成果太长、需要用户审阅时，调用 show_completion(task=30字内标题, summary=1–120字结果)，只发送一次；它只是通知，不是批准。即使只回答一句话或用户要求返回 JSON 也要提醒，JSON 原文改用安全摘要；只有内部标题生成、Codex 私有 helper/环境建议等明确后台任务、显式子任务或缺少有效轮次状态时保持安静。
 2. 简单选择或能完整放进气泡的短成果审阅，使用 request_decision(task=30字内标题, question=80字内且至多3段的完整正文, options=2–3项)。
    每项必须含 label（不超过20显示列，约10个汉字）和 description（6–48字的一句影响说明）；最多一个 recommended=true，并在说明中解释理由。不能只写“方案A/方案B”。
 3. 用同一个 request_id 调用 wait_for_reply(timeout_seconds=45)，pending 时继续等待，最多12轮。

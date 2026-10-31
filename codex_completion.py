@@ -42,6 +42,15 @@ _WAITING = re.compile(
     r"|^(?:please (?:choose|confirm|provide)|waiting for (?:you|your)|"
     r"which .{0,60}\?)", re.I,
 )
+_CODEX_HELPER_BIN = re.compile(
+    r"(?:^|/)appdata/local/openai/codex/bin/[^/]+/?$", re.I,
+)
+_AMBIENT_SUGGESTION_ITEM_KEYS = {
+    "appId", "appIds",
+}
+_AMBIENT_SUGGESTION_MARKERS = {
+    "currentSuggestionIds", "generatedAtMs", "projectRoot",
+}
 _STEP = re.compile(r"^\s*(?:\d+[.)、]|[-*]\s+)\s*\S", re.M)
 _FENCED_CODE = re.compile(r"```.*?(?:```|$)", re.S)
 _URL = re.compile(r"(?:https?|ftp)://[^\s<>\"]+|www\.[^\s<>\"]+", re.I)
@@ -68,6 +77,59 @@ _SECRET_TOKEN = re.compile(
     r"|\b[A-Z][A-Z0-9_]{7,}\b"
 )
 _REDACTION = "[已隐藏]"
+_STRUCTURED_RESULT = "已返回结构化结果，请查看任务。"
+
+
+def _structured_json(value: object) -> dict | list | None:
+    if not isinstance(value, str) or len(value) > 1024 * 1024:
+        return None
+    clean = value.strip()
+    if not clean.startswith(("{", "[")):
+        return None
+    try:
+        parsed = json.loads(clean)
+    except (TypeError, ValueError):
+        return None
+    return parsed if isinstance(parsed, (dict, list)) else None
+
+
+def _is_codex_helper_cwd(value: object) -> bool:
+    """Recognize Codex's private helper executable directory in memory only."""
+    if not isinstance(value, str):
+        return False
+    return _CODEX_HELPER_BIN.search(value.replace("\\", "/")) is not None
+
+
+def _is_ambient_suggestions(value: object) -> bool:
+    parsed = _structured_json(value)
+    if not isinstance(parsed, dict) or "suggestions" not in parsed:
+        return False
+    # Current Codex ambient suggestions have a distinctive persisted shape:
+    # generatedAtMs/currentSuggestionIds/projectRoot plus items carrying an
+    # appId or appIds. Requiring the two strongest markers avoids treating a
+    # user's ordinary {"suggestions": [...]} deliverable as background work.
+    if not {"currentSuggestionIds", "generatedAtMs"}.issubset(parsed):
+        return False
+    suggestions = parsed.get("suggestions")
+    if not isinstance(suggestions, list):
+        return False
+    has_app_binding = any(
+        isinstance(item, dict) and _AMBIENT_SUGGESTION_ITEM_KEYS.intersection(item)
+        for item in suggestions[:20]
+    )
+    return has_app_binding and bool(
+        _AMBIENT_SUGGESTION_MARKERS.intersection(parsed),
+    )
+
+
+def internal_completion(value: object, cwd: object = None) -> bool:
+    """Return true only for known Codex background-task outputs."""
+    if _is_ambient_suggestions(value):
+        return True
+    parsed = _structured_json(value)
+    return (_is_codex_helper_cwd(cwd)
+            and isinstance(parsed, dict)
+            and parsed == {"exclude": []})
 
 
 def prompt_class(value: object) -> str:
@@ -84,11 +146,13 @@ def prompt_class(value: object) -> str:
     return "unknown"
 
 
-def result_class(value: object) -> str:
+def result_class(value: object, cwd: object = None) -> str:
     # Stop may omit or blank the latest assistant text. Treat that as a
     # completed turn with a generic preview so short replies are not lost.
     if not isinstance(value, str) or not value.strip():
         return "brief"
+    if internal_completion(value, cwd):
+        return "internal"
     clean = " ".join(value.split())
     if len(clean) < 240 and _WAITING.search(clean) and not _RESULT.search(clean):
         return "waiting"
@@ -112,6 +176,11 @@ def completion_preview(value: object) -> str:
         return fallback
     text = value.replace("\r\n", "\n").replace("\r", "\n")
     text = _FENCED_CODE.sub("\n", text)
+    # Structured replies are valid user deliverables, but their raw JSON can
+    # be long, private or unreadable in a small bubble. Keep the notification
+    # while replacing only the preview text with an action-oriented summary.
+    if _structured_json(text) is not None:
+        return _STRUCTURED_RESULT
     paragraphs = re.split(r"\n\s*\n", text)
     candidate = ""
     for paragraph in paragraphs:

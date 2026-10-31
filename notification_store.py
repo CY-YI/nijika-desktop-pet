@@ -346,7 +346,7 @@ class NotificationStore:
                                        *, result_class: str,
                                        message_preview: str | None = None) -> Notification | None:
         """Atomically create at most one safe completion notice for a turn."""
-        if result_class not in {"empty", "brief", "deliverable", "waiting"}:
+        if result_class not in {"empty", "brief", "deliverable", "waiting", "internal"}:
             raise ValueError("invalid result class")
         message = ("已完成本轮任务，请查看结果。" if message_preview is None else
                    _required_text(message_preview, "message_preview", 120))
@@ -364,11 +364,19 @@ class NotificationStore:
                 "FROM codex_turn_state WHERE session_hash=? AND turn_hash=?",
                 (session_hash, turn_hash),
             ).fetchone()
-            if (row is None or not row["has_user_prompt"]
-                    or row["user_prompt_class"] == "internal"
-                    or result_class == "empty"
-                    or row["nijika_notice_sent"]
-                    or row["completion_notice_sent"]):
+            if row is None or not row["has_user_prompt"]:
+                return None
+            if (row["user_prompt_class"] == "internal"
+                    or result_class in {"empty", "internal"}):
+                # Record the terminal state for known background work so a
+                # repeated Stop cannot keep reconsidering the same turn.
+                connection.execute(
+                    "UPDATE codex_turn_state SET completion_notice_sent=1, updated_at=? "
+                    "WHERE session_hash=? AND turn_hash=?",
+                    (now, session_hash, turn_hash),
+                )
+                return None
+            if row["nijika_notice_sent"] or row["completion_notice_sent"]:
                 return None
             connection.execute(
                 "INSERT INTO notifications VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?)",

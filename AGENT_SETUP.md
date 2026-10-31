@@ -1,5 +1,11 @@
 # 接入 Agent：Codex、ChatGPT Work、DSH、Claude Code 与其他本机客户端
 
+## 2026-10-31 Codex 后台任务隔离
+
+Codex 的 `Stop` Hook 会收到用户对话之外的后台任务。当前实现只在两种可核实特征下静默：最终回复同时包含 `currentSuggestionIds`、`generatedAtMs`、`suggestions`，且建议项带 `appId`/`appIds`；或工作路径位于 Codex 私有 `AppData\Local\OpenAI\Codex\bin\<版本>` 且最终回复精确为 `{"exclude":[]}`。其他 JSON 回复仍属于用户任务，会生成一条完成气泡，但正文使用安全摘要而不是原始 JSON。
+
+分类所需的路径和回复只在 Hook 进程内存中读取；`codex_turn_state` 仍只保存哈希轮次标识、分类和去重标记。显式子任务事件、内部标题生成和缺少有效轮次状态继续静默。该修复不改变 MCP、权限 Hook 信任、消息库或外部客户端配置。
+
 ## 2026-10-30 配置一致性审计
 
 Codex 的虹夏技能只保留源码与 `CODEX_HOME`（通常为 `%USERPROFILE%\.codex`）中的一份。不要把同名技能再复制到 `%USERPROFILE%\.agents\skills`；技能发现位置同时存在两份且内容不同时，不同任务可能读取旧规则。相同内容装两份也只算重复，不视为双保险。
@@ -23,7 +29,7 @@ Codex、DSH 和本机 Work 的新版持久规则都要求在最终回复前检�
 
 DSH 是可切换模型的工作台，不默认等于 DeepSeek 或 Codex。标准 DSH 连接省略 `agent_name/software`，通过官方配置和握手显示 `Agent · DSH`；明确模型时才传真实名称。共享 MCP 会拒绝把 Codex、ChatGPT、DSH 等宿主产品名当成 DSH 的 Agent，真实 `DeepSeek` 或自定义名称仍保留。自动接入会删除旧的孤立虹夏开始标记，但不会改由 MAGPIE 管理的实际服务。
 
-2026-10-30 本机正式安装已更新三个 EXE、Codex 全局规则/技能、DSH desktop/web 配置和 Work 插件 0.1.7。正式用户库真实气泡已验证 `Agent · DSH` 与 `DeepSeek · DSH`；已打开客户端仍要重连 MCP 或新建任务，新的持久提示词才会加载。服务端身份守卫不依赖客户端重连，旧参数也不会再显示 `Codex · DSH`。
+2026-10-30 本机正式安装已更新三个 EXE、Codex 全局规则/技能、DSH desktop/web 配置和 Work 插件 0.1.7。2026-10-31 的持久规则更新已将 Work 插件升级为 0.1.8，正式安装显示 `installed=true, enabled=true`；Codex/DSH/Work 技能审计为 `clean`。正式用户库真实气泡已验证 `Agent · DSH` 与 `DeepSeek · DSH`；已打开客户端仍要重连 MCP 或新建任务，新的持久提示词才会加载。服务端身份守卫不依赖客户端重连，旧参数也不会再显示 `Codex · DSH`。
 
 ## 2026-10-29 扫描本机与批量接入
 
@@ -207,7 +213,7 @@ powershell -ExecutionPolicy Bypass -File .\integrations\codex\install-hooks.ps1
 
 当前 CLI 的 `/hooks` 页分别显示 `Installed / Active / Review`：仅安装而未信任时会有 `Active=0` / `Review=1`，不能视为已启用执行。回车可审阅选中的事件；若界面提供 `t trust all`，仅在核对所有列出的 hook 都愿意信任时使用。确认虹夏各事件 `Active` 为 `1`、`Review` 为 `0`。在桌宠选择“已设置信任”只是状态回传，不会修改 Codex 的信任配置；若仍显示 `untrusted`，请核对该 CLI 使用的配置目录与来源路径。
 
-完成兜底用于 Agent 漏调工具的情形：每个有效轮次的 Stop 都从最终回复生成最多 120 字的安全结果摘要；正文为空或缺失时使用通用完成摘要，并先去除代码、链接、本机路径和常见敏感形态；不能再只写“任务完成”。内部标题和无有效轮次状态保持安静；未主动发出选择通知的等待答复也会提醒。成功调用过虹夏 show_completion 或 request_decision 的同轮不再补发，点击/关闭后重放 Stop 也不重复。过滤采用启发式，少见表述可能误判；它不补造决策选项、不自动执行审批、不唤醒结束的会话。桌宠未运行时仍只是排队，pending 不表示桌面可见。Work/DSH/Claude Code 的完成事件桥接不在本次范围。
+完成兜底用于 Agent 漏调工具的情形：每个有效轮次的 Stop 都从最终回复生成最多 120 字的安全结果摘要；正文为空或缺失时使用通用完成摘要，并先去除代码、链接、本机路径和常见敏感形态；不能再只写“任务完成”。用户主动要求返回 JSON 时仍提醒，但气泡改用通用结构化结果摘要。内部标题、已确认的 Codex helper／环境建议、显式子任务和无有效轮次状态保持安静；未主动发出选择通知的等待答复也会提醒。成功调用过虹夏 show_completion 或 request_decision 的同轮不再补发，点击/关闭后重放 Stop 也不重复。过滤采用启发式，少见表述可能误判；它不补造决策选项、不自动执行审批、不唤醒结束的会话。桌宠未运行时仍只是排队，pending 不表示桌面可见。Work/DSH/Claude Code 的完成事件桥接不在本次范围。
 
 信任后在一个新 Codex 任务中验收：让它在临时目录创建并读取一个测试文件，明确这一次不要主动调用桌宠工具；完成时应收到一条具体结果提醒。再问一次“1+1等于几，只回答数字”，也应收到一条提醒。最后让它主动调用一次 show_completion，应只收到一条带任务名的通知。正式会话的自然触发仍须在本机按此验证，隔离 CLI 测试不代替本人信任。
 

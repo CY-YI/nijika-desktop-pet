@@ -124,7 +124,7 @@ MCP 的 `show_completion` / `request_decision` 注入 SDK 请求 Context，从 `
 
 可选 `approval_hook.py` 接收 Codex `PermissionRequest` 与 `PostToolUse` 事件。审批通知优先显示、按事件去重；操作完成后收起尚未点击的对应提醒。程序不存储原始命令，不输出允许/拒绝决定；“知道了”仅是提醒回执，实际授权始终留在 Codex 审批卡。全局 hook 定义必须由用户审阅并信任后才会执行，配置和验收步骤见 `AGENT_SETUP.md`。
 
-2026-10-31 Codex 完成兜底规则：同一冻结 Hook 扩展处理 `UserPromptSubmit` 与 `Stop`。`codex_completion.py` 仅在内存分析 prompt、工具名/结果和最后回复，输出分类与布尔值；`NotificationStore` 的 `codex_turn_state` 只保存 SHA256 会话/轮次标识、分类、工具计数、通知标记与时间。Stop 只需有效 prompt 状态即可为每个有效轮次创建提醒；回复正文缺失时使用通用摘要，内部标题和无有效轮次状态保持安静。成功的虹夏 show_completion/request_decision（含 Work 插件命名变体）会抑制兜底。通知插入与已发送标记在同一 `BEGIN IMMEDIATE` 事务中，点击、关闭及通知保留期清理后仍凭无正文标记去重。未发任何通知的旧状态 30 天后清理；已发主动或兜底通知的哈希去重行保留至消息库删除/重置。
+2026-10-31 Codex 完成兜底规则：同一冻结 Hook 扩展处理 `UserPromptSubmit` 与 `Stop`。`codex_completion.py` 仅在内存分析 prompt、工具名/结果、最后回复和工作路径，输出分类与布尔值；`NotificationStore` 的 `codex_turn_state` 只保存 SHA256 会话/轮次标识、分类、工具计数、通知标记与时间。Stop 只需有效 prompt 状态即可为每个有效轮次创建提醒；回复正文缺失时使用通用摘要。内部标题、显式子任务、已确认的 Codex helper 固定输出、ambient-suggestions 结构和无有效轮次状态保持安静。普通用户要求返回 JSON 时仍提醒，但预览替换为安全通用摘要。成功的虹夏 show_completion/request_decision（含 Work 插件命名变体）会抑制兜底。通知插入与已发送标记在同一 `BEGIN IMMEDIATE` 事务中，点击、关闭及通知保留期清理后仍凭无正文标记去重。未发任何通知的旧状态 30 天后清理；已发主动或兜底通知的哈希去重行保留至消息库删除/重置。
 
 固定气泡为“ChatGPT · 任务完成 / 安全摘要或通用完成提示 / 知道了”，不转发任务全文。分类仅用于摘要和去重，不能覆盖任意语言和所有表达；事件缺失或数据库异常时静默失败且退出 0，不阻断正常工作。Stop 在所有路径返回 `{}`，不续跑模型；不读取不稳定的 transcript。原 Computer Use `notify` 不改，Claude Code 来源仍只处理审批两事件。此次数据库只新增表，保留原九列通知结构，现有桌宠/MCP EXE 仍能读取新通知；无需为此重建前端或修改各 Agent 的 MCP 配置。
 

@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from approval_hook import handle_event, main
-from codex_completion import completion_preview, prompt_class, tool_flags
+from codex_completion import completion_preview, prompt_class, result_class, tool_flags
 from notification_store import NotificationStore
 
 
@@ -148,6 +148,102 @@ class CodexCompletionTests(unittest.TestCase):
         request = self.stop("我很好，谢谢。")
         self.assertIsNotNone(request)
         self.assertEqual(self.store.get(request).message, "我很好，谢谢。")
+
+    def test_ambient_suggestions_background_output_is_quiet(self):
+        self.begin("整理本项目的环境建议")
+        output = json.dumps({
+            "projectRoot": "C:/private/project",
+            "generatedAtMs": 123456,
+            "currentSuggestionIds": ["suggestion-1"],
+            "suggestions": [{
+                "appId": "codex-document-control",
+                "title": "Open a document",
+                "description": "Continue the document workflow.",
+                "prompt": "Continue",
+            }],
+        })
+        self.assertIsNone(self.stop(output))
+        self.assertIsNone(self.stop(output))
+        self.assertEqual(self.count(), 0)
+        with contextlib.closing(sqlite3.connect(self.path)) as connection:
+            self.assertEqual(connection.execute(
+                "SELECT completion_notice_sent FROM codex_turn_state",
+            ).fetchone()[0], 1)
+
+    def test_codex_private_helper_output_is_quiet_only_with_known_signature(self):
+        helper_cwd = (
+            "C:/Users/example/AppData/Local/OpenAI/Codex/bin/"
+            "0ab0e7a8f3779036"
+        )
+        self.begin("Return the requested helper object.")
+        event = self.event(
+            "Stop", last_assistant_message='{"exclude":[]}', cwd=helper_cwd,
+        )
+        self.assertIsNone(handle_event(event, self.store))
+        self.assertEqual(self.count(), 0)
+
+        self.identity["turn_id"] = "user-json-in-helper-directory"
+        self.begin("请返回一个 JSON 对象")
+        event = self.event(
+            "Stop", last_assistant_message='{"status":"ok"}', cwd=helper_cwd,
+        )
+        request = handle_event(event, self.store)
+        self.assertIsNotNone(request)
+        self.assertEqual(
+            self.store.get(request).message, "已返回结构化结果，请查看任务。",
+        )
+
+    def test_user_requested_json_still_notifies_with_safe_preview(self):
+        self.begin("请只返回一个 JSON 对象，不要调用工具")
+        request = self.stop('{"status":"ok","items":[1,2,3]}')
+        self.assertIsNotNone(request)
+        self.assertEqual(
+            self.store.get(request).message, "已返回结构化结果，请查看任务。",
+        )
+        self.assertNotIn('{"status"', self.store.get(request).message)
+
+    def test_generic_user_suggestions_json_is_not_mistaken_for_ambient_work(self):
+        self.begin("请返回两条改进建议，使用 JSON 数组")
+        request = self.stop(json.dumps({"suggestions": [{
+            "title": "改进文档",
+            "description": "补充安装步骤",
+            "prompt": "请补充安装步骤",
+        }]}))
+        self.assertIsNotNone(request)
+        self.assertEqual(
+            self.store.get(request).message, "已返回结构化结果，请查看任务。",
+        )
+
+    def test_structured_classification_boundaries(self):
+        self.assertEqual(
+            result_class(json.dumps({
+                "projectRoot": "C:/project",
+                "generatedAtMs": 123,
+                "currentSuggestionIds": ["suggestion"],
+                "suggestions": [{"appIds": ["connector_example"]}],
+            })),
+            "internal",
+        )
+        self.assertEqual(
+            result_class('{"suggestions":[{"appId":"example"}]}'), "brief",
+        )
+        self.assertEqual(
+            result_class(
+                '{"generatedAtMs":123,"currentSuggestionIds":["x"],'
+                '"suggestions":[{"title":"ordinary result"}]}',
+            ),
+            "brief",
+        )
+        self.assertEqual(
+            result_class(
+                '{"exclude":[]}',
+                r"C:\Users\example\AppData\Local\OpenAI\Codex\bin\build",
+            ),
+            "internal",
+        )
+        self.assertEqual(result_class('{"status":"ok"}'), "brief")
+        self.assertEqual(completion_preview('{"status":"ok"}'),
+                         "已返回结构化结果，请查看任务。")
 
     def test_missing_or_blank_stop_message_still_creates_generic_notice(self):
         for message in (None, ""):

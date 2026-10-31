@@ -1,9 +1,21 @@
 # 当前待办
 
+## 当前任务：Codex 内部后台任务误提醒修复（2026-10-31）
+
+- 用户反馈：当前任务没有产生请求，但虹夏显示了旧项目 Ambient Suggestions JSON 和 Codex 私有 helper `{"exclude":[]}` 两条通知。根因是 Stop Hook 把后台任务误当成有效用户轮次。
+- [x] 在 `codex_completion.py` 增加内存级内部任务识别，并让 `notification_store.py` 为静默内部轮次写入完成去重标记。
+- [x] 普通用户要求 JSON 时继续提醒，`completion_preview()` 改为安全通用摘要；补齐 ambient、helper、普通 JSON、简单问答和重复 Stop 测试。
+- [x] 更新 Codex、DSH、Work 持久规则与设置中心生成文案；Work 插件源码提升为 0.1.8。
+- [x] 运行完整 Python/JavaScript 回归、语法与差异检查。Python 168 项（167 通过、1 项可选 PyYAML 跳过），JavaScript 20/20；敏感信息扫描在提交前继续执行。
+- [x] 备份旧 Hook、规则、技能与 Work 0.1.7；重建并同步工作区 `dist/` 与正式安装目录的审批提醒 EXE。新 SHA-256 为 `5CD44E9F738D96AE68E0ECCFE25AD9467EEA18C48FC882BE2D254198B8C8F717`；桌宠、MCP、消息库、MAGPIE 项和 Hook 信任未覆盖。
+- [x] 跑冻结 Hook、MCP、标准目录前端、接入审计、Work 0.1.8 与 DSH 安装器冒烟，结果均通过。真实 Codex CLI 自定义 provider 隔离冒烟本轮未重跑，不记为通过。
+- [x] 验证证据已写入 `diagnostics/internal-task-guard-20261031-v2/verification.json`；Codex/DSH/Work 技能审计为 `clean`，Work 插件显示 `installed=true, enabled=true, version=0.1.8`。
+- [ ] 提交并推送现有开发分支。
+
 ## 当前任务：每轮回复提醒（2026-10-31）
 
 - 用户决定：不再区分“简单事实问答”和实质任务；只要有效轮次结束，就通过虹夏显示一次具体提醒。用户不需要在每次对话前重复提醒 Agent。
-- [x] 删除 Codex Stop 对 `question + brief`、`substantive_tool_count=0`、`waiting` 和正文暂缺结果的静默过滤；保留内部标题和缺少有效轮次状态的保护。
+- [x] 删除 Codex Stop 对 `question + brief`、`substantive_tool_count=0`、`waiting` 和正文暂缺结果的静默过滤；保留内部标题、已确认后台任务和缺少有效轮次状态的保护。
 - [x] 更新项目规则、Codex/DSH/Work 技能与设置中心生成的持久提醒文案；Work 插件版本提升为 0.1.7。
 - [x] 补充“无工具简单问答”和正文暂缺回归；项目虚拟环境全量 Python 163 项通过、1 项可选依赖跳过，JavaScript 20/20、语法和 `git diff --check` 通过。
 - [x] 重建并同步审批提醒程序；候选 `dist-next/every-reply-reminder-20261031/虹夏审批提醒.exe` SHA-256 `59934E1A38A0207F18FB1D3A5EB80D6A9145F655A9FC034D64595E1DA277439A`。隔离 Codex CLI question/work 各产生 1 条兜底提醒，主动 MCP 1 条且兜底 0 条；异步 Hook 冒烟加入短暂排空等待。

@@ -1,10 +1,20 @@
 # 虹夏桌宠：重做需求
 
+## 2026-10-31 Codex 内部后台任务误提醒修复
+
+- 用户反馈：气泡出现了两条与当前任务无关的通知，内容分别来自 Codex 的 `ambient-suggestions` 生成和私有 helper，均属于很久以前已结束的内部工作。
+- Must：Codex Stop Hook 只对可核实的内部任务静默。`ambient-suggestions` 必须同时具备 `currentSuggestionIds`、`generatedAtMs`、`suggestions`，且建议项带 `appId`/`appIds`；私有 helper 必须在 `AppData\Local\OpenAI\Codex\bin\<版本>` 目录返回精确的 `{"exclude":[]}`。缺少任一强特征的普通建议 JSON 仍按用户回复提醒。
+- Must：普通用户任务即使明确要求返回 JSON，也必须继续生成一条完成提醒；气泡只显示“已返回结构化结果，请查看任务。”，不得把原始 JSON 截断后写入通知。
+- Must：内部任务和普通任务都按哈希后的会话/轮次去重；同一 Stop 重放、点击、关闭和通知保留期清理不能造成重复。工作路径和完整回复只在 Hook 内存中分析，不持久化。
+- Won't：不删除或重放两条历史通知，不按回复内容跨请求模糊去重，不扩大权限，也不覆盖 MCP 服务、MAGPIE 管理项、Agent 档案或 Hook 信任；只同步本项目虹夏的持久规则与技能。
+- 验收：单元和打包 Hook 覆盖 ambient JSON、helper 固定对象、普通 JSON、简单问答、主动提醒去重和重复 Stop；完整回归、正式程序同步、Git 提交与推送必须完成后再标记本轮通过。
+- 状态：目标回归 26/26、全量 Python 168 项（167 通过、1 项可选 PyYAML 跳过）、JavaScript 20/20、候选与正式安装 Hook、MCP、标准目录前端、Work 0.1.8 和 DSH 安装器验证通过；Codex/DSH/Work 技能审计为 `clean`。正式 Hook 已替换为 SHA-256 `5CD44E9F738D96AE68E0ECCFE25AD9467EEA18C48FC882BE2D254198B8C8F717`，证据见 `diagnostics/internal-task-guard-20261031-v2/`。真实 Codex CLI 自定义 provider 隔离冒烟未重跑，不记为通过。
+
 ## 2026-10-31 每轮回复提醒
 
 - 用户原话：“只要完成了一次对话就要进行提醒”，并明确要求简单的一问一答也显示气泡，不需要每次在对话前再次提醒 Agent。
 - Must：Codex Stop 兜底与 Codex、DSH、Work 持久规则统一处理每个有效轮次，包括事实问答、等待用户回答的短句和正文暂缺的短答；同轮已经成功发送 `show_completion` 或 `request_decision` 时只保留一条提醒。
-- Must：内部标题生成和缺少有效 `UserPromptSubmit`/轮次标识保持安静；正文为空或缺失时使用通用完成摘要，不把排队状态冒充桌面已显示。
+- Must：内部标题生成、已确认的 Codex helper／环境建议、显式子任务和缺少有效 `UserPromptSubmit`/轮次标识保持安静；正文为空或缺失时使用通用完成摘要，不把排队状态冒充桌面已显示。
 - 验收：隔离单元覆盖简单问答、无工具问答、等待答复、实质任务、主动提醒去重和空/内部回复；真实 CLI question 冒烟应产生一条兜底提醒，用户配置字节不变。
 - 状态：代码、持久规则和正式 Hook 已更新；Python 163 项（1 项可选跳过）、JavaScript 20/20、打包与隔离 CLI 验收通过。本机规则审计为 `clean`；已打开的外部客户端仍需重连或新建任务完成自然气泡观察。
 
@@ -199,7 +209,7 @@
 | N21 | Should | 角色皮肤与时装外壳替换 | `control_store.py` 与衣橱页面；PNG / 九帧 ZIP、切换及默认恢复，实际浏览器导入通过；2026-10-17 增加“自制角色”AI 出图提示词与两种文件格式标注，一键复制 | 初版已实现；本轮未提供新时装素材；设置中心新卡片需重建安装版后可见 |
 | N22 | Should | 可视化动作与日常互动设置 | `pet.py`、`control_store.py` 与设置页面；持久化、预览与独立轮询，浏览器刷新保留选择 | 初版已实现；最终 EXE 同步与正式入口待复验 |
 | N23 | Should | 可配置的投喂与打赏入口 | 支持页及本机图片/链接配置；空状态与测试链接保存通过 | 初版已实现；真实收款图未提供，不实现支付/订单/到账验证 |
-| N51 | Must | Codex 实质任务完成提醒兜底 | `codex_completion.py`、`approval_hook.py`、`codex_turn_state` 与四事件安装器；有效主动通知去重、短事实问答过滤、原子写入与无正文状态 | 已通过：56 项回归、打包冒烟、真实隔离 CLI；2026-10-17 本人信任后 hooks/list 确认四项 trusted/enabled，不跳过信任、不覆盖 Hook 的新 CLI 任务正常结束后自动补发 1 条；其他 Agent 完成兜底不在本轮 |
+| N51 | Must | Codex 每个有效回复的完成提醒兜底 | `codex_completion.py`、`approval_hook.py`、`codex_turn_state` 与四事件安装器；简单问答和用户要求的结构化结果均提醒，主动通知去重，内部标题、已确认后台任务、显式子任务与无有效轮次保持安静 | 已通过：2026-10-31 目标回归 26/26、全量 Python 168 项（1 项可选跳过）、冻结 Hook 与正式安装 Hook 冒烟；内部 ambient/helper 输出不再生成气泡，历史错误通知保留作证据 |
 
 ## 管理界面增量需求（2026-10-15）
 

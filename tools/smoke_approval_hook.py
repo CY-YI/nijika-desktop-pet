@@ -128,6 +128,54 @@ def main() -> None:
         run_hook("PostToolUse")
         run_hook("Stop")
         assert store.next_pending() is None
+
+        # Codex ambient-suggestion generation is internal even though it runs
+        # in the user's project directory. Its JSON must never enter a bubble.
+        event["turn_id"] = "ambient-suggestions-turn"
+        event["prompt"] = "整理本项目的环境建议"
+        event["cwd"] = "C:/isolated-project"
+        run_hook("UserPromptSubmit")
+        event["last_assistant_message"] = json.dumps({
+            "projectRoot": "C:/isolated-project",
+            "generatedAtMs": 123456,
+            "currentSuggestionIds": ["suggestion-1"],
+            "suggestions": [{
+                "appId": "codex-document-control",
+                "title": "Open a document",
+                "description": "Continue the document workflow.",
+                "prompt": "Continue",
+            }],
+        })
+        run_hook("Stop")
+        assert store.next_pending() is None
+
+        # Codex's private helper runs from its versioned bin directory and
+        # returns this exact exclusion object. Keep it quiet without treating
+        # every JSON reply from a normal user task as internal.
+        event["turn_id"] = "private-helper-turn"
+        event["prompt"] = "Return the requested helper object."
+        event["cwd"] = (
+            "C:/Users/example/AppData/Local/OpenAI/Codex/bin/"
+            "0ab0e7a8f3779036"
+        )
+        run_hook("UserPromptSubmit")
+        event["last_assistant_message"] = '{"exclude":[]}'
+        run_hook("Stop")
+        assert store.next_pending() is None
+
+        # A real user asking for JSON still receives a completion notice. The
+        # structured reply is summarized instead of truncating raw JSON into
+        # the bubble.
+        event["turn_id"] = "user-json-turn"
+        event["prompt"] = "请只返回一个 JSON 对象，不要调用工具"
+        event["cwd"] = "C:/isolated-project"
+        run_hook("UserPromptSubmit")
+        event["last_assistant_message"] = '{"status":"ok","items":[1,2,3]}'
+        run_hook("Stop")
+        json_notice = store.next_pending()
+        assert json_notice is not None
+        assert json_notice.message == "已返回结构化结果，请查看任务。"
+        store.dismiss(json_notice.id)
         for path in store.path.parent.glob("queue.sqlite3*"):
             assert b"TEST_PRIVATE_" not in path.read_bytes()
 

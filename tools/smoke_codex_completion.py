@@ -32,7 +32,9 @@ def toml_text(value: object) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--case", choices=("work", "question", "notice"), default="work")
+    parser.add_argument(
+        "--case", choices=("work", "question", "json", "notice"), default="work",
+    )
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--approval-exe", type=Path,
                         default=ROOT / "dist" / "虹夏审批提醒.exe")
@@ -102,6 +104,8 @@ def main() -> None:
             "work": "请只在当前临时目录创建 proof.txt，内容为 nijika-codex-stop-test，然后读取确认。"
                     "最后用中文简述实际检查结果并写明已完成。不要调用任何桌宠工具，不要读写其他目录。",
             "question": "1+1等于几？只回答数字，不调用工具。",
+            "json": "请只输出一个 JSON 对象，内容为 {\"status\":\"ok\"}；"
+                    "不要使用 Markdown 代码块，不要解释，不要调用工具。",
             "notice": "请只调用一次 nijika-pet 的 show_completion，task 为 Codex独立提醒测试，"
                       "summary 为 已完成本机隔离工具测试。不要读写文件，不要等待点击；工具返回后直接结束任务。",
         }
@@ -141,7 +145,9 @@ def main() -> None:
                     "SELECT COUNT(*), SUM(has_user_prompt), SUM(completion_notice_sent) "
                     "FROM codex_turn_state",
                 ).fetchone()
-                notices = connection.execute("SELECT agent, title FROM notifications").fetchall()
+                notices = connection.execute(
+                    "SELECT agent, title, message FROM notifications",
+                ).fetchall()
             if options.case == "notice" and notices:
                 break
             if options.case != "notice" and state[2]:
@@ -151,7 +157,9 @@ def main() -> None:
             state = connection.execute(
                 "SELECT COUNT(*), SUM(has_user_prompt), SUM(completion_notice_sent) FROM codex_turn_state",
             ).fetchone()
-            notices = connection.execute("SELECT agent, title FROM notifications").fetchall()
+            notices = connection.execute(
+                "SELECT agent, title, message FROM notifications",
+            ).fetchall()
         assert state[0] >= 1 and state[1] >= 1, (
             "No valid UserPromptSubmit event; "
             f"state_rows={state[0]}, notices={len(notices)}, "
@@ -160,14 +168,29 @@ def main() -> None:
         )
         if options.case == "work":
             assert (temporary / "proof.txt").read_text(encoding="utf-8-sig").strip() == "nijika-codex-stop-test"
-            assert notices == [("ChatGPT", "任务完成")] and state[2] == 1, "Expected one fallback notice"
+            assert (len(notices) == 1
+                    and notices[0][:2] == ("ChatGPT", "任务完成")
+                    and state[2] == 1), (
+                "Expected one fallback notice: "
+                f"notices={notices!r}, state={state!r}"
+            )
         elif options.case == "question":
-            assert notices == [("ChatGPT", "任务完成")] and state[2] == 1, (
+            assert len(notices) == 1 and notices[0][:2] == ("ChatGPT", "任务完成") and state[2] == 1, (
                 "Every non-empty reply should create one completion notice: "
                 f"notices={notices!r}, state={state!r}"
             )
+        elif options.case == "json":
+            assert len(notices) == 1 and notices[0][:2] == ("ChatGPT", "任务完成") and state[2] == 1, (
+                "A user-requested JSON reply should still create one completion notice: "
+                f"notices={notices!r}, state={state!r}"
+            )
+            assert not notices[0][2].lstrip().startswith(("{", "[")), (
+                f"Raw structured JSON leaked into the completion preview: {notices[0][2]!r}"
+            )
         else:
-            assert notices == [("ChatGPT", "Codex独立提醒测试")] and not state[2], (
+            assert (len(notices) == 1
+                    and notices[0][:2] == ("ChatGPT", "Codex独立提醒测试")
+                    and not state[2]), (
                 f"Explicit notice duplicated: notices={notices!r}, state={state!r}"
             )
         print(f"Real Codex CLI {options.case}: turn completed, valid prompt state, "
