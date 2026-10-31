@@ -8,6 +8,7 @@
 - Setup 0.1.8 已从同一构建编译到 `dist-release/installer-0.1.8/`，SHA-256 `4aa2ceafde95d09347c6f09a79b502ddd5cfe3c9707d3f2ed6c4c4548db97fa5`。本轮不在日常账户执行安装/升级/卸载；干净 Windows Sandbox/VM 全流程尚待，不将其作为已完成验收的安装器发布。
 - 源码测试：Python 188 项（187 通过、1 项可选依赖跳过）、JavaScript 20/20、两个 DSH 版本各 5/5，冻结 Hook/MCP、DSH 安装幂等与配置保护、Work MCP 启动器、Agent 配置引导及冻结前端通过。证据在 `diagnostics/shared-notifications-20261031/`。协议与组件通过不等于所有宿主实机通过。
 - 分发仍限已授权的私下试用；不覆盖旧 Release，公开素材分发权与新版安装器验收未解决前不创建新的公开二进制发布。
+- 源码与验收说明已提交 `1ca0cd0` 并推送现有 `codex/interaction-settings-20261017` 分支。生成包未纳入 Git；GitHub 旧 Release 下载内容不因本次分支推送自动更新。
 
 ## 2026-10-31 安装冒烟隔离勘误
 
