@@ -7,6 +7,12 @@
 - 当前候选：`dist-release/installer-0.1.7/虹夏桌宠-Setup-0.1.7.exe`，大小 72,630,210 字节，SHA-256 `9ee17469433a0ab97df2830a4f358423461521cd2d787c405d14b304fdd5fb31`；配套 `installer-manifest.json` 与隔离安装证据在 `diagnostics/installer-20261031/`。
 - 发布前必须核对新 Setup EXE 的 `installer-manifest.json`、隔离安装/卸载证据和 GitHub Release 附件哈希；安装器不写收件人的外部 Agent 配置，首次接入仍从设置中心完成。
 
+## 2026-10-31 朋友私下试用包
+
+- 使用 `python tools/package_friend_trial.py` 生成三文件 ZIP：安装器、安装器清单和简明试用说明；不包含用户数据库、Agent 配置、备份、诊断或发送者路径。
+- 当前包：`dist-release/friend-trial-0.1.7/虹夏桌宠-v0.1.7-朋友私下试用.zip`，大小 72,122,456 字节，SHA-256 `6535f68e2f6f65c67ccf0d6341993bb8d79adcb5370e38764293d2bc903e80a9`。
+- 这是私下测试包；收件人解压后双击 Setup，安装后从“虹夏桌宠设置 → Agent 接入”完成自己的客户端配置。角色和图标素材的公开再分发权仍未解决，不作为公开下载包。
+
 ## 2026-10-31 每轮回复提醒修复
 
 - 新审批 Hook 候选：`dist-next/every-reply-reminder-20261031/虹夏审批提醒.exe`，SHA-256 `59934E1A38A0207F18FB1D3A5EB80D6A9145F655A9FC034D64595E1DA277439A`。
