@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = '0.1.6',
+    [string]$Version = '0.1.7',
     [string]$OutputDirectory = 'dist-release\installer',
     [string]$Compiler = '',
     [switch]$BuildApplications,
@@ -51,7 +51,11 @@ $output = Join-Path $root $OutputDirectory
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 & $Compiler ('/DSourceDir=' + $stage) ('/DOutputDir=' + $output) ('/DAppVersion=' + $Version) ('/DLanguageFile=' + $language) (Join-Path $root 'installer\nijika.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
-$installer = Join-Path $output ('虹夏桌宠-Setup-' + $Version + '.exe')
+$installers = @(Get-ChildItem -LiteralPath $output -Filter ('*Setup-' + $Version + '.exe') -File)
+if ($installers.Count -ne 1) {
+    throw "Expected exactly one Setup EXE for version $Version in $output; found $($installers.Count)."
+}
+$installer = $installers[0].FullName
 $hash = Get-FileHash -LiteralPath $installer -Algorithm SHA256
 $manifest = [ordered]@{
     file = Split-Path -Leaf $installer

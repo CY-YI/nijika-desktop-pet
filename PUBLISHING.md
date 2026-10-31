@@ -1,5 +1,12 @@
 # 本机候选与发布检查单
 
+## 2026-10-31 每轮回复提醒修复安装器
+
+- 新安装器应使用 `v0.1.7`：它基于提交 `bf4e324`，包含每个有效 Agent 轮次结束都发送虹夏提醒的修复，覆盖简单事实问答、无工具短答和等待用户回答的短句；同一轮已经主动发送 `show_completion` 或 `request_decision` 时仍保持去重。
+- 构建命令：`powershell -ExecutionPolicy Bypass -File tools\build_installer.ps1 -Version 0.1.7 -OutputDirectory dist-release\installer-0.1.7`。旧 `v0.1.6` 保留作历史版本，不应继续作为最新下载入口。
+- 当前候选：`dist-release/installer-0.1.7/虹夏桌宠-Setup-0.1.7.exe`，大小 72,630,210 字节，SHA-256 `9ee17469433a0ab97df2830a4f358423461521cd2d787c405d14b304fdd5fb31`；配套 `installer-manifest.json` 与隔离安装证据在 `diagnostics/installer-20261031/`。
+- 发布前必须核对新 Setup EXE 的 `installer-manifest.json`、隔离安装/卸载证据和 GitHub Release 附件哈希；安装器不写收件人的外部 Agent 配置，首次接入仍从设置中心完成。
+
 ## 2026-10-31 每轮回复提醒修复
 
 - 新审批 Hook 候选：`dist-next/every-reply-reminder-20261031/虹夏审批提醒.exe`，SHA-256 `59934E1A38A0207F18FB1D3A5EB80D6A9145F655A9FC034D64595E1DA277439A`。

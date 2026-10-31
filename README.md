@@ -10,7 +10,7 @@
 
 正式安装的三个程序已从本轮冻结构建同步更新，现有消息、设置、8 个 Agent 档案、MAGPIE 归属和客户端配置均保留。正式桌宠 SHA256 为 `DE3553927024511445E57D57B510249B77B1CF73B7D75872BB4D2FC7BA7E5F77`，MCP 为 `BA8A70AA0CB594B936917CCDD3AF01B9F45DC219B4DEAD1AD5C55B5765EFD9E5`，审批提醒为 `571DFD53D021814556071C352CF362829236719247614E50B7EDB20C5389BDA2`。
 
-安装前程序、运行资源和 SQLite 一致性快照在 `backups/reminder-source-hardening-20261030/`。正式安装后，19 种 MCP 来源、4 个并发客户端、审批 Hook、DSH 安装器、Work 插件和接入指引冻结冒烟通过；真实桌面气泡分别验证了 `Agent · DSH`、`DeepSeek · DSH`，并实际显示了一次不授予权限的命令审批提醒。证据见 `diagnostics/reminder-source-hardening-20261030/`。扫描只读取已知扩展清单，不读取账号、聊天或密钥；MAGPIE 管理的目标不会由虹夏重复写入。既有客户端需重连 MCP 或新建任务以加载本轮规则；最新私下试用包尚未重新打包本轮安装补丁。准确边界见 [PUBLISHING.md](PUBLISHING.md) 与 [TODO.md](TODO.md)。
+安装前程序、运行资源和 SQLite 一致性快照在 `backups/reminder-source-hardening-20261030/`。正式安装后，19 种 MCP 来源、4 个并发客户端、审批 Hook、DSH 安装器、Work 插件和接入指引冻结冒烟通过；真实桌面气泡分别验证了 `Agent · DSH`、`DeepSeek · DSH`，并实际显示了一次不授予权限的命令审批提醒。证据见 `diagnostics/reminder-source-hardening-20261030/`。扫描只读取已知扩展清单，不读取账号、聊天或密钥；MAGPIE 管理的目标不会由虹夏重复写入。`v0.1.7` 安装器已基于本轮每回复提醒修复重新构建，发布前仍需按 PUBLISHING.md 核对 Release 附件。
 
 2026-10-30 的配置复审已清理旧 `.agents` 重复技能、旧技能备份和零字节审批探针，备份在 `backups/config-cleanup-20261030/safe-tool-apply/`。当前 Codex/DSH/Work 技能审计为 `clean`，5 个皮肤（含默认）和 8 个 Agent 档案可读且无完整键重复；具体命令与证据见 [AGENT_SETUP.md](AGENT_SETUP.md) 和 `diagnostics/config-cleanup-20261030/`。
 
@@ -26,7 +26,7 @@
 
 当前源码完成 119 项 Python 回归（118 通过、1 项可选 YAML 跳过），系统环境补测 YAML 组 6 项通过，20 项 JavaScript 测试与语法检查通过。最新冻结候选及精确安装程序的冒烟结果见 [发布检查单](PUBLISHING.md)；这些结果不表示每个外部宿主的新会话和原生权限事件均已实测。
 
-本轮仅整理、清理并向现有开发分支提交源码，不增加功能、不合并 `main`、不发布二进制下载。正式公开发行仍待真实赞助资料、自制角色试导入与角色/图标分发权利核对；尚未实现的完整动作及宿主桥接见 [TODO.md](TODO.md)。历史记录中的“未安装／暂不提交”仅描述对应日期的操作，以本节及最新检查点为准。
+当前源码和 `v0.1.7` 安装器候选已提交到现有开发分支；二进制是否作为 GitHub Release 下载，仍以 PUBLISHING.md 的附件哈希和私下试用授权为准。正式公开发行仍待真实赞助资料、自制角色试导入与角色/图标分发权利核对；尚未实现的完整动作及宿主桥接见 [TODO.md](TODO.md)。历史记录中的“未安装／暂不提交”仅描述对应日期的操作，以本节及最新检查点为准。
 
 使用入口：[安装与运行](INSTALL.md) · [Agent 接入](AGENT_SETUP.md) · [自制皮肤格式](SKIN_FORMAT.md) · [架构](ARCHITECTURE.md) · [回退](ROLLBACK.md)。下方日期段落保留为历史记录。
 
