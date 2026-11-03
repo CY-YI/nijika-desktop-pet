@@ -6,7 +6,8 @@
 - 最终桌宠：`build/agent-config-guard-20261103/stage/dist/虹夏桌宠.exe`，40,209,627 字节，SHA-256 `A3ECD0B147C77D83C962D7D2EA2CB29208D67DE833D9BD7091AF66068CCCE479`；工作区 `dist` 与本机正式安装已同步，正式文件仅备份后重启本应用完成替换。
 - 更新 Setup：`dist-release/installer-0.1.9-guard/虹夏桌宠-Setup-0.1.9.exe`，SHA-256 `e22bcff0f00ba14392346e1c572ba6fa969d0dd88e1eb09113bc2ea0d2eaf3c9`，未签名。朋友私下试用 ZIP：`dist-release/friend-trial-0.1.9-guard/虹夏桌宠-v0.1.9-朋友私下试用.zip`，64,192,192 字节，SHA-256 `ba6b0284a2fbf6029e3057337bfb812c33a9fb42a7af02da83d62f91ab42a223`，4 项内容核对通过。
 - 验收：Python 194 项（193 通过、1 项可选 PyYAML 跳过）、JavaScript 20/20、DSH 4 通过/1 可选跳过；冻结前端、接入指引、MCP、内置浏览器实际勾选和定向安装打包回归通过。证据在 `diagnostics/agent-config-guard-20261103/`。
-- 未执行项：可丢弃干净 Windows 中的 Setup 安装/升级/卸载，以及外部 Agent 重连后的自然任务调用。发布前仍须按本文件和最终新版本哈希复核。
+- 收尾验收补记：电脑重启后先清理 1 个明确的旧 MCP 残留目录（37,785,966 字节），随后复核可清理项为 0；当前 5 个活动 MCP 全部从 onedir 目录启动，引用 `%TEMP%\_MEI*` 的数量为 0。DSH 桌面客户端在不额外提示使用虹夏的一轮自然短问答中自动调用 MCP，聊天气泡显示 `Agent · DSH` 和具体结果，通知 ID 为 `dcfb19d6d0da488e90eecd0d192f617a`。证据见 `diagnostics/post-reboot-cleanup-20261103.json`、`diagnostics/post-reboot-cleanup-confirm-20261103.json` 和 `diagnostics/agent-config-guard-final-20261103/verification.json`。
+- 未执行项：可丢弃干净 Windows 中的 Setup 安装/升级/卸载，以及其他外部宿主重连后的自然任务调用。本机没有 Windows Sandbox，且已有正式安装；测试工具会拒绝在日常账户执行破坏性安装流程。发布前仍须按本文件和最终新版本哈希复核。
 
 ## 2026-11-03 MCP onedir 临时目录治理
 

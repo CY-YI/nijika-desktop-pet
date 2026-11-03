@@ -10,6 +10,9 @@
 - [x] 构建并验证新桌宠，备份后仅重启确切虹夏进程并同步工作区 `dist` 与正式安装目录；正式 SHA-256 为 `A3ECD0B147C77D83C962D7D2EA2CB29208D67DE833D9BD7091AF66068CCCE479`。
 - [x] 生成更新安装器 `dist-release/installer-0.1.9-guard/虹夏桌宠-Setup-0.1.9.exe`（SHA-256 `e22bcff0f00ba14392346e1c572ba6fa969d0dd88e1eb09113bc2ea0d2eaf3c9`）和 4 项朋友试用 ZIP（SHA-256 `ba6b0284a2fbf6029e3057337bfb812c33a9fb42a7af02da83d62f91ab42a223`）。清洁 Windows 安装/升级/卸载仍待专门环境。
 - [x] 敏感信息扫描、Git 差异审阅、正式安装版审批 Hook／MCP／接入指引与技能一致性审计通过；提交并推送当前分支，保留 `challenge-cup-notice.pdf`、`ppt-build-20261101/` 两项无关未跟踪文件。
+- [x] 重启后只读复查发现并安全回收 1 个旧 MCP 残留目录（37,785,966 字节）；随后可清理项为 0，5 个活动 MCP 全部使用 onedir，引用 `_MEI` 的 MCP 进程为 0。
+- [x] DSH 自然短问答验收通过：未额外提醒使用虹夏，DSH 自动调用 MCP；聊天与气泡均显示结果，通知来源为 `Agent · DSH`，通知 ID `dcfb19d6d0da488e90eecd0d192f617a`。真实 SessionStore 生命周期、Work 插件和 19 种 MCP 来源／4 并发客户端也通过。
+- [ ] 干净 Windows 安装、升级和卸载仍需在 Windows Sandbox 或独立 VM 执行；当前机器没有 Windows Sandbox 且已有正式安装，不得在日常账户绕过隔离边界。
 
 ## 当前任务：MCP onedir 与临时目录治理（2026-11-03）
 
