@@ -5,6 +5,7 @@
 - 设置中心在应用前强制校验 onedir MCP：`虹夏MCP-v2.exe` 与同级 `_internal\` 必须同时存在，只有 EXE 时拒绝生成或应用配置并显示明确原因。
 - 批量扫描不再允许同时选择 Codex 与 ChatGPT Work；两者共用本机 Codex 环境，同时配置会创建两套 MCP 和重复工具入口。前端改选其中一项时会取消另一项并显示原因，后端也保留同样校验。
 - 新增两条回归：Codex/Work 组合双向拒绝；完整 onedir 可规划，缺少 `_internal` 时拒绝。最终 Python 194 项（193 通过、1 项可选 PyYAML 跳过）、JavaScript 20/20、DSH 4 通过/1 可选跳过；冻结前端、接入指引、MCP、内置浏览器实际勾选、Setup 编译和 4 项朋友试用 ZIP 核对通过。
+- 朋友试用包增加 `FRIEND_TRIAL_GUIDE.md`，打包器现在输出 5 项内容并保留版本、路径、重连、自动接入和故障排查说明。最新 ZIP 为 `虹夏桌宠-v0.1.9-朋友试用包.zip`，SHA-256 `1461e0779acf635332fd61ed10bf2236c871ec7da8185bbfc2677e4efb7d1934`。
 - 正式桌宠已备份并仅重启本应用后替换，SHA-256 为 `A3ECD0B147C77D83C962D7D2EA2CB29208D67DE833D9BD7091AF66068CCCE479`。更新后的 Setup SHA-256 为 `e22bcff0f00ba14392346e1c572ba6fa969d0dd88e1eb09113bc2ea0d2eaf3c9`，朋友私下试用 ZIP SHA-256 为 `ba6b0284a2fbf6029e3057337bfb812c33a9fb42a7af02da83d62f91ab42a223`。
 
 ## Unreleased - 2026-11-03 MCP onedir
