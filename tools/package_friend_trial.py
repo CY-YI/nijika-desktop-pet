@@ -11,11 +11,11 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SETUP = ROOT / "dist-release" / "installer-0.1.9" / "虹夏桌宠-Setup-0.1.9.exe"
-DEFAULT_MANIFEST = ROOT / "dist-release" / "installer-0.1.9" / "installer-manifest.json"
+DEFAULT_SETUP = ROOT / "dist-release" / "installer-0.1.10" / "虹夏桌宠-Setup-0.1.10.exe"
+DEFAULT_MANIFEST = ROOT / "dist-release" / "installer-0.1.10" / "installer-manifest.json"
 DEFAULT_AGENT_SETUP = ROOT / "AGENT_SETUP.md"
 DEFAULT_FRIEND_GUIDE = ROOT / "FRIEND_TRIAL_GUIDE.md"
-DEFAULT_OUTPUT = ROOT / "dist-release" / "friend-trial-0.1.9-release" / "虹夏桌宠-v0.1.9-朋友试用包.zip"
+DEFAULT_OUTPUT = ROOT / "dist-release" / "friend-trial-0.1.10" / "虹夏桌宠-v0.1.10-朋友试用包.zip"
 
 
 def sha256(path: Path) -> str:

@@ -48,7 +48,7 @@ Codex 的 Stop Hook 现在只静默两类已确认的后台输出：同时具备
 
 当前源码完成 194 项 Python 回归（193 通过、1 项可选 PyYAML 跳过），20 项 JavaScript、4 项 DSH 事件测试通过（1 项真实 SessionStore 测试因未提供当前安装路径而跳过），冻结前端、接入指引、MCP、内置浏览器实际勾选、Setup 构建及朋友试用 ZIP 核对通过。最新结果见 [发布检查单](PUBLISHING.md) 和 `diagnostics/agent-config-guard-20261103/`；这些结果不表示每个外部宿主的新会话和原生权限事件均已实测，也不替代干净 Windows 上的安装/卸载全流程。
 
-当前源码和 `v0.1.9` 安装器候选保存在现有开发分支的工作区；二进制是否作为 GitHub Release 下载，仍以 PUBLISHING.md 的附件哈希和私下试用授权为准。正式公开发行仍待真实赞助资料、自制角色试导入与角色/图标分发权利核对；尚未实现的完整动作及宿主桥接见 [TODO.md](TODO.md)。历史记录中的“未安装／暂不提交”仅描述对应日期的操作，以本节及最新检查点为准。
+当前源码和 `v0.1.10` 安装器候选保存在现有开发分支的工作区；二进制是否作为 GitHub Release 下载，仍以 PUBLISHING.md 的附件哈希和私下试用授权为准。真实微信收款图已纳入公开白名单，安装包、朋友试用包和完整源码包会保留该投喂入口。正式公开发行仍待自制角色试导入与角色/图标分发权利核对；尚未实现的完整动作及宿主桥接见 [TODO.md](TODO.md)。历史记录中的“未安装／暂不提交”仅描述对应日期的操作，以本节及最新检查点为准。
 
 使用入口：[安装与运行](INSTALL.md) · [Agent 接入](AGENT_SETUP.md) · [自制皮肤格式](SKIN_FORMAT.md) · [架构](ARCHITECTURE.md) · [回退](ROLLBACK.md)。下方日期段落保留为历史记录。
 
@@ -102,7 +102,7 @@ Windows 桌面上的 Q 版坐姿虹夏：完整双腿、透明背景、八种表
 
 给熟人私下试用优先运行 `powershell -ExecutionPolicy Bypass -File tools\build_installer.ps1` 生成单个 Windows Setup EXE。收件人双击安装器即可选择安装目录、桌面快捷方式和开机自启，默认安装到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，无需管理员权限或 PowerShell。安装、覆盖升级和卸载保留用户消息、皮肤与 Agent 档案，不自动改外部客户端配置。`tools\package_release.py` 保留为旧 ZIP/脚本安装通道。公开发布的素材权利仍需另行确认。
 
-给朋友测试时可直接使用 `python tools\package_friend_trial.py` 生成小型私下试用 ZIP；当前脚本位于 `tools/package_friend_trial.py`，默认输出到 `dist-release/friend-trial-0.1.9-release/`。包内包含已加入自动接入防重复校验的 `v0.1.9` Setup、校验清单、最新 `AGENT_SETUP.md`、快速说明 `FRIEND_TRIAL_GUIDE.md` 和简明文本说明。旧 `dist-next` 候选和构建缓存属于可再生历史产物，清理前仍保留诊断与回退证据。
+给朋友测试时可直接使用 `python tools\package_friend_trial.py` 生成小型私下试用 ZIP；当前脚本位于 `tools/package_friend_trial.py`，默认输出到 `dist-release/friend-trial-0.1.10/`。包内包含带公开投喂资料的 `v0.1.10` Setup、校验清单、最新 `AGENT_SETUP.md`、快速说明 `FRIEND_TRIAL_GUIDE.md` 和简明文本说明。旧 `dist-next` 候选和构建缓存属于可再生历史产物，清理前仍保留诊断与回退证据。
 
 **Agent 接入配置集中见 [AGENT_SETUP.md](AGENT_SETUP.md)**：分别说明私下试用包、Codex、桌面客户端 Work、DSH、Claude Code，以及其他支持 stdio MCP 的本机客户端如何配置和验证。设置中心的“接入步骤”可直接复制自动配置提示词，内含本机 MCP 程序路径、完整 JSON 和提醒规则；发给有本机文件操作能力的 AI，由它配置与验证。接入文件自动保存至用户数据目录下 `integrations/agents/<档案ID>/`，界面显示准确路径，无需手动下载。客户端重载或本人权限确认仍按实际要求完成。
 
@@ -119,6 +119,6 @@ DSH 本机接入脚本在 `integrations/dsh/install.ps1`，默认注册 desktop 
 
 本轮为既有 MVP 补充多 Agent 能力差异/冲突检查、透明 PNG 多帧待机皮肤，以及可随包携带的作者赞助资料。100 项 Python、20 项 JS、标准展开包冻结冒烟和实际浏览器流程通过；候选位于 `dist-next/release-readiness-20261026/release-candidate.zip`。未替换正式安装；准确范围及尚缺材料见 `TODO.md` 和 `PUBLISHING.md`。自制角色格式和试用步骤见 [SKIN_FORMAT.md](SKIN_FORMAT.md)。
 
-设置中心的 Agent 页可展开查看 Codex/本机 Work/DSH/通用客户端的特别要求，原生权限提示不等于 MCP 通知。赞助页保存真实 HTTPS 链接或收款图后可“导出公开赞助资料”，维护者用 `python tools/package_release.py --support-bundle <该ZIP完整路径>` 打入包内；不需要发送个人数据目录。
+设置中心的 Agent 页可展开查看 Codex/本机 Work/DSH/通用客户端的特别要求，原生权限提示不等于 MCP 通知。赞助页保存真实 HTTPS 链接或收款图后可“导出公开赞助资料”；仓库中的 `distribution/support.json` 与可选 `distribution/support.png` 会经白名单校验后自动进入安装包、朋友试用包和完整源码包。`python tools/package_release.py --support-bundle <该ZIP完整路径>` 可临时覆盖仓库公开资料。两种方式都不读取或发送个人数据目录。
 
 公开分发前仍需补齐真实赞助资料、用户新角色试导入，以及默认角色/图标的公开再分发依据。本轮没有选择新许可证或上传公开下载。

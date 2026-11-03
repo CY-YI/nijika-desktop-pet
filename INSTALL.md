@@ -15,7 +15,7 @@
 
 第二条命令会删除 `%TEMP%` 中同时匹配旧虹夏运行时指纹、超过最小年龄且没有被任何运行进程使用的直属 `_MEI*` 目录；不会处理其他软件、重解析点或活动目录。运行中的旧客户端不会被强制结束，重连后才会使用新路径。
 
-本机迁移已完成：正式安装、工作区 `dist`、Codex/DSH 配置、MAGPIE 的 `nijika-pet` 和 Work 插件 0.1.9 均使用 onedir；最终 Python 194 项（193 通过、1 项可选依赖跳过）、JavaScript 20/20、冻结前端、冻结 MCP、内置浏览器自动接入勾选和 Setup 编译通过。`0.1.9` 尚待在一台可丢弃的干净 Windows 环境完成实际安装、升级、桌面启动和卸载；不在日常账户用测试绕过该隔离边界。
+本机迁移已完成：正式安装、工作区 `dist`、Codex/DSH 配置、MAGPIE 的 `nijika-pet` 和 Work 插件 0.1.9 均使用 onedir；`v0.1.10` 发布候选新增公开投喂资料自动随包。最终 Python 197 项（196 通过、1 项可选依赖跳过）、JavaScript 20/20、冻结前端、冻结 MCP、内置浏览器自动接入勾选和 Setup 编译通过。`v0.1.10` 的实际安装/升级/卸载仍待在一台可丢弃的干净 Windows 环境完成；不在日常账户用测试绕过该隔离边界。
 
 ## 本轮统一提醒更新
 
@@ -178,7 +178,7 @@ Codex 完成兜底（2026-10-17）：重建 Hook 后运行 `integrations\codex\i
 
 ## 桌面客户端 Work 本机接入
 
-本机插件目录为 `plugins/nijika-work-local/`，项目插件清单为 `.agents/plugins/marketplace.json`。源码中的 `mcp.json` 不再包含开发者电脑路径；Python 启动脚本优先查找同一项目根目录的 `dist/虹夏MCP-v2/虹夏MCP-v2.exe`，也可读取 `NIJIKA_MCP_EXE` 或正式安装目录。插件运行仍需要能从 PATH 找到 `python.exe`。私下试用包的安装脚本会按收件人目录写入确定的 EXE 路径。当前源码为 0.1.9 版，技能要求每轮主动检查完成提醒、短决策连续等待、恢复会话时先读取旧请求。安装命令为：
+本机插件目录为 `plugins/nijika-work-local/`，项目插件清单为 `.agents/plugins/marketplace.json`。源码中的 `mcp.json` 不再包含开发者电脑路径；Python 启动脚本优先查找同一项目根目录的 `dist/虹夏MCP-v2/虹夏MCP-v2.exe`，也可读取 `NIJIKA_MCP_EXE` 或正式安装目录。插件运行仍需要能从 PATH 找到 `python.exe`。私下试用包的安装脚本会按收件人目录写入确定的 EXE 路径。Work 插件版本为 0.1.9，桌面应用发布候选为 0.1.10；技能要求每轮主动检查完成提醒、短决策连续等待、恢复会话时先读取旧请求。安装命令为：
 
 ```powershell
 codex plugin marketplace add . --json
@@ -199,7 +199,7 @@ Codex 全局技能和 Work 0.1.9 插件技能均要求在最终回复前主动�
 
 接收者保持安装目录完整，Agent 向导仍按收件人本机位置生成配置；普通接入流程不变。自制皮肤见 `SKIN_FORMAT.md`，不需要安装额外绘图软件才能导入 PNG/ZIP。
 
-维护者在投喂支持页保存并导出 `nijika-public-support.zip` 后，使用 `python tools/package_release.py --app-exe <候选桌宠EXE> --support-bundle <公开赞助ZIP> --output <输出ZIP>`。该开关只带公开作者说明/链接/可选收款图，收件人首次启动自动显示。无此开关时不读取维护者本机赞助配置。公开图的摘要与配置配对，旧图片不会被当成新配置自动展示。真实支付和到账校验仍由收款平台承担。
+维护者在投喂支持页保存并导出 `nijika-public-support.zip` 后，可先按项目维护流程把校验后的公开 `distribution/support.json` 与可选 `distribution/support.png` 提交到仓库；安装包、朋友试用包和完整源码包会从这组公开白名单文件自动带入投喂入口。需要临时使用另一份公开资料时，可用 `python tools/package_release.py --app-exe <候选桌宠EXE> --support-bundle <公开赞助ZIP> --output <输出ZIP>` 覆盖仓库资料。两种方式都只带作者说明、HTTPS 链接和可选收款图，不读取维护者消息库、Agent 档案或其他私人配置。公开图的摘要与配置配对，旧图片不会被当成新配置自动展示。真实支付和到账校验仍由收款平台承担。
 
 ## 2026-10-29 本机发现候选
 

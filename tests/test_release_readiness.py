@@ -18,7 +18,7 @@ from control_panel import skin_idle_preview
 from control_store import ControlStore, SPRITES
 from notification_store import NotificationStore
 from skin_animation import SkinTimeline, validate_animation
-from support_bundle import read_bundle
+from support_bundle import read_bundle, read_public_bundle
 from tools import package_release
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -170,6 +170,50 @@ class ReleaseReadinessTests(unittest.TestCase):
             for name, digest in manifest.items():
                 self.assertEqual(hashlib.sha256(archive.read(package_release.PREFIX + "/" + name)).hexdigest(), digest)
             self.assertFalse(any("sqlite" in name or "agents" in name for name in archive.namelist()))
+
+    def test_repository_public_support_is_automatic_and_private_state_is_excluded(self):
+        config = {"name": "Public author", "message": "Voluntary support",
+                  "url": "https://example.com/sponsor"}
+        source = self.base / "mock-source"
+        source.mkdir()
+        (source / "app.exe").write_bytes(b"test executable placeholder")
+        public_dir = source / "distribution"
+        public_dir.mkdir()
+        image = png()
+        (public_dir / "support.png").write_bytes(image)
+        (public_dir / "support.json").write_text(json.dumps({
+            **config, "image_sha256": hashlib.sha256(image).hexdigest(),
+        }), encoding="utf-8")
+        (source / "notifications.sqlite3").write_bytes(b"must not ship")
+        public_files = read_public_bundle(source)
+        self.assertEqual(set(public_files),
+                         {"distribution/support.json", "distribution/support.png"})
+        output = self.base / "automatic-release.zip"
+        with patch.object(package_release, "ROOT", source), \
+                patch.object(package_release, "FILES", ("app.exe",)):
+            package_release.build(output)
+            self.assertEqual(package_release.release_file_names(),
+                             ["app.exe", *public_files])
+        with ZipFile(output) as archive:
+            manifest = json.loads(archive.read(package_release.PREFIX + "/SHA256SUMS.json"))
+            self.assertEqual(set(manifest), {"app.exe", *public_files})
+            self.assertFalse(any("sqlite" in name or "agents" in name for name in archive.namelist()))
+            for name, expected in public_files.items():
+                self.assertEqual(archive.read(package_release.PREFIX + "/" + name), expected)
+
+    def test_repository_public_support_fails_closed_on_tampered_image(self):
+        source = self.base / "tampered-source"
+        public_dir = source / "distribution"
+        public_dir.mkdir(parents=True)
+        image = png()
+        (public_dir / "support.png").write_bytes(image)
+        (public_dir / "support.json").write_text(json.dumps({
+            "name": "Public author", "message": "", "url": "https://example.com/sponsor",
+            "image_sha256": hashlib.sha256(image).hexdigest(),
+        }), encoding="utf-8")
+        (public_dir / "support.png").write_bytes(png(3))
+        with self.assertRaisesRegex(ValueError, "摘要不匹配"):
+            read_public_bundle(source)
 
     def test_empty_or_unsafe_public_support_cannot_be_exported(self):
         with self.assertRaises(ValueError):

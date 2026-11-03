@@ -1,5 +1,6 @@
 import json
 import hashlib
+import io
 import os
 import subprocess
 import tempfile
@@ -8,9 +9,18 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
+from PIL import Image
+
+from support_bundle import read_public_bundle
 from tools import package_release
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def png() -> bytes:
+    output = io.BytesIO()
+    Image.new("RGB", (32, 32), "white").save(output, format="PNG")
+    return output.getvalue()
 
 
 def materialize_release_source(source: Path) -> None:
@@ -70,6 +80,33 @@ class InstallerPackagingTests(unittest.TestCase):
             self.assertFalse((output / "notifications.sqlite3").exists())
             with self.assertRaises(FileExistsError):
                 package_release.stage(output)
+
+    def test_stage_automatically_includes_reviewed_public_support(self):
+        with tempfile.TemporaryDirectory(prefix="nijika public support ") as directory:
+            base = Path(directory)
+            source = base / "source"
+            output = base / "stage"
+            materialize_release_source(source)
+            (source / "plugins/nijika-work-local/mcp.json").write_text(
+                json.dumps({"mcpServers": {"nijika-work-pet": {"args": ["AUTO_LOCAL_MCP"]}}}),
+                encoding="utf-8")
+            public = source / "distribution"
+            public.mkdir(exist_ok=True)
+            image = png()
+            (public / "support.png").write_bytes(image)
+            (public / "support.json").write_text(json.dumps({
+                "name": "Public author", "message": "Voluntary support",
+                "url": "https://example.com/sponsor",
+                "image_sha256": hashlib.sha256(image).hexdigest(),
+            }), encoding="utf-8")
+            with patch.object(package_release, "ROOT", source):
+                package_release.stage(output)
+            public_files = read_public_bundle(source)
+            self.assertEqual((output / "distribution/support.json").read_bytes(),
+                             public_files["distribution/support.json"])
+            self.assertEqual((output / "distribution/support.png").read_bytes(),
+                             public_files["distribution/support.png"])
+            self.assertFalse((output / "notifications.sqlite3").exists())
 
     def test_candidate_package_keeps_all_three_reviewed_executables(self):
         with tempfile.TemporaryDirectory() as directory:

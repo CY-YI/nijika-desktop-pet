@@ -1,5 +1,15 @@
 # 本机候选与发布检查单
 
+## 2026-11-03 v0.1.10 公开投喂资料随包
+
+- 发布器默认读取仓库 `distribution/support.json` 和 `distribution/support.png`，经摘要与图片白名单校验后自动打入安装器、朋友试用包和完整源码包。显式 `--support-bundle` 仍可覆盖；用户消息库、Agent 档案和客户端配置不进入包。
+- 安装器：`dist-release/installer-0.1.10/虹夏桌宠-Setup-0.1.10.exe`，65,051,396 字节，SHA-256 `063805df2fa9716b6d6313916d4f8ebae05267f8e0b7420a2f9822bce4f1b8f9`，未签名。
+- 朋友试用包：`dist-release/friend-trial-0.1.10/虹夏桌宠-v0.1.10-朋友试用包.zip`，64,565,693 字节，SHA-256 `07996787dd8da54f182f1db87851137a11a9b622efa902fe81d75e9293596c9c`；ZIP 完整性和 5 项内容通过，快速说明含公开投喂入口。
+- 标准暂存区：`build/installer-staging/0.1.10`，175 个清单文件、176 个实际文件；`distribution/support.json` 与 `support.png` 的清单哈希与仓库文件逐项一致。冻结设置中心、Agent、养成、皮肤和赞助导出冒烟通过。
+- 最终 Python 197 项（196 通过、1 项可选 PyYAML 跳过）、JavaScript 20/20、Python/JavaScript/PowerShell 语法与 `git diff --check` 通过。
+- 未执行项：在可丢弃的干净 Windows 环境实际运行 Setup 安装、升级和卸载。临时安装尝试被本机自动审批策略拒绝，没有绕过；当前结果属于编译、标准暂存区和冻结运行验收，不宣称真实安装全流程通过。
+- `v0.1.9` 预发布保持原样；本版使用 `v0.1.10` 单独发布，避免覆盖旧附件。
+
 ## 2026-11-03 自动接入防重复候选
 
 - 自动配置现在同时校验 `虹夏MCP-v2.exe` 与同级 `_internal\`；缺失运行时会在写入前拒绝。批量扫描禁止同时选择 Codex 与 ChatGPT Work，前端实际点击验证为选择 Work 后自动取消 Codex。
@@ -142,7 +152,7 @@
 - [x] 100 项 Python、20 项 JS；真实已安装 MCP 的 7 个来源和 4 个独立进程共库并发测试通过。技能差异审计不读取私密配置，也不代表所有客户端的原生审批事件均通过。
 - [x] 扩展冻结冒烟覆盖资源一致、鉴权、养成、Agent 导出/能力矩阵、模板导入/应用、多帧预览、赞助白名单导出；实际浏览器走通下载/上传/保存/导出，360/1280 宽度无整页溢出，控制台错误 0。独立真实桌宠窗口加载已导入多帧皮肤。
 - [x] 多帧/赞助相关接口、接入差异、教程与格式手册同步；包中增加 `SKIN_FORMAT.md`。详细证据保留在 `diagnostics/release-readiness-20261026/`。
-- [ ] 收到真实赞助材料：作者在赞助页保存并导出 ZIP，再运行 `python tools/package_release.py --app-exe <已测候选EXE> --support-bundle <真实公开资料ZIP> --output <新分享ZIP>`。只纳入公开 JSON/可选 PNG；演示 example.com 资料不得用于真实发布。
+- [x] 收到真实赞助材料并纳入源码：从设置中心导出公开资料后，校验并提交 `distribution/support.json` 与 `distribution/support.png`；发布器自动带入安装包、朋友试用包和完整源码包。也可用 `--support-bundle` 覆盖仓库资料。只纳入公开 JSON/可选 PNG；消息库、Agent 档案和私人配置不进入包。
 - [ ] 用户按衣橱提示词试制自己的角色并试导入；核对素材可公开分发，尤其默认角色与桌面图标。未擅自添加许可证。
 - [ ] 按实际改动组整理 Git 存档、审阅最终公开说明和发布附件；本轮不批量提交历史混合工作树，也不自动上传。
 

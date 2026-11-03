@@ -185,8 +185,15 @@ def verify(executable: Path) -> None:
             call("/api/support", {"name": "Isolated test", "message": "Test only",
                                   "url": "https://example.com/sponsor"})
             with ZipFile(io.BytesIO(call("/api/support/export"))) as archive:
-                assert archive.namelist() == ["distribution/support.json"]
-                assert json.loads(archive.read("distribution/support.json"))["name"] == "Isolated test"
+                names = archive.namelist()
+                assert "distribution/support.json" in names
+                assert set(names) <= {"distribution/support.json", "distribution/support.png"}
+                config = json.loads(archive.read("distribution/support.json"))
+                assert config["name"] == "Isolated test"
+                if "distribution/support.png" in names:
+                    import hashlib
+                    assert config["image_sha256"] == hashlib.sha256(
+                        archive.read("distribution/support.png")).hexdigest()
             assert database.is_file()
         finally:
             # The onefile bootstrap owns the child app: terminate that owned tree.

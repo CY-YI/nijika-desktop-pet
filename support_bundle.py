@@ -1,4 +1,4 @@
-"""Explicitly export only public sponsor information, never the user database."""
+"""Explicitly export or package only public sponsor information, never the user database."""
 from __future__ import annotations
 
 import io
@@ -61,6 +61,34 @@ def public_support_image(root: Path) -> Path | None:
     except (OSError, ValueError, TypeError, AttributeError):
         pass
     return None
+
+
+def read_public_bundle(root: Path) -> dict[str, bytes]:
+    """Read reviewed public sponsor files and fail closed on inconsistent data."""
+    document = root / "distribution" / "support.json"
+    image_path = root / "distribution" / "support.png"
+    if not document.is_file():
+        if image_path.exists():
+            raise ValueError("公开赞助资料缺少 support.json，不能单独打包收款图。")
+        return {}
+    if document.stat().st_size > 8192:
+        raise ValueError("公开赞助说明过大。")
+    try:
+        config = json.loads(document.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("无法读取公开赞助说明。") from error
+    if not isinstance(config, dict):
+        raise ValueError("公开赞助说明需要 JSON 对象。")
+    digest = config.pop("image_sha256", None)
+    config = validate_support(config)
+    image = None
+    if image_path.is_file():
+        if image_path.stat().st_size > 8 * 1024 * 1024:
+            raise ValueError("公开赞助图片不能超过 8 MB。")
+        image = image_path.read_bytes()
+        if digest and hashlib.sha256(image).hexdigest() != digest:
+            raise ValueError("公开赞助图片与说明中的摘要不匹配。")
+    return read_bundle(export_bundle(config, image))
 
 
 def export_bundle(config: dict, image: bytes | None) -> bytes:

@@ -13,7 +13,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from support_bundle import read_bundle
+from support_bundle import read_bundle, read_public_bundle
 PREFIX = "虹夏桌宠-Windows私下试用"
 MCP_DIRECTORY = "dist/虹夏MCP-v2"
 MCP_EXECUTABLE = f"{MCP_DIRECTORY}/虹夏MCP-v2.exe"
@@ -95,7 +95,16 @@ def _collect_entries(sources: dict[str, Path]) -> list[tuple[str, Path]]:
 
 def release_file_names(mcp_directory: Path | None = None) -> list[str]:
     """Return the exact allowlisted file set, including the MCP runtime tree."""
-    return [name for name, _ in _collect_entries(_release_sources(mcp_directory))]
+    names = [name for name, _ in _collect_entries(_release_sources(mcp_directory))]
+    names.extend(_public_support(None))
+    return names
+
+
+def _public_support(support_bundle: Path | None) -> dict[str, bytes]:
+    """Use an explicit reviewed bundle or the repository's public sponsor files."""
+    if support_bundle:
+        return read_bundle(support_bundle.read_bytes())
+    return read_public_bundle(ROOT)
 
 
 def build(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None,
@@ -106,7 +115,7 @@ def build(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None
     if approval_exe:
         sources["dist/虹夏审批提醒.exe"] = approval_exe
     entries = _collect_entries(sources)
-    public = read_bundle(support_bundle.read_bytes()) if support_bundle else {}
+    public = _public_support(support_bundle)
     manifest: dict[str, str] = {}
     output.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=6) as archive:
@@ -138,7 +147,7 @@ def stage(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None
     if approval_exe:
         sources["dist/虹夏审批提醒.exe"] = approval_exe
     entries = _collect_entries(sources)
-    public = read_bundle(support_bundle.read_bytes()) if support_bundle else {}
+    public = _public_support(support_bundle)
     manifest: dict[str, str] = {}
     for name, source in entries:
         data = source.read_bytes()
@@ -170,7 +179,7 @@ def main() -> None:
     parser.add_argument("--approval-exe", type=Path,
                         help="Use the matching candidate lifecycle/approval program without mixing old dist files")
     parser.add_argument("--support-bundle", type=Path,
-                        help="Include explicitly exported public sponsor information; never read a user database")
+                        help="Override repository public sponsor files with an explicit bundle; never reads a user database")
     parser.add_argument("--stage", type=Path,
                         help="Create a new clean installer source directory instead of a ZIP")
     args = parser.parse_args()

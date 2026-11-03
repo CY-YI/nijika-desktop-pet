@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import contextlib
+import hashlib
 import json
 import tempfile
 import threading
@@ -383,7 +384,14 @@ class LocalAPITests(unittest.TestCase):
             self.assertTrue(image.is_animated)
         self.app.store.update_support({"name": "Test author", "message": "Thank you", "url": "https://example.com/support"})
         with ZipFile(io.BytesIO(binary("/api/support/export"))) as archive:
-            self.assertEqual(archive.namelist(), ["distribution/support.json"])
+            names = archive.namelist()
+            self.assertIn("distribution/support.json", names)
+            self.assertEqual(set(names) - {"distribution/support.json", "distribution/support.png"}, set())
+            config = json.loads(archive.read("distribution/support.json"))
+            self.assertEqual(config["name"], "Test author")
+            if "distribution/support.png" in names:
+                self.assertEqual(config["image_sha256"],
+                                 hashlib.sha256(archive.read("distribution/support.png")).hexdigest())
         self.assertTrue(all("capabilities" in client for client in self.call("/api/state")["clients"]))
 
     def test_page_loads_draft_controller_before_app_and_serves_its_real_source(self):
