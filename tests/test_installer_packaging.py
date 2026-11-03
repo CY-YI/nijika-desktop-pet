@@ -31,19 +31,25 @@ class InstallerPackagingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             setup, manifest, guide = root / "custom-setup.exe", root / "manifest.json", root / "AGENT_SETUP.md"
+            friend_guide = root / "FRIEND_TRIAL_GUIDE.md"
             setup.write_bytes(b"isolated installer fixture")
             manifest.write_text(json.dumps({"version": "9.8.7", "sha256":
                 hashlib.sha256(setup.read_bytes()).hexdigest()}), encoding="utf-8")
             guide.write_text("current guide", encoding="utf-8")
+            friend_guide.write_text("friend quick guide", encoding="utf-8")
             output = root / "trial.zip"
-            build(output, setup, manifest, guide)
+            build(output, setup, manifest, guide, friend_guide)
             with ZipFile(output) as archive:
-                self.assertEqual(len(archive.namelist()), 4)
+                self.assertEqual(len(archive.namelist()), 5)
                 self.assertTrue(all(name.startswith("虹夏桌宠-v9.8.7-") for name in archive.namelist()))
                 text = archive.read("虹夏桌宠-v9.8.7-朋友私下试用/朋友试用说明.txt").decode("utf-8")
                 self.assertIn("custom-setup.exe", text)
                 self.assertIn("仅主动调用", text)
                 self.assertNotIn("0.1.7", text)
+                self.assertEqual(
+                    archive.read("虹夏桌宠-v9.8.7-朋友私下试用/FRIEND_TRIAL_GUIDE.md"),
+                    b"friend quick guide",
+                )
 
     def test_stage_uses_allowlist_and_recipient_placeholder(self):
         with tempfile.TemporaryDirectory(prefix="nijika installer stage ") as directory:

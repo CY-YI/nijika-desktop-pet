@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SETUP = ROOT / "dist-release" / "installer-0.1.9" / "虹夏桌宠-Setup-0.1.9.exe"
 DEFAULT_MANIFEST = ROOT / "dist-release" / "installer-0.1.9" / "installer-manifest.json"
 DEFAULT_AGENT_SETUP = ROOT / "AGENT_SETUP.md"
-DEFAULT_OUTPUT = ROOT / "dist-release" / "friend-trial-0.1.9" / "虹夏桌宠-v0.1.9-朋友私下试用.zip"
+DEFAULT_FRIEND_GUIDE = ROOT / "FRIEND_TRIAL_GUIDE.md"
+DEFAULT_OUTPUT = ROOT / "dist-release" / "friend-trial-0.1.9-release" / "虹夏桌宠-v0.1.9-朋友试用包.zip"
 
 
 def sha256(path: Path) -> str:
@@ -49,13 +50,16 @@ Work 仅支持本机任务，普通云端聊天不能直接访问本机程序。
 """
 
 
-def build(output: Path, setup: Path, manifest: Path, agent_setup: Path) -> dict[str, object]:
+def build(output: Path, setup: Path, manifest: Path, agent_setup: Path,
+          friend_guide: Path = DEFAULT_FRIEND_GUIDE) -> dict[str, object]:
     if not setup.is_file():
         raise FileNotFoundError(f"Missing Setup EXE: {setup}")
     if not manifest.is_file():
         raise FileNotFoundError(f"Missing installer manifest: {manifest}")
     if not agent_setup.is_file():
         raise FileNotFoundError(f"Missing Agent setup guide: {agent_setup}")
+    if not friend_guide.is_file():
+        raise FileNotFoundError(f"Missing friend guide: {friend_guide}")
     manifest_data = json.loads(manifest.read_text(encoding="utf-8-sig"))
     version = str(manifest_data.get("version", ""))
     if not re.fullmatch(r"\d+\.\d+\.\d+(?:\.\d+)?", version):
@@ -72,6 +76,7 @@ def build(output: Path, setup: Path, manifest: Path, agent_setup: Path) -> dict[
         archive.write(setup, f"{archive_root}/{setup.name}")
         archive.write(manifest, f"{archive_root}/{manifest.name}")
         archive.write(agent_setup, f"{archive_root}/{agent_setup.name}")
+        archive.write(friend_guide, f"{archive_root}/{friend_guide.name}")
         archive.writestr(f"{archive_root}/朋友试用说明.txt", guide_bytes)
     return {
         "status": "built",
@@ -79,7 +84,7 @@ def build(output: Path, setup: Path, manifest: Path, agent_setup: Path) -> dict[
         "bytes": output.stat().st_size,
         "sha256": sha256(output),
         "setup_sha256": actual_digest,
-        "files": [setup.name, manifest.name, agent_setup.name, "朋友试用说明.txt"],
+        "files": [setup.name, manifest.name, agent_setup.name, friend_guide.name, "朋友试用说明.txt"],
     }
 
 
@@ -88,9 +93,11 @@ def main() -> None:
     parser.add_argument("--setup", type=Path, default=DEFAULT_SETUP)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--agent-setup", type=Path, default=DEFAULT_AGENT_SETUP)
+    parser.add_argument("--friend-guide", type=Path, default=DEFAULT_FRIEND_GUIDE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
-    print(json.dumps(build(args.output, args.setup, args.manifest, args.agent_setup),
+    print(json.dumps(build(args.output, args.setup, args.manifest, args.agent_setup,
+                           args.friend_guide),
                      ensure_ascii=False, indent=2))
 
 
