@@ -244,8 +244,15 @@ function renderDiscovery() {
       const check = node("input"); check.type = "checkbox"; check.checked = discovery.selected.has(item.id);
       check.setAttribute("aria-label","选择 " + item.label);
       check.addEventListener("change", () => {
-        if (check.checked) discovery.selected.add(item.id); else discovery.selected.delete(item.id);
+        if (check.checked) {
+          const paired = item.id === "codex" ? "work" : item.id === "work" ? "codex" : "";
+          if (paired && discovery.selected.delete(paired)) {
+            $("#scan-status").textContent = "Codex 与 ChatGPT Work 共用本机 Codex 环境，本轮只保留一种接入方式。";
+          }
+          discovery.selected.add(item.id);
+        } else discovery.selected.delete(item.id);
         clearDiscoveryPlan();
+        renderDiscovery();
       });
       heading.append(check);
     }
@@ -253,6 +260,9 @@ function renderDiscovery() {
     card.append(heading,node("p","field-help",item.evidence.join("；") || "未找到已知入口，可通过单独向导指定目录。"),
       node("code","file-path",item.config_path),
       node("p","field-help",(item.manager === "magpie" ? "MAGPIE 管理；保留分发，不直接写配置。" : "") + item.verification));
+    if (item.id === "codex" || item.id === "work") {
+      card.append(node("p","field-help","Codex 与 ChatGPT Work 共用本机 Codex 环境，只能选择一个接入方式，避免重复 MCP。"));
+    }
     if (item.issue) card.append(node("p","form-error",item.issue));
     if (item.mode === "guided") {
       const guide = button(item.identity ? "接入此扩展" : "生成接入指引","button small secondary", () => {

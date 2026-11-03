@@ -2,7 +2,7 @@
 
 ## MCP onedir 运行时（2026-11-03）
 
-- 当前 MCP 入口固定为 `dist/虹夏MCP-v2/虹夏MCP-v2.exe`，其 `_internal/` 必须与 EXE 一同分发。设置中心、Work 启动包装器、自动接入和安装器均通过 `app_layout.bundled_mcp_path()` 或等价的同一路径读取。
+- 当前 MCP 入口固定为 `dist/虹夏MCP-v2/虹夏MCP-v2.exe`，其 `_internal/` 必须与 EXE 一同分发。设置中心、Work 启动包装器、自动接入和安装器均通过 `app_layout.bundled_mcp_path()` 或等价的同一路径读取；自动接入在规划前调用 `validate_bundled_mcp()` 同时检查 EXE 与运行时目录。批量扫描还会阻止 Codex 与 Work 同时提交，避免同一本机 Codex 环境建立两套 MCP。
 - MCP 改为 onedir 后直接从安装目录加载运行时，不再由 onefile bootloader 在每次启动时展开到 `%TEMP%\_MEI*`。桌宠和审批提醒仍各自使用 onefile，不影响现有快捷方式或 Hook 命令。
 - `tools/cleanup_mcp_temp.py` 是迁移维护工具，不在正常启动路径运行。默认 dry-run；apply 只处理 `%TEMP%` 直属 `_MEI*`，同时核验旧 MCP 的通用运行时文件和 `httpx2-2.13.1`、`opentelemetry_api-1.45.1`、`pydantic_core` 目录签名、解析路径、重解析点、年龄和 Windows Toolhelp 活动模块引用。
 - 旧安装升级时，Inno Setup 只删除精确的 `{app}\dist\虹夏MCP-v2.exe`，安装 onedir 目录；不会删除同目录其他文件。正在运行的旧 MCP 进程继续使用其已加载映像，客户端重启或 MCP 重连后切换到新路径。

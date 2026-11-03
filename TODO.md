@@ -1,5 +1,16 @@
 # 当前待办
 
+## 当前任务：自动接入防重复与运行时完整性（2026-11-03）
+
+- [x] 审查扫描、预览、应用、配置合并和 Work/DSH 路径，确认新版自动配置统一使用 onedir，不会主动生成旧 onefile 路径。
+- [x] `app_layout.validate_bundled_mcp()` 在规划前同时检查 MCP EXE 和同级 `_internal/`；缺失时拒绝并提示不能只复制 EXE。
+- [x] 批量 API 禁止 `codex + work`；前端勾选其一时自动取消另一项并显示“共用本机 Codex 环境，只保留一种接入方式”。
+- [x] 新增完整/缺失 onedir 与 Codex/Work 双向组合回归；目标 47 项 Python、JavaScript 语法和 `git diff --check` 通过。
+- [x] 完成全量 Python 194 项（193 通过、1 项可选依赖跳过）、JavaScript 20/20、DSH 4 通过/1 可选跳过、冻结前端、接入指引和 MCP 回归；设置中心页面实际验证勾选 Work 会取消 Codex 并显示原因。
+- [x] 构建并验证新桌宠，备份后仅重启确切虹夏进程并同步工作区 `dist` 与正式安装目录；正式 SHA-256 为 `A3ECD0B147C77D83C962D7D2EA2CB29208D67DE833D9BD7091AF66068CCCE479`。
+- [x] 生成更新安装器 `dist-release/installer-0.1.9-guard/虹夏桌宠-Setup-0.1.9.exe`（SHA-256 `e22bcff0f00ba14392346e1c572ba6fa969d0dd88e1eb09113bc2ea0d2eaf3c9`）和 4 项朋友试用 ZIP（SHA-256 `ba6b0284a2fbf6029e3057337bfb812c33a9fb42a7af02da83d62f91ab42a223`）。清洁 Windows 安装/升级/卸载仍待专门环境。
+- [x] 敏感信息扫描、Git 差异审阅、正式安装版审批 Hook／MCP／接入指引与技能一致性审计通过；提交并推送当前分支，保留 `challenge-cup-notice.pdf`、`ppt-build-20261101/` 两项无关未跟踪文件。
+
 ## 当前任务：MCP onedir 与临时目录治理（2026-11-03）
 
 - 分支 `codex/interaction-settings-20261017`，基线 `458da30`；用户已授权按 SOP 实施、验收和收尾，要求不误碰系统文件。无关未跟踪文件 `challenge-cup-notice.pdf` 与 `ppt-build-20261101/` 保留不动。

@@ -145,6 +145,13 @@ def verify(executable: Path) -> None:
             discovered = json.loads(call("/api/agents/scan", {}))
             assert {"codex", "work", "dsh", "claude", "gemini", "copilot"} <= {
                 item["id"] for item in discovered["clients"]}
+            try:
+                call("/api/agents/batch-plan", {"clients": ["codex", "work"]})
+            except HTTPError as error:
+                assert error.code == 400
+                assert "共用本机 Codex 环境" in error.read().decode("utf-8")
+            else:
+                raise AssertionError("Codex and Work were accepted as one batch")
             batch = json.loads(call("/api/agents/batch-plan", {"clients": ["claude", "gemini", "copilot"]}))
             assert all(item["status"] == "ready" for item in batch["results"])
             result = json.loads(call("/api/agents/batch-apply", {"batch_id": batch["batch_id"]}))

@@ -4,6 +4,8 @@
 
 `0.1.9` 起，MCP 的正式路径为 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏MCP-v2\虹夏MCP-v2.exe`，并依赖同级 `_internal\`。不要把目录内的 EXE 单独复制到别处。升级安装器只删除精确旧文件 `...\dist\虹夏MCP-v2.exe`，再安装完整 onedir 目录；消息库、皮肤、设置、Agent 档案、客户端配置、MAGPIE 管理项和 Hook 信任均保留。
 
+设置中心的自动接入会在生成配置前校验上述 EXE 和 `_internal\`；缺一即拒绝。批量选择中，Codex 与 ChatGPT Work 共用本机 Codex 环境，因此只能选择一项，避免重复 MCP 和重复工具入口。
+
 新版本不再产生 onefile 的 `_MEI` 解包目录。已有残留可用仓库工具先做只读预演：
 
 ```powershell
@@ -13,7 +15,7 @@
 
 第二条命令会删除 `%TEMP%` 中同时匹配旧虹夏运行时指纹、超过最小年龄且没有被任何运行进程使用的直属 `_MEI*` 目录；不会处理其他软件、重解析点或活动目录。运行中的旧客户端不会被强制结束，重连后才会使用新路径。
 
-本机迁移已完成：正式安装、工作区 `dist`、Codex/DSH 配置、MAGPIE 的 `nijika-pet` 和 Work 插件 0.1.9 均使用 onedir；最终 Python 192 项、JavaScript 20/20、冻结前端的 173 文件暂存区、冻结 MCP 与 Setup 编译通过。`0.1.9` 尚待在一台可丢弃的干净 Windows 环境完成实际安装、升级、桌面启动和卸载；不在日常账户用测试绕过该隔离边界。
+本机迁移已完成：正式安装、工作区 `dist`、Codex/DSH 配置、MAGPIE 的 `nijika-pet` 和 Work 插件 0.1.9 均使用 onedir；最终 Python 194 项（193 通过、1 项可选依赖跳过）、JavaScript 20/20、冻结前端、冻结 MCP、内置浏览器自动接入勾选和 Setup 编译通过。`0.1.9` 尚待在一台可丢弃的干净 Windows 环境完成实际安装、升级、桌面启动和卸载；不在日常账户用测试绕过该隔离边界。
 
 ## 本轮统一提醒更新
 

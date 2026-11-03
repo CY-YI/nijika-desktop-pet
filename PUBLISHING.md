@@ -1,5 +1,13 @@
 # 本机候选与发布检查单
 
+## 2026-11-03 自动接入防重复候选
+
+- 自动配置现在同时校验 `虹夏MCP-v2.exe` 与同级 `_internal\`；缺失运行时会在写入前拒绝。批量扫描禁止同时选择 Codex 与 ChatGPT Work，前端实际点击验证为选择 Work 后自动取消 Codex。
+- 最终桌宠：`build/agent-config-guard-20261103/stage/dist/虹夏桌宠.exe`，40,209,627 字节，SHA-256 `A3ECD0B147C77D83C962D7D2EA2CB29208D67DE833D9BD7091AF66068CCCE479`；工作区 `dist` 与本机正式安装已同步，正式文件仅备份后重启本应用完成替换。
+- 更新 Setup：`dist-release/installer-0.1.9-guard/虹夏桌宠-Setup-0.1.9.exe`，SHA-256 `e22bcff0f00ba14392346e1c572ba6fa969d0dd88e1eb09113bc2ea0d2eaf3c9`，未签名。朋友私下试用 ZIP：`dist-release/friend-trial-0.1.9-guard/虹夏桌宠-v0.1.9-朋友私下试用.zip`，64,192,192 字节，SHA-256 `ba6b0284a2fbf6029e3057337bfb812c33a9fb42a7af02da83d62f91ab42a223`，4 项内容核对通过。
+- 验收：Python 194 项（193 通过、1 项可选 PyYAML 跳过）、JavaScript 20/20、DSH 4 通过/1 可选跳过；冻结前端、接入指引、MCP、内置浏览器实际勾选和定向安装打包回归通过。证据在 `diagnostics/agent-config-guard-20261103/`。
+- 未执行项：可丢弃干净 Windows 中的 Setup 安装/升级/卸载，以及外部 Agent 重连后的自然任务调用。发布前仍须按本文件和最终新版本哈希复核。
+
 ## 2026-11-03 MCP onedir 临时目录治理
 
 - 根因是 MCP 使用 PyInstaller onefile，异常退出或高频重启后 `%TEMP%\_MEI*` 未回收；不是普通问答或提醒逻辑故障。桌宠和审批提醒保持 onefile，只有 MCP 改为 onedir。

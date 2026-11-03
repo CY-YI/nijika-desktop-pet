@@ -13,7 +13,7 @@ import tomllib
 import uuid
 from pathlib import Path
 
-from app_layout import bundled_mcp_path
+from app_layout import bundled_mcp_path, validate_bundled_mcp
 from control_store import ControlStore, IDENTIFIER
 from notice_source import resolve_source
 from notification_capabilities import notification_capability
@@ -295,6 +295,11 @@ class AgentSetup:
                 any(not isinstance(item, str) or item not in CLIENTS or item == "custom" for item in selected) or
                 len(set(selected)) != len(selected)):
             raise ValueError("请选择不重复的受支持客户端。")
+        if {"codex", "work"} <= set(selected):
+            raise ValueError(
+                "Codex 与 ChatGPT Work 共用本机 Codex 环境，请只选择一种接入方式；"
+                "同时配置会生成两套 MCP 和重复提醒。"
+            )
         results = []
         for client in selected:
             try:
@@ -573,8 +578,7 @@ class AgentSetup:
              agent_identity: str | None = None, software: str = "") -> dict:
         if client not in CLIENTS or not isinstance(name, str) or not 1 <= len(name.strip()) <= 30 or any(ord(c) < 32 for c in name):
             raise ValueError("请选择客户端，并填写 1–30 字的 Agent 名称。")
-        if not self.mcp.is_file():
-            raise ValueError("找不到虹夏 MCP 程序，请先构建完整安装包。")
+        validate_bundled_mcp(self.root)
         name = name.strip()
         directory = Path(location).expanduser() if location else self.default_home(client)
         if not directory.is_absolute():

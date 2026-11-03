@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from agent_discovery import scan, read_json, magpie_state, MAX_CONFIG
 from agent_setup import AgentSetup
+from app_layout import bundled_mcp_path
 from control_store import ControlStore
 from notification_store import NotificationStore
 from agent_activity import AgentActivity
@@ -132,6 +133,27 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(len(self.store.agents()), 2)
         with self.assertRaises(ValueError):
             self.setup.batch_apply(batch["batch_id"])
+
+    def test_batch_rejects_codex_and_work_duplicate_runtime(self):
+        with self.assertRaisesRegex(ValueError, "共用本机 Codex 环境"):
+            self.setup.batch_plan(["codex", "work"])
+        with self.assertRaisesRegex(ValueError, "共用本机 Codex 环境"):
+            self.setup.batch_plan(["work", "codex"])
+
+    def test_mcp_plan_requires_executable_and_onedir_runtime(self):
+        application = Path(self.temp.name) / "application"
+        executable = bundled_mcp_path(application)
+        runtime = executable.parent / "_internal"
+        runtime.mkdir(parents=True)
+        executable.write_bytes(b"mcp executable")
+        setup = AgentSetup(application, self.store, self.home)
+
+        plan = setup.plan("claude", "Claude")
+        self.assertEqual(plan["export"]["mcpServers"]["nijika-pet"]["command"], str(executable))
+
+        runtime.rmdir()
+        with self.assertRaisesRegex(ValueError, "安装不完整"):
+            setup.plan("claude", "Claude")
 
     def test_batch_file_changed_after_preview_is_failed_independently(self):
         batch = self.setup.batch_plan(["claude", "gemini"])
