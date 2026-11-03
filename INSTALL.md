@@ -1,5 +1,20 @@
 # 安装与运行
 
+## 2026-11-03 MCP onedir 升级
+
+`0.1.9` 起，MCP 的正式路径为 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏MCP-v2\虹夏MCP-v2.exe`，并依赖同级 `_internal\`。不要把目录内的 EXE 单独复制到别处。升级安装器只删除精确旧文件 `...\dist\虹夏MCP-v2.exe`，再安装完整 onedir 目录；消息库、皮肤、设置、Agent 档案、客户端配置、MAGPIE 管理项和 Hook 信任均保留。
+
+新版本不再产生 onefile 的 `_MEI` 解包目录。已有残留可用仓库工具先做只读预演：
+
+```powershell
+.\.venv\Scripts\python.exe tools\cleanup_mcp_temp.py --summary-only
+.\.venv\Scripts\python.exe tools\cleanup_mcp_temp.py --min-age-hours 24 --apply --summary-only
+```
+
+第二条命令会删除 `%TEMP%` 中同时匹配旧虹夏运行时指纹、超过最小年龄且没有被任何运行进程使用的直属 `_MEI*` 目录；不会处理其他软件、重解析点或活动目录。运行中的旧客户端不会被强制结束，重连后才会使用新路径。
+
+本机迁移已完成：正式安装、工作区 `dist`、Codex/DSH 配置、MAGPIE 的 `nijika-pet` 和 Work 插件 0.1.9 均使用 onedir；最终 Python 192 项、JavaScript 20/20、冻结前端的 173 文件暂存区、冻结 MCP 与 Setup 编译通过。`0.1.9` 尚待在一台可丢弃的干净 Windows 环境完成实际安装、升级、桌面启动和卸载；不在日常账户用测试绕过该隔离边界。
+
 ## 本轮统一提醒更新
 
 使用本轮完整新版包，保留 `dist` 和 `integrations` 的相对结构。安装后在“Agent 接入”重新预览并应用 DSH，可同时更新 MCP 和独立的 `NIJIKA-DSH-LIFECYCLE` 块；实际模块及程序路径按接收方安装位置生成。缺少模块、标记冲突或预览后配置变化会停止写入，其他服务与权限保留。MAGPIE 管理的连接只登记，不会自动安装此模块，须由维护该配置的人审阅合并。
@@ -10,13 +25,13 @@ Codex 已信任的原有四事件命令保持兼容，不需要重复重配 MCP�
 
 ## 2026-10-31 Codex 内部后台任务误提醒修复
 
-正式安装的 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏审批提醒.exe` 已替换为 SHA-256 `5CD44E9F738D96AE68E0ECCFE25AD9467EEA18C48FC882BE2D254198B8C8F717`。新 Hook 不再把 Codex `ambient-suggestions` 或私有 helper 的 `{"exclude":[]}` 后台结果写入虹夏气泡；普通用户回复、简单问答和用户主动要求的 JSON 仍每轮提醒，JSON 使用固定安全摘要。桌宠、MCP、消息库、MAGPIE 服务与 Hook 信任未改变。Codex/DSH/Work 的持久规则已同步，Work 插件已升级并启用 0.1.8；已打开的客户端需要新任务或重连以加载新版规则。
+正式安装的 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏审批提醒.exe` 已替换为 SHA-256 `5CD44E9F738D96AE68E0ECCFE25AD9467EEA18C48FC882BE2D254198B8C8F717`。新 Hook 不再把 Codex `ambient-suggestions` 或私有 helper 的 `{"exclude":[]}` 后台结果写入虹夏气泡；普通用户回复、简单问答和用户主动要求的 JSON 仍每轮提醒，JSON 使用固定安全摘要。桌宠、MCP、消息库、MAGPIE 服务与 Hook 信任未改变。Codex/DSH/Work 的持久规则已同步，Work 插件已升级并启用 0.1.9；已打开的客户端需要新任务或重连以加载新版规则。
 
 ## 2026-10-30 路径可移植性与配置审计
 
 安装脚本默认写入 `%LOCALAPPDATA%\NijikaDesktopPet\app`，也可用 `-InstallRoot` 指定其他本机绝对路径。它会使用收件人的实际安装位置重写 Work `mcp.json`，不会沿用在原作者电脑上的路径；Codex 配置目录由 `-CodexHome`（默认 `%USERPROFILE%\.codex`）生成，DSH 目录由 `-DshRoot`（默认 `%USERPROFILE%\.dsh`）生成。设置中心的接入向导使用当前实际用户目录和当前 MCP 可执行文件位置，不写死项目目录。
 
-已用带空格和中文的自定义安装目录验证：完整解压包安装后，Work 的 MCP 参数等于该安装目录下的 `dist\虹夏MCP-v2.exe`，且不包含原解压目录；收件人传入的 `-CodexHome` 也会同步到实际 Codex CLI 进程，不能再出现技能写在自定义目录、MCP 却注册到默认目录的分裂状态。安装/向导继续采用备份、预览后变化检查和同名冲突停止；不要为了“修好”而同时保留两个管理同一个客户端的虹夏服务。
+已用带空格和中文的自定义安装目录验证：完整解压包安装后，Work 的 MCP 参数等于该安装目录下的 `dist\虹夏MCP-v2\虹夏MCP-v2.exe`，且不包含原解压目录；收件人传入的 `-CodexHome` 也会同步到实际 Codex CLI 进程，不能再出现技能写在自定义目录、MCP 却注册到默认目录的分裂状态。安装/向导继续采用备份、预览后变化检查和同名冲突停止；不要为了“修好”而同时保留两个管理同一个客户端的虹夏服务。
 
 维护者检查技能、当前皮肤和 Agent 档案：
 
@@ -141,10 +156,10 @@ python -m venv .venv
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-输出在 `dist/虹夏桌宠.exe`（桌宠与设置中心）、`dist/虹夏MCP-v2.exe` 和 `dist/虹夏审批提醒.exe`。第三个程序供可选的 Codex 命令审批与完成兜底提醒使用，安装与审阅步骤见 `AGENT_SETUP.md`。当前电脑已配置 Codex；其他电脑也可使用设置中心向导，或在项目根目录运行：
+输出在 `dist/虹夏桌宠.exe`（桌宠与设置中心）、完整 `dist/虹夏MCP-v2/` 目录和 `dist/虹夏审批提醒.exe`。MCP 目录内的 EXE 与 `_internal/` 必须一起保留；第三个程序供可选的 Codex 命令审批与完成兜底提醒使用，安装与审阅步骤见 `AGENT_SETUP.md`。当前电脑已配置 Codex；其他电脑也可使用设置中心向导，或在项目根目录运行：
 
 ```powershell
-$mcpExe = (Resolve-Path -LiteralPath 'dist\虹夏MCP-v2.exe').Path
+$mcpExe = (Resolve-Path -LiteralPath 'dist\虹夏MCP-v2\虹夏MCP-v2.exe').Path
 codex mcp add nijika-pet -- $mcpExe
 codex mcp get nijika-pet
 ```
@@ -155,13 +170,13 @@ Codex 的审批策略可能要求先确认 MCP 工具调用。经用户明确授
 
 Codex 完成兜底（2026-10-17）：重建 Hook 后运行 `integrations\codex\install-hooks.ps1`，或安装试用包时加 `-CodexHooks`；本人在 Codex `/hooks` 审阅新增 UserPromptSubmit / Stop，保留原 PermissionRequest / PostToolUse，然后新开任务。该功能不需要改变 Agent 的 MCP JSON、全局技能或前端设置；现有 Computer Use notify 保持原样。只有成功调用过桌宠通知的同轮会抑制兜底，输入无效不算已发送。消息库仅新增无正文的轮次表，旧桌宠/MCP 能直接显示它生成的普通完成通知。
 
-单文件版首次启动需要解包资源，可能比源码运行略慢。`dist/`、`.venv/` 与构建缓存不入 Git；源码包必须保留 `assets/sprites/`。通知数据库默认在 `%USERPROFILE%\.nijika-desktop-pet\notifications.sqlite3`，避免桌面客户端的 AppData 重定向造成两份队列；旧运行中会话的待处理消息与回复由桌宠桥接。可用 `env.example` 中的可选变量在隔离测试时改路径。消息含任务摘要，请只在受信任的本机用户会话中使用。本项目不要求真实 API 密钥或联网。
+桌宠与审批提醒仍为单文件程序；MCP 自 `0.1.9` 起为目录程序，启动时不再向 `%TEMP%` 解包。`dist/`、`.venv/` 与构建缓存不入 Git；源码包必须保留 `assets/sprites/`。通知数据库默认在 `%USERPROFILE%\.nijika-desktop-pet\notifications.sqlite3`，避免桌面客户端的 AppData 重定向造成两份队列；旧运行中会话的待处理消息与回复由桌宠桥接。可用 `env.example` 中的可选变量在隔离测试时改路径。消息含任务摘要，请只在受信任的本机用户会话中使用。本项目不要求真实 API 密钥或联网。
 
 维护者可运行 `.\.venv\Scripts\python.exe tools\smoke_packaged_mcp.py` 测试打包服务，或运行 `.\.venv\Scripts\python.exe tools\smoke_pet_ipc.py` 在隔离消息库下测试真实桌面气泡与点击回传；`tools\smoke_claude_hooks.py` 与 `tools\smoke_dsh_installer.py` 分别隔离验证 Claude Code 钩子安装器与 DSH 安装脚本。`tools/benchmark_motion.py`、`tools/probe_window_fps.py` 和 `tools/make_bubble_preview.py` 分别用于动画性能及气泡预览；这些工具不会进入打包版。
 
 ## 桌面客户端 Work 本机接入
 
-本机插件目录为 `plugins/nijika-work-local/`，项目插件清单为 `.agents/plugins/marketplace.json`。源码中的 `mcp.json` 不再包含开发者电脑路径；Python 启动脚本优先查找同一项目根目录的 `dist/虹夏MCP-v2.exe`，也可读取 `NIJIKA_MCP_EXE` 或正式安装目录。插件运行仍需要能从 PATH 找到 `python.exe`。私下试用包的安装脚本会按收件人目录写入确定的 EXE 路径。当前源码为 0.1.8 版，技能要求每轮主动检查完成提醒、短决策连续等待、恢复会话时先读取旧请求。安装命令为：
+本机插件目录为 `plugins/nijika-work-local/`，项目插件清单为 `.agents/plugins/marketplace.json`。源码中的 `mcp.json` 不再包含开发者电脑路径；Python 启动脚本优先查找同一项目根目录的 `dist/虹夏MCP-v2/虹夏MCP-v2.exe`，也可读取 `NIJIKA_MCP_EXE` 或正式安装目录。插件运行仍需要能从 PATH 找到 `python.exe`。私下试用包的安装脚本会按收件人目录写入确定的 EXE 路径。当前源码为 0.1.9 版，技能要求每轮主动检查完成提醒、短决策连续等待、恢复会话时先读取旧请求。安装命令为：
 
 ```powershell
 codex plugin marketplace add . --json
@@ -171,13 +186,13 @@ codex plugin list --marketplace nijika-local --json
 
 确认插件显示 `installed: true`、`enabled: true` 后，保持 `虹夏桌宠.exe` 运行，**重启 ChatGPT 桌面客户端**，从本机运行的 Work 新任务发起一条简短测试选择题，检查气泡能显示、点击后 Work 能读回选择。普通聊天或云端 Work 不会因为本机 Codex 配置而自动拥有这个 stdio 工具。插件说明仅指导 Agent 何时调用；模型是否主动调用仍需以新任务实测，不能由安装状态推断。需要将云端 Work 接入时，必须提供经过鉴权的远程 HTTPS MCP 端点，本机插件不能代替公网连接。请勿把本机消息库直接暴露到网络。
 
-Codex 全局技能和 Work 0.1.8 插件技能均要求在最终回复前主动检查完成提醒，并在一次 45 秒等待返回 `pending` 后复用原请求 ID 继续等待，最多约九分钟；若任务已结束，较晚的点击仍保存在消息库，但不会自动唤醒 Agent。在原会话发送“继续”后，技能要求先调用 `get_reply` 读取该请求。当前打开的 Codex/Work 任务不保证热更新；真实 Work 会话中的主动提醒、长等待和晚到回复仍按现场调用验收。
+Codex 全局技能和 Work 0.1.9 插件技能均要求在最终回复前主动检查完成提醒，并在一次 45 秒等待返回 `pending` 后复用原请求 ID 继续等待，最多约九分钟；若任务已结束，较晚的点击仍保存在消息库，但不会自动唤醒 Agent。在原会话发送“继续”后，技能要求先调用 `get_reply` 读取该请求。当前打开的 Codex/Work 任务不保证热更新；真实 Work 会话中的主动提醒、长等待和晚到回复仍按现场调用验收。
 
 可用 `.\.venv\Scripts\python.exe tools\smoke_work_plugin.py` 在隔离消息库下验证插件启动入口及四个 MCP 工具，不会给正在运行的桌宠发送测试通知。
 
 ## DeepSeek Harness（DSH）本机接入
 
-当前电脑已把同一 `dist/虹夏MCP-v2.exe` 注册到 DSH 的 desktop 与 web 配置，并安装 `nijika-dsh-dialog` 技能和全局触发说明。其他电脑先构建 EXE，再执行 `powershell -ExecutionPolicy Bypass -File .\integrations\dsh\install.ps1`。安装不会替换 DSH 原有的桌宠插件；配置、重启和测试步骤见 `integrations/dsh/README.md`。
+当前电脑已把同一 `dist/虹夏MCP-v2/虹夏MCP-v2.exe` 注册到 DSH 的 desktop 与 web 配置，并安装 `nijika-dsh-dialog` 技能和全局触发说明。其他电脑先构建完整 onedir 目录，再执行 `powershell -ExecutionPolicy Bypass -File .\integrations\dsh\install.ps1`。安装不会替换 DSH 原有的桌宠插件；配置、重启和测试步骤见 `integrations/dsh/README.md`。
 # 2026-10-26 多帧皮肤与赞助随包
 
 接收者保持安装目录完整，Agent 向导仍按收件人本机位置生成配置；普通接入流程不变。自制皮肤见 `SKIN_FORMAT.md`，不需要安装额外绘图软件才能导入 PNG/ZIP。

@@ -1,5 +1,11 @@
 # 版本回退与本机备份
 
+## 2026-11-03 MCP onedir 迁移
+
+在替换正式安装前，三个当前程序和必要的客户端路径摘要会备份到 `backups/mcp-onedir-20261103/`。回退需要恢复 `虹夏桌宠.exe`、`虹夏审批提醒.exe` 以及旧 onefile 的 `虹夏MCP-v2.exe`；只恢复 onedir 目录中的 EXE 而遗漏 `_internal/` 不能构成可运行程序。
+
+正式升级后若要回退 MCP，应按备份恢复旧 onefile EXE，并把客户端配置明确改回 `<安装根>\dist\虹夏MCP-v2.exe`。默认保留最新消息库、设置、Agent 档案与 Hook 信任，不整份覆盖用户数据。`0.1.9` 安装器只删除精确旧 MCP 文件，不删除桌宠、审批程序、文档或 `dist` 其他内容。
+
 ## 2026-10-30 配置旧文件清理
 
 安全清理工具把三个旧目标备份到 `backups/config-cleanup-20261030/safe-tool-apply/`，`manifest.json` 记录原路径、类型、文件大小和 SHA-256。需要回退时按清单恢复：`01-nijika-desktop-dialog/` 回到 `%USERPROFILE%\.agents\skills\nijika-desktop-dialog`，另外两个单文件恢复原文件名；默认不要恢复旧技能副本，否则审计会再次判为冲突或重复。

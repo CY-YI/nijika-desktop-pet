@@ -34,7 +34,7 @@ def main() -> None:
         for _ in range(2):
             result = subprocess.run(command, capture_output=True, timeout=60)
             assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
-        expected = str(PROJECT / "dist" / "虹夏MCP-v2.exe")
+        expected = str(PROJECT / "dist" / "虹夏MCP-v2" / "虹夏MCP-v2.exe")
         snapshots = {}
         for profile in ("desktop", "web"):
             path = root / "profiles" / profile / "cordis.patch.yml"

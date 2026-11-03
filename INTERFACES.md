@@ -1,5 +1,12 @@
 # 内部接口
 
+## MCP 启动路径（2026-11-03）
+
+- 所有新配置的 MCP `command` 必须指向 `<安装根>\dist\虹夏MCP-v2\虹夏MCP-v2.exe`，不得单独复制 EXE 而遗漏同级 `_internal/`。
+- 自动接入允许把精确旧路径 `<安装根>\dist\虹夏MCP-v2.exe` 迁移到 onedir，即使旧文件已删除；未知目录中的同名程序、额外参数或无法核实的旧条目仍拒绝覆盖。
+- Work 的 `AUTO_LOCAL_MCP` 与 `run_mcp.py` 接受 onedir 目录、其 EXE 或显式 `NIJIKA_MCP_EXE`；路径解析失败时不得回退到任意同名文件。
+- 临时运行时清理不属于 MCP 工具接口。它使用维护命令 `python tools/cleanup_mcp_temp.py [--apply] [--summary-only]`，报告结构包含候选数、活跃跳过数、删除数、回收字节、失败项和模式。
+
 ## 通用生命周期 v1（2026-10-31）
 
 `虹夏审批提醒.exe --lifecycle` 从 stdin 读取一个最多 1 MiB 的 UTF-8 JSON；必须提供 version=1、event、client_id、session_id、turn_id 和 origin。事件为 `turn_started/tool_finished/turn_completed`，后台/子任务忽略，缺失身份拒绝。完整字段和约束见 `NOTIFICATION_PROTOCOL.md`。

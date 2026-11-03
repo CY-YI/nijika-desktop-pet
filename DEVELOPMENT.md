@@ -36,7 +36,7 @@
 
 程序默认使用你自己 Windows 用户目录中的数据。如果你已装过虹夏，希望开发时与日常版分开，请使用下面的隔离设置。
 
-`虹夏MCP-v2.exe` 和 `虹夏审批提醒.exe` 由客户端或事件模块调用，不是两个需要手动打开的桌宠窗口。
+`虹夏MCP-v2/虹夏MCP-v2.exe` 和 `虹夏审批提醒.exe` 由客户端或事件模块调用，不是需要手动打开的桌宠窗口。MCP 自 `0.1.9` 起为 onedir，必须保留同级 `_internal/`。
 
 ## 运行源码
 
@@ -118,7 +118,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -OutputDirectory
 三个程序生成在 `dist-dev/`。桌宠、MCP 和事件提醒程序应来自同一份已验证源码。打包分发可使用：
 
 ```powershell
-.\.venv\Scripts\python.exe tools/package_release.py --app-exe ".\dist-dev\虹夏桌宠.exe" --mcp-exe ".\dist-dev\虹夏MCP-v2.exe" --approval-exe ".\dist-dev\虹夏审批提醒.exe" --output ".\dist-release\my-trial.zip"
+.\.venv\Scripts\python.exe tools/package_release.py --app-exe ".\dist-dev\虹夏桌宠.exe" --mcp-exe ".\dist-dev\虹夏MCP-v2\虹夏MCP-v2.exe" --approval-exe ".\dist-dev\虹夏审批提醒.exe" --output ".\dist-release\my-trial.zip"
 ```
 
 Windows Setup 另需本机 Inno Setup 6 编译器，见 `installer/README.md` 和 `PUBLISHING.md`。源码包不附带第三方编译器安装文件。

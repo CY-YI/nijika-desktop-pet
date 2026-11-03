@@ -1,5 +1,13 @@
 # 变更记录
 
+## Unreleased - 2026-11-03 MCP onedir
+
+- 将 MCP 从 PyInstaller onefile 改为 onedir，稳定路径为 `dist/虹夏MCP-v2/虹夏MCP-v2.exe`；启动时不再把运行时重复解压到 `%TEMP%`，桌宠和审批程序仍保持 onefile。
+- 新增默认只读的旧运行时清理器，只删除 `%TEMP%` 直属、同时满足旧虹夏 MCP 的通用运行时文件和本次构建特有目录签名、超过 24 小时且未被任何运行进程引用的 `_MEI*` 目录。现场首批删除 1,327 个目录，失败 0，回收约 50.42 GB；活动目录、非虹夏运行时和重解析点均保留。收紧签名后复查剩余 3 个同版本残留，再删除并回收约 113 MB。
+- 构建、Work 启动包装器、设置中心自动接入、旧路径安全迁移、ZIP/源码包、便携安装、Inno Setup 和冒烟工具改取 onedir 路径；安装升级只删除精确旧文件 `{app}\dist\虹夏MCP-v2.exe`。
+- 版本提升为 `0.1.9`。最终 Python 192 项（191 通过、1 项可选 PyYAML 跳过）、JavaScript 20/20、DSH 4 通过/1 可选跳过；冻结前端、冻结 MCP、审批 Hook、Work、DSH 安装器、接入审计和 173 文件标准暂存区通过。onedir 连续启动前后 `_MEI` 数量均为 4,063、没有新增。
+- 用户数据库、设置、Agent 档案、MAGPIE 的其他服务、其他客户端配置和既有 Hook 信任未替换；仅 `nijika-pet` 的 MAGPIE 命令从旧 onefile 精确迁移到 onedir，8 个绑定及 `NIJIKA_AGENT_NAME` 保留。旧客户端进程未批量结束。
+
 ## Unreleased - 2026-10-31 完整工程学习包
 
 - 新增 `DEVELOPMENT.md` 与源码包首读说明，覆盖源码运行、隔离数据库/Agent 目录、修改位置、测试和三程序构建。

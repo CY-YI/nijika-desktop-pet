@@ -8,7 +8,7 @@ import unittest
 
 from agent_setup import AgentSetup, remove_legacy_dsh_nijika_entry
 from control_store import ControlStore
-from setup_config import repair_orphan_dsh_marker
+from setup_config import codex_service_update, json_service_update, repair_orphan_dsh_marker
 
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY = ("    - id: magpie-mcp-nijika-pet\n"
@@ -135,6 +135,30 @@ class SetupSafetyTests(unittest.TestCase):
         self.setup.apply(plan["plan_id"])
         self.assertEqual(tomllib.loads(self.codex.read_text(encoding="utf-8"))["mcp_servers"]["nijika-pet"]["command"],
                          str(self.setup.mcp))
+
+    def test_known_legacy_onefile_paths_migrate_even_after_old_binary_is_removed(self):
+        application = self.home / "application"
+        current = application / "dist/虹夏MCP-v2/虹夏MCP-v2.exe"
+        current.parent.mkdir(parents=True)
+        current.write_bytes(b"current onedir executable")
+        legacy = application / "dist/虹夏MCP-v2.exe"
+        codex = (
+            '[mcp_servers.nijika-pet]\ncommand = ' + json.dumps(str(legacy)) +
+            '\n[mcp_servers.nijika-pet.env]\nNIJIKA_AGENT_NAME = "Codex"\n'
+        )
+        updated, notes = codex_service_update(
+            codex, current, application, {}, lambda text, environment: text)
+        self.assertEqual(
+            tomllib.loads(updated)["mcp_servers"]["nijika-pet"]["command"],
+            str(current),
+        )
+        self.assertTrue(notes)
+
+        document = {"mcpServers": {"nijika-pet": {"command": str(legacy)}}}
+        migrated = json_service_update(
+            document, current, {"NIJIKA_AGENT_NAME": "Claude"},
+            "claude", application)
+        self.assertEqual(migrated["mcpServers"]["nijika-pet"]["command"], str(current))
 
     def test_custom_source_required_and_consistent_across_saved_handoff(self):
         for software in ("", "auto", "未识别软件", "bad\nhost"):

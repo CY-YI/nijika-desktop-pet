@@ -1,5 +1,12 @@
 # 架构
 
+## MCP onedir 运行时（2026-11-03）
+
+- 当前 MCP 入口固定为 `dist/虹夏MCP-v2/虹夏MCP-v2.exe`，其 `_internal/` 必须与 EXE 一同分发。设置中心、Work 启动包装器、自动接入和安装器均通过 `app_layout.bundled_mcp_path()` 或等价的同一路径读取。
+- MCP 改为 onedir 后直接从安装目录加载运行时，不再由 onefile bootloader 在每次启动时展开到 `%TEMP%\_MEI*`。桌宠和审批提醒仍各自使用 onefile，不影响现有快捷方式或 Hook 命令。
+- `tools/cleanup_mcp_temp.py` 是迁移维护工具，不在正常启动路径运行。默认 dry-run；apply 只处理 `%TEMP%` 直属 `_MEI*`，同时核验旧 MCP 的通用运行时文件和 `httpx2-2.13.1`、`opentelemetry_api-1.45.1`、`pydantic_core` 目录签名、解析路径、重解析点、年龄和 Windows Toolhelp 活动模块引用。
+- 旧安装升级时，Inno Setup 只删除精确的 `{app}\dist\虹夏MCP-v2.exe`，安装 onedir 目录；不会删除同目录其他文件。正在运行的旧 MCP 进程继续使用其已加载映像，客户端重启或 MCP 重连后切换到新路径。
+
 ## 统一通知生命周期（2026-10-31）
 
 `notification_lifecycle.handle_lifecycle` 是唯一事件处理入口，`notification_policy` 统一分类、安全摘要和成功工具回执判定；旧 `codex_completion` 保留重导出兼容。Codex 原生 Hook 和 DSH 的实时 `session/event` 模块只做映射，均通过共享 SQLite 原子事务去重。旧 `codex_turn_state` 表和 Codex 哈希不变，其他客户端加独立命名空间。禁止关联“最近任务”。
@@ -12,7 +19,7 @@ DSH 模块仅接受 `firstLiveSeq` 后的根会话，真实 `source.kind=user` �
 
 - `tools/package_release.py --stage` 从与 ZIP 相同的显式文件白名单生成全新安装暂存区；安装器不扫描工作区，因此不会把数据库、备份、诊断或客户端配置带入产物。
 - `tools/build_installer.ps1` 调用 Inno Setup 6 编译 `installer/nijika.iss`。安装目录、开始菜单、桌面和 Startup 快捷方式由 Setup 管理，默认当前用户安装；应用本体继续使用 `application_root()` 的定位约定。
-- Work 的 `AUTO_LOCAL_MCP` 在安装/升级的 `ssPostInstall` 阶段替换为 JSON 转义后的实际 `{app}\dist\虹夏MCP-v2.exe`；不重写其他客户端，不接管 MAGPIE 配置。
+- Work 的 `AUTO_LOCAL_MCP` 在安装/升级的 `ssPostInstall` 阶段替换为 JSON 转义后的实际 `{app}\dist\虹夏MCP-v2\虹夏MCP-v2.exe`；不重写其他客户端，不接管 MAGPIE 配置。
 - `%USERPROFILE%\.nijika-desktop-pet` 不属于安装目录，Setup/Uninstall 不删除其中任何内容。卸载只清理安装时登记的文件和生成的通知日志，不清理外部 Agent 配置。
 - `tools/smoke_windows_installer.py` 只允许可丢弃 Windows 会话，并拒绝已有安装、卸载登记或虹夏快捷方式；不会修改系统目录注册表。旧重定向测试已废止，其结果不能证明日常桌面未受影响。
 

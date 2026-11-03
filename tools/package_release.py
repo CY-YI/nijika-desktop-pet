@@ -15,10 +15,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from support_bundle import read_bundle
 PREFIX = "虹夏桌宠-Windows私下试用"
+MCP_DIRECTORY = "dist/虹夏MCP-v2"
+MCP_EXECUTABLE = f"{MCP_DIRECTORY}/虹夏MCP-v2.exe"
 FILES = (
     "00-解压后先看.txt",
     "dist/虹夏桌宠.exe",
-    "dist/虹夏MCP-v2.exe",
+    MCP_DIRECTORY,
     "dist/虹夏审批提醒.exe",
     "integrations/codex/hooks.example.json",
     "integrations/codex/install-hooks.ps1",
@@ -44,20 +46,72 @@ FILES = (
 )
 
 
-def build(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None,
-          support_bundle: Path | None = None, approval_exe: Path | None = None) -> None:
-    overrides = {"dist/虹夏桌宠.exe": app_exe, "dist/虹夏MCP-v2.exe": mcp_exe,
-                 "dist/虹夏审批提醒.exe": approval_exe}
-    sources = {name: overrides.get(name) or ROOT / name for name in FILES}
-    missing = [name for name, source in sources.items() if not source.is_file()]
+def _mcp_source(mcp_exe: Path | None) -> Path:
+    source = mcp_exe or (ROOT / MCP_DIRECTORY)
+    if source.is_dir():
+        executable = source / "虹夏MCP-v2.exe"
+    elif source.is_file() and source.name.casefold() == "虹夏mcp-v2.exe":
+        source, executable = source.parent, source
+    else:
+        raise FileNotFoundError(f"Missing onedir MCP directory or executable: {source}")
+    if not executable.is_file():
+        raise FileNotFoundError(f"Missing onedir MCP executable: {executable}")
+    return source
+
+
+def _release_sources(mcp_exe: Path | None = None) -> dict[str, Path]:
+    overrides: dict[str, Path | None] = {
+        "dist/虹夏桌宠.exe": None,
+        "dist/虹夏审批提醒.exe": None,
+    }
+    if MCP_DIRECTORY in FILES:
+        overrides[MCP_DIRECTORY] = _mcp_source(mcp_exe)
+    return {name: overrides.get(name) or ROOT / name for name in FILES}
+
+
+def _collect_entries(sources: dict[str, Path]) -> list[tuple[str, Path]]:
+    entries: list[tuple[str, Path]] = []
+    missing: list[str] = []
+    for name, source in sources.items():
+        if source.is_symlink():
+            raise ValueError(f"Release source cannot be a symlink: {source}")
+        if source.is_dir():
+            files = sorted((path for path in source.rglob("*") if path.is_file()),
+                           key=lambda path: path.relative_to(source).as_posix())
+            if not files:
+                missing.append(name)
+            for path in files:
+                if path.is_symlink():
+                    raise ValueError(f"Release source contains a symlink: {path}")
+                entries.append((f"{name}/{path.relative_to(source).as_posix()}", path))
+        elif source.is_file():
+            entries.append((name, source))
+        else:
+            missing.append(name)
     if missing:
         raise FileNotFoundError("Missing release files: " + ", ".join(missing))
+    return entries
+
+
+def release_file_names(mcp_directory: Path | None = None) -> list[str]:
+    """Return the exact allowlisted file set, including the MCP runtime tree."""
+    return [name for name, _ in _collect_entries(_release_sources(mcp_directory))]
+
+
+def build(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None,
+          support_bundle: Path | None = None, approval_exe: Path | None = None) -> None:
+    sources = _release_sources(mcp_exe)
+    if app_exe:
+        sources["dist/虹夏桌宠.exe"] = app_exe
+    if approval_exe:
+        sources["dist/虹夏审批提醒.exe"] = approval_exe
+    entries = _collect_entries(sources)
     public = read_bundle(support_bundle.read_bytes()) if support_bundle else {}
     manifest: dict[str, str] = {}
     output.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=6) as archive:
-        for name in FILES:
-            data = sources[name].read_bytes()
+        for name, source in entries:
+            data = source.read_bytes()
             if name == "plugins/nijika-work-local/mcp.json":
                 plugin = json.loads(data)
                 plugin["mcpServers"]["nijika-work-pet"]["args"][-1] = "AUTO_LOCAL_MCP"
@@ -76,17 +130,17 @@ def build(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None
 def stage(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None,
           support_bundle: Path | None = None, approval_exe: Path | None = None) -> None:
     """Create a clean installer source tree from the same explicit allowlist."""
-    overrides = {"dist/虹夏桌宠.exe": app_exe, "dist/虹夏MCP-v2.exe": mcp_exe,
-                 "dist/虹夏审批提醒.exe": approval_exe}
-    sources = {name: overrides.get(name) or ROOT / name for name in FILES}
-    missing = [name for name, source in sources.items() if not source.is_file()]
-    if missing:
-        raise FileNotFoundError("Missing release files: " + ", ".join(missing))
     if output.exists():
         raise FileExistsError(f"Installer staging directory already exists: {output}")
+    sources = _release_sources(mcp_exe)
+    if app_exe:
+        sources["dist/虹夏桌宠.exe"] = app_exe
+    if approval_exe:
+        sources["dist/虹夏审批提醒.exe"] = approval_exe
+    entries = _collect_entries(sources)
     public = read_bundle(support_bundle.read_bytes()) if support_bundle else {}
     manifest: dict[str, str] = {}
-    for name, source in sources.items():
+    for name, source in entries:
         data = source.read_bytes()
         if name == "plugins/nijika-work-local/mcp.json":
             plugin = json.loads(data)

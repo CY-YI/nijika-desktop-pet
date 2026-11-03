@@ -88,7 +88,8 @@ def verify(executable: Path) -> dict:
                 assert capability["automatic_completion_verified"] is False
                 assert capability["mode"] == ("active_only" if client == "custom" else "event_available")
                 assert capability["lifecycle_executable"] == str(executable.parent / "虹夏审批提醒.exe")
-                assert config["mcpServers"]["nijika-pet"]["command"] == str(executable.parent / "虹夏MCP-v2.exe")
+                assert config["mcpServers"]["nijika-pet"]["command"] == str(
+                    executable.parent / "虹夏MCP-v2" / "虹夏MCP-v2.exe")
                 prompt = (bundle / "nijika-setup-prompt.txt").read_text(encoding="utf-8")
                 assert prompt == result["guide"]["prompt"]
                 assert "status=invalid" in prompt and "20显示列" in prompt

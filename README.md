@@ -2,6 +2,12 @@
 
 准备学习或修改源码，请先读 [源码开发指南](DEVELOPMENT.md)：包含环境搭建、隔离运行、模块地图、测试与构建步骤。完整工程包额外附带已验证程序和 `SOURCE_MANIFEST.json`，不包含个人配置或运行数据。
 
+## MCP onedir 与临时目录治理（2026-11-03）
+
+`虹夏MCP-v2` 已从 PyInstaller onefile 改为 onedir。新入口是 `dist\虹夏MCP-v2\虹夏MCP-v2.exe`，必须连同同目录的 `_internal\` 一起复制或安装；客户端不再在每次启动时把运行时解包到 `%TEMP%\_MEI*`。桌宠和审批提醒仍使用 onefile。
+
+旧版 `dist\虹夏MCP-v2.exe` 仅作为精确迁移来源。`0.1.9` 安装器会在升级时删除该旧文件并安装完整 onedir 目录，不删除 `dist` 中其他文件。维护者若需回收旧运行时，可先运行 `python tools\cleanup_mcp_temp.py` 预演；只有同时匹配旧虹夏 MCP 的通用运行时文件和本次构建特有目录签名、超过 24 小时且未被运行进程引用的 `%TEMP%` 直属 `_MEI*` 才会在显式 `--apply` 时删除。本次两轮安全清理合计回收 50,132,361,143 字节，最终复查可清理项为 0；活动目录和非虹夏运行时均保留。
+
 ## 统一提醒核心（2026-10-31）
 
 各客户端共用同一生命周期协议、安全摘要、来源解析和通知去重；详见 [NOTIFICATION_PROTOCOL.md](NOTIFICATION_PROTOCOL.md)。Codex 原生事件与 DSH 实时会话模块只负责转交事件。DSH 已核对 `0.2.1-rc.2 / 0.2.1-rc.3` 的接口；Work 等其他客户端目前仍只支持主动 MCP 调用，不承诺漏调时自动补发。
@@ -38,9 +44,9 @@ Codex 的 Stop Hook 现在只静默两类已确认的后台输出：同时具备
 
 本机正式程序已更新至本轮 Agent 接入修复版本：桌面提醒与选择、设置中心、基础互动、透明 PNG 多帧皮肤和公开赞助资料导出均已实现。Agent 配置区将管理昵称、Agent 身份和所在软件分开；配置迁移先预览、备份并校验，冲突或未知旧程序会停止写入。
 
-当前源码完成 119 项 Python 回归（118 通过、1 项可选 YAML 跳过），系统环境补测 YAML 组 6 项通过，20 项 JavaScript 测试与语法检查通过。最新冻结候选及精确安装程序的冒烟结果见 [发布检查单](PUBLISHING.md)；这些结果不表示每个外部宿主的新会话和原生权限事件均已实测。
+当前源码完成 192 项 Python 回归（191 通过、1 项可选 PyYAML 跳过），20 项 JavaScript、4 项 DSH 事件测试通过（1 项真实 SessionStore 测试因未提供当前安装路径而跳过），Python/PowerShell 语法检查和 `git diff --check` 通过。最新 0.1.9 冻结候选、173 文件标准暂存区与 Setup 冒烟结果见 [发布检查单](PUBLISHING.md)；这些结果不表示每个外部宿主的新会话和原生权限事件均已实测，也不替代干净 Windows 上的安装/卸载全流程。
 
-当前源码和 `v0.1.7` 安装器候选已提交到现有开发分支；二进制是否作为 GitHub Release 下载，仍以 PUBLISHING.md 的附件哈希和私下试用授权为准。正式公开发行仍待真实赞助资料、自制角色试导入与角色/图标分发权利核对；尚未实现的完整动作及宿主桥接见 [TODO.md](TODO.md)。历史记录中的“未安装／暂不提交”仅描述对应日期的操作，以本节及最新检查点为准。
+当前源码和 `v0.1.9` 安装器候选保存在现有开发分支的工作区；二进制是否作为 GitHub Release 下载，仍以 PUBLISHING.md 的附件哈希和私下试用授权为准。正式公开发行仍待真实赞助资料、自制角色试导入与角色/图标分发权利核对；尚未实现的完整动作及宿主桥接见 [TODO.md](TODO.md)。历史记录中的“未安装／暂不提交”仅描述对应日期的操作，以本节及最新检查点为准。
 
 使用入口：[安装与运行](INSTALL.md) · [Agent 接入](AGENT_SETUP.md) · [自制皮肤格式](SKIN_FORMAT.md) · [架构](ARCHITECTURE.md) · [回退](ROLLBACK.md)。下方日期段落保留为历史记录。
 
@@ -88,13 +94,13 @@ Agent 接入区区分管理昵称、Agent 和所在软件，通用客户端必�
 
 Windows 桌面上的 Q 版坐姿虹夏：完整双腿、透明背景、八种表情、自然眨眼。默认“活泼明显”动态：连续的待机呼吸、轻摆与偶尔弹跳；单击换表情并弹起，双击连续回应；按住角色拖动时倾斜，松手自然回正。右键可以选表情、大小、动态强度、手动说话、演示提醒或退出。Codex 可经本机 MCP 工具发送真实的完成提醒和选择题；简单选择及短成果审阅在气泡中显示完整决策信息和逐项简介，点击结果由当前 Agent 读取并继续任务，无需再回聊天确认。Agent 每个有效轮次的结束提醒由客户端规则和 Codex Stop 兜底共同保证。菜单里的“演示”仍只在本地生效。
 
-本机成品可双击 `dist/虹夏桌宠.exe` 启动；`dist/虹夏MCP-v2.exe` 是 Codex 自动启动的 stdio 服务，不需手动双击。当前电脑已注册 `nijika-pet` MCP 并安装 `skills/nijika-desktop-dialog/` 的全局副本；项目 `AGENTS.md` 规定何时主动发送提醒。独立 Codex CLI 会话已在普通审阅和选择任务中自主调用桌宠；Codex 桌面应用的新任务也已自动发出完成提醒并在桌面显示。Git 仓库只保存源码、素材、测试和文档，`dist/` 生成文件不入库；克隆后按 `INSTALL.md` 构建和注册。动画预览见 `art/motion-preview.gif`，气泡外观见 `art/bubble-preview.png`，角色帧在 `assets/sprites/`。
+本机成品可双击 `dist/虹夏桌宠.exe` 启动；`dist/虹夏MCP-v2/虹夏MCP-v2.exe` 是 Codex 自动启动的 stdio 服务，不需手动双击，且不能脱离同级 `_internal/` 单独复制。当前电脑已注册 `nijika-pet` MCP 并安装 `skills/nijika-desktop-dialog/` 的全局副本；项目 `AGENTS.md` 规定何时主动发送提醒。独立 Codex CLI 会话已在普通审阅和选择任务中自主调用桌宠；Codex 桌面应用的新任务也已自动发出完成提醒并在桌面显示。Git 仓库只保存源码、素材、测试和文档，`dist/` 生成文件不入库；克隆后按 `INSTALL.md` 构建和注册。动画预览见 `art/motion-preview.gif`，气泡外观见 `art/bubble-preview.png`，角色帧在 `assets/sprites/`。
 
 对外分享文档可运行 `.\.venv\Scripts\python.exe tools\package_docs.py` 从当前源码生成压缩包；旧压缩包不作为最新工程状态的依据。
 
 给熟人私下试用优先运行 `powershell -ExecutionPolicy Bypass -File tools\build_installer.ps1` 生成单个 Windows Setup EXE。收件人双击安装器即可选择安装目录、桌面快捷方式和开机自启，默认安装到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，无需管理员权限或 PowerShell。安装、覆盖升级和卸载保留用户消息、皮肤与 Agent 档案，不自动改外部客户端配置。`tools\package_release.py` 保留为旧 ZIP/脚本安装通道。公开发布的素材权利仍需另行确认。
 
-给朋友测试时可直接使用 `python tools\package_friend_trial.py` 生成小型私下试用 ZIP；当前已生成的包位于 `dist-release/friend-trial-0.1.7/`，其中包含 `v0.1.7` Setup、校验清单、最新 `AGENT_SETUP.md` 和简明说明。旧 `dist-next` 候选和构建缓存属于可再生历史产物，清理前仍保留诊断与回退证据。
+给朋友测试时可直接使用 `python tools\package_friend_trial.py` 生成小型私下试用 ZIP；当前已生成的包位于 `dist-release/friend-trial-0.1.9/`，其中包含 `v0.1.9` Setup、校验清单、最新 `AGENT_SETUP.md` 和简明说明。旧 `dist-next` 候选和构建缓存属于可再生历史产物，清理前仍保留诊断与回退证据。
 
 **Agent 接入配置集中见 [AGENT_SETUP.md](AGENT_SETUP.md)**：分别说明私下试用包、Codex、桌面客户端 Work、DSH、Claude Code，以及其他支持 stdio MCP 的本机客户端如何配置和验证。设置中心的“接入步骤”可直接复制自动配置提示词，内含本机 MCP 程序路径、完整 JSON 和提醒规则；发给有本机文件操作能力的 AI，由它配置与验证。接入文件自动保存至用户数据目录下 `integrations/agents/<档案ID>/`，界面显示准确路径，无需手动下载。客户端重载或本人权限确认仍按实际要求完成。
 
@@ -102,7 +108,7 @@ Windows 桌面上的 Q 版坐姿虹夏：完整双腿、透明背景、八种表
 
 桌面客户端 Work 的本机接入包在 `plugins/nijika-work-local/`，本机已通过 `.agents/plugins/marketplace.json` 安装并启用。它把同一 `虹夏MCP-v2.exe` 作为插件工具提供，并附带 Work 对话用的简短决策 skill。独立 Codex 会话关闭原有直连后仍通过插件实际调用成功；这证明插件工具链可用，但不等于 Work 会话已经连接。首次使用需重启桌面客户端、在**本机运行的 Work 新任务**中确认工具可见并完成一次桌面点击回传。云端 Work 对话不能直接运行这个 Windows 本机 stdio 程序；那种接入需要另行设计可安全访问的远程 MCP 服务。详见 `INSTALL.md`。
 
-Codex 全局技能和本机 Work 插件 0.1.8 均要求最终回复前主动检查完成提醒，并加入“同一请求连续等待、恢复会话先读旧回复”的规则。较晚的点击会保存，但一旦 Agent 任务结束，现有 stdio MCP 无法单靠桌面点击重新唤醒任务；在原会话发送“继续”可触发读取。当前打开的会话不保证热更新，新的 Work 插件还需重启 ChatGPT 桌面客户端后在新任务中验收。
+Codex 全局技能和本机 Work 插件 0.1.9 均要求最终回复前主动检查完成提醒，并加入“同一请求连续等待、恢复会话先读旧回复”的规则。较晚的点击会保存，但一旦 Agent 任务结束，现有 stdio MCP 无法单靠桌面点击重新唤醒任务；在原会话发送“继续”可触发读取。当前打开的会话不保证热更新，新的 Work 插件还需重启 ChatGPT 桌面客户端后在新任务中验收。
 
 DSH 本机接入脚本在 `integrations/dsh/install.ps1`，默认注册 desktop 和 web 两个配置，安装专用技能及全局触发规则。本机已写入配置并通过 DSH web 合成配置检查、打包 MCP 握手及隔离选择回传测试。DSH 新会话已自主调用虹夏并显示带 DSH 来源的气泡；用户较晚点击后，回复保存在消息库，但 DSH 原任务已结束，未自动读回。技能现要求重复等待并在会话恢复时读取旧请求；无时限自动唤醒尚未实现。操作和限制见 `integrations/dsh/README.md`。
 

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = '0.1.8',
+    [string]$Version = '0.1.9',
     [string]$OutputDirectory = 'dist-release\installer',
     [string]$Compiler = '',
     [switch]$BuildApplications,
@@ -46,7 +46,7 @@ if ($ApplicationDirectory) {
     $reviewedApplications = (Resolve-Path -LiteralPath $ApplicationDirectory).Path
     $packageArguments += @(
         '--app-exe', (Join-Path $reviewedApplications '虹夏桌宠.exe'),
-        '--mcp-exe', (Join-Path $reviewedApplications '虹夏MCP-v2.exe'),
+        '--mcp-exe', (Join-Path $reviewedApplications '虹夏MCP-v2\虹夏MCP-v2.exe'),
         '--approval-exe', (Join-Path $reviewedApplications '虹夏审批提醒.exe')
     )
 }

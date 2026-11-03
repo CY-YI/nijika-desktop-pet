@@ -72,7 +72,7 @@ async def main(source: bool) -> None:
     if visible_window(WINDOW_CLASS):
         raise SystemExit("Close the already running desktop pet before this isolated smoke test")
     pet_exe = ROOT / "dist" / "虹夏桌宠.exe"
-    mcp_exe = ROOT / "dist" / "虹夏MCP-v2.exe"
+    mcp_exe = ROOT / "dist" / "虹夏MCP-v2" / "虹夏MCP-v2.exe"
     if not source and (not pet_exe.is_file() or not mcp_exe.is_file()):
         raise SystemExit("Run build.ps1 before the packaged smoke test")
     pet_command = ([sys.executable, str(ROOT / "pet.py")] if source

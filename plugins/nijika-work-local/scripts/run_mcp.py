@@ -8,18 +8,31 @@ import os
 from pathlib import Path
 
 
+EXECUTABLE_NAME = "虹夏MCP-v2.exe"
+DIRECTORY_NAME = "虹夏MCP-v2"
+
+
+def as_executable(path: Path) -> Path:
+    """Accept either the app layout directory or its executable."""
+    return path / EXECUTABLE_NAME if path.is_dir() else path
+
+
 def resolve_executable(argument: str) -> Path:
     if argument != "AUTO_LOCAL_MCP":
-        return Path(argument)
+        return as_executable(Path(argument))
     script = Path(__file__).resolve()
     candidates = []
     override = os.environ.get("NIJIKA_MCP_EXE")
     if override:
-        candidates.append(Path(override))
-    candidates.append(script.parents[3] / "dist" / "虹夏MCP-v2.exe")
+        candidates.append(as_executable(Path(override)))
+    source_root = script.parents[3]
+    candidates.append(source_root / "dist" / DIRECTORY_NAME / EXECUTABLE_NAME)
+    candidates.append(source_root / "dist" / EXECUTABLE_NAME)
     local_appdata = os.environ.get("LOCALAPPDATA")
     if local_appdata:
-        candidates.append(Path(local_appdata) / "NijikaDesktopPet" / "app" / "dist" / "虹夏MCP-v2.exe")
+        installed_dist = Path(local_appdata) / "NijikaDesktopPet" / "app" / "dist"
+        candidates.append(installed_dist / DIRECTORY_NAME / EXECUTABLE_NAME)
+        candidates.append(installed_dist / EXECUTABLE_NAME)
     return next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
 
 

@@ -13,7 +13,7 @@ from pathlib import Path, PurePosixPath
 from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
-APPLICATIONS = ("虹夏桌宠.exe", "虹夏MCP-v2.exe", "虹夏审批提醒.exe")
+APPLICATION_ROOTS = ("虹夏桌宠.exe", "虹夏MCP-v2", "虹夏审批提醒.exe")
 BLOCKED = {
     ".git", ".venv", "__pycache__", ".pytest_cache", "node_modules", "backups", "diagnostics",
     "build", "dist", "dist-dev", "dist-next", "dist-release", ".pyinstaller-cache",
@@ -60,11 +60,23 @@ def build(output: Path, applications: Path | None = None) -> dict:
         raise ValueError("The archive does not contain the complete committed source tree.")
     runtime_hashes = {}
     if applications:
-        for name in APPLICATIONS:
-            data = (applications / name).read_bytes()
-            relative = f"dist/{name}"
-            files[relative] = data
-            runtime_hashes[relative] = hashlib.sha256(data).hexdigest()
+        for name in APPLICATION_ROOTS:
+            source = applications / name
+            if source.is_file():
+                entries = [(name, source)]
+            elif source.is_dir():
+                entries = [(f"{name}/{path.relative_to(source).as_posix()}", path)
+                           for path in sorted(source.rglob("*"))
+                           if path.is_file() and not path.is_symlink()]
+            else:
+                raise FileNotFoundError(f"Missing application artifact: {source}")
+            if not entries:
+                raise ValueError(f"Empty application artifact: {source}")
+            for relative_name, path in entries:
+                data = path.read_bytes()
+                relative = f"dist/{relative_name}"
+                files[relative] = data
+                runtime_hashes[relative] = hashlib.sha256(data).hexdigest()
     manifest = {
         "format_version": 1, "source_commit": revision, "source_branch": branch,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -94,6 +106,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--applications", type=Path,
-                        help="Explicit reviewed directory containing all three runtime EXEs")
+                        help="Explicit reviewed directory containing the app EXE, approval EXE and onedir MCP folder")
     args = parser.parse_args()
     print(json.dumps(build(args.output, args.applications), ensure_ascii=False, indent=2))

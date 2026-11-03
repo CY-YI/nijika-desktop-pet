@@ -90,7 +90,8 @@ def main() -> None:
             overrides.append("hooks." + event + "=[" + group + "]")
         if options.case == "notice":
             overrides.extend([
-                "mcp_servers.nijika-pet.command=" + toml_text(str(ROOT / "dist" / "虹夏MCP-v2.exe")),
+                "mcp_servers.nijika-pet.command=" +
+                toml_text(str(ROOT / "dist" / "虹夏MCP-v2" / "虹夏MCP-v2.exe")),
                 "mcp_servers.nijika-pet.env.NIJIKA_PET_DB_PATH=" + toml_text(str(database)),
                 'mcp_servers.nijika-pet.env.NIJIKA_AGENT_NAME="Codex"',
                 'mcp_servers.nijika-pet.tools.show_completion.approval_mode="approve"',

@@ -1,5 +1,11 @@
 # 接入 Agent：Codex、ChatGPT Work、DSH、Claude Code 与其他本机客户端
 
+## 2026-11-03 MCP onedir 路径
+
+新配置统一指向 `<安装根>\dist\虹夏MCP-v2\虹夏MCP-v2.exe`。该 EXE 不能脱离同级 `_internal\` 单独复制；设置中心“所需文件”会显示当前机器的完整路径。旧版精确路径 `<安装根>\dist\虹夏MCP-v2.exe` 可在预览中安全迁移到新目录路径，未知目录中的同名程序仍会被拒绝。
+
+升级不会结束正在运行的客户端或 MCP。已打开客户端需要重连 MCP 或新建任务，才会停止使用旧 onefile 进程并加载新路径。
+
 ## 当前接入方式：统一提醒核心
 
 1. 打开设置 → Agent 接入 → 扫描本机 → 预览并应用；已有档案打开“接入步骤”刷新导出资料。所有路径按当前安装目录生成，不复制作者电脑路径。
@@ -40,7 +46,7 @@ Codex、DSH 和本机 Work 的新版持久规则都要求在最终回复前检�
 
 DSH 是可切换模型的工作台，不默认等于 DeepSeek 或 Codex。标准 DSH 连接省略 `agent_name/software`，通过官方配置和握手显示 `Agent · DSH`；明确模型时才传真实名称。共享 MCP 会拒绝把 Codex、ChatGPT、DSH 等宿主产品名当成 DSH 的 Agent，真实 `DeepSeek` 或自定义名称仍保留。自动接入会删除旧的孤立虹夏开始标记，但不会改由 MAGPIE 管理的实际服务。
 
-2026-10-30 本机正式安装已更新三个 EXE、Codex 全局规则/技能、DSH desktop/web 配置和 Work 插件 0.1.7。2026-10-31 的持久规则更新已将 Work 插件升级为 0.1.8，正式安装显示 `installed=true, enabled=true`；Codex/DSH/Work 技能审计为 `clean`。正式用户库真实气泡已验证 `Agent · DSH` 与 `DeepSeek · DSH`；已打开客户端仍要重连 MCP 或新建任务，新的持久提示词才会加载。服务端身份守卫不依赖客户端重连，旧参数也不会再显示 `Codex · DSH`。
+2026-10-30 本机正式安装已更新三个 EXE、Codex 全局规则/技能、DSH desktop/web 配置和 Work 插件 0.1.7。2026-11-03 的 MCP onedir 更新将 Work 插件提升到 0.1.9，并把 Codex、DSH desktop/web 与 MAGPIE 的 `nijika-pet` 启动路径切到 onedir；Codex/DSH/Work 技能审计为 `clean`。正式用户库真实气泡已验证 `Agent · DSH` 与 `DeepSeek · DSH`；已打开客户端仍要重连 MCP 或新建任务，新的持久提示词和路径才会加载。服务端身份守卫不依赖客户端重连，旧参数也不会再显示 `Codex · DSH`。
 
 ## 2026-10-29 扫描本机与批量接入
 
@@ -151,11 +157,11 @@ Codex 向导合并 MCP、交互技能和全局触发规则；DSH 向导合并 de
 
 | 客户端 | MCP 程序 | 客户端配置 | 主动提醒规则 | 技能（可选） |
 | --- | --- | --- | --- | --- |
-| Codex | `dist\虹夏MCP-v2.exe` | `<用户目录>\.codex\config.toml` | `<用户目录>\.codex\AGENTS.md` | `<用户目录>\.codex\skills\nijika-desktop-dialog\SKILL.md` |
-| Claude Code | `dist\虹夏MCP-v2.exe` | `<用户目录>\.claude.json`（用户级 MCP）；审批钩子在 `<用户目录>\.claude\settings.json` | `<用户目录>\.claude\CLAUDE.md` | `<用户目录>\.claude\skills\nijika-desktop-dialog\SKILL.md` |
-| Work | `dist\虹夏MCP-v2.exe` | `<用户目录>\.nijika-desktop-pet\integrations\work\plugins\nijika-work-local\mcp.json`（另有插件清单） | 插件技能内的规则 | 插件内 `skills\nijika-work-dialog\SKILL.md` |
-| DSH | `dist\虹夏MCP-v2.exe` | `<用户目录>\.dsh\profiles\desktop\cordis.patch.yml` 与 `profiles\web\cordis.patch.yml` | `<用户目录>\.dsh\AGENTS.md` | `<用户目录>\.dsh\skills\nijika-dsh-dialog\SKILL.md` |
-| 其他 MCP 客户端 | `dist\虹夏MCP-v2.exe` | 专属接入目录的 `nijika-mcp.json`；实际客户端目标由接收 AI 核实 | 同目录的 `nijika-agent-instructions.txt` | 同目录的 `SKILL.md`，由接收 AI 按客户端规则安装 |
+| Codex | `dist\虹夏MCP-v2\虹夏MCP-v2.exe` | `<用户目录>\.codex\config.toml` | `<用户目录>\.codex\AGENTS.md` | `<用户目录>\.codex\skills\nijika-desktop-dialog\SKILL.md` |
+| Claude Code | `dist\虹夏MCP-v2\虹夏MCP-v2.exe` | `<用户目录>\.claude.json`（用户级 MCP）；审批钩子在 `<用户目录>\.claude\settings.json` | `<用户目录>\.claude\CLAUDE.md` | `<用户目录>\.claude\skills\nijika-desktop-dialog\SKILL.md` |
+| Work | `dist\虹夏MCP-v2\虹夏MCP-v2.exe` | `<用户目录>\.nijika-desktop-pet\integrations\work\plugins\nijika-work-local\mcp.json`（另有插件清单） | 插件技能内的规则 | 插件内 `skills\nijika-work-dialog\SKILL.md` |
+| DSH | `dist\虹夏MCP-v2\虹夏MCP-v2.exe` | `<用户目录>\.dsh\profiles\desktop\cordis.patch.yml` 与 `profiles\web\cordis.patch.yml` | `<用户目录>\.dsh\AGENTS.md` | `<用户目录>\.dsh\skills\nijika-dsh-dialog\SKILL.md` |
+| 其他 MCP 客户端 | `dist\虹夏MCP-v2\虹夏MCP-v2.exe` | 专属接入目录的 `nijika-mcp.json`；实际客户端目标由接收 AI 核实 | 同目录的 `nijika-agent-instructions.txt` | 同目录的 `SKILL.md`，由接收 AI 按客户端规则安装 |
 
 `config.toml` 与 `cordis.patch.yml` 中写入的服务名分别为 `nijika-pet` 和 `mcp-nijika-pet`。新版来源字段分开：Codex=`ChatGPT + Codex`、Claude Code=`Claude + Claude Code`、DSH=`Agent + DSH`、Work=`ChatGPT + Work`。同一个安装版 MCP 可以被多个客户端共用，每个客户端仍应配置正确来源。一个客户端只保留自己的虹夏注册：Codex 用 `nijika-pet`，Claude Code 用 `nijika-pet`，DSH 用 `mcp-nijika-pet`，Work 用 `nijika-work-pet`。旧的 `nijika_pet`、`magpie-mcp-nijika-pet` 重复条目会造成顶部来源错配，接入脚本只清理已识别且可核实的旧副本。路径由向导自动填入，不需要手抄；上述表格用于手动排查。
 
@@ -199,7 +205,7 @@ powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1 -Dsh -NoLaun
 在项目根目录运行：
 
 ```powershell
-$mcpExe = (Resolve-Path -LiteralPath '.\dist\虹夏MCP-v2.exe').Path
+$mcpExe = (Resolve-Path -LiteralPath '.\dist\虹夏MCP-v2\虹夏MCP-v2.exe').Path
 codex mcp add nijika-pet -- $mcpExe
 codex mcp get nijika-pet
 
@@ -243,12 +249,12 @@ Claude Code 的用户级接入由三部分组成；目前设置中心没有专�
 1. 注册 MCP：先备份用户级 `%USERPROFILE%\.claude.json`；已有 `nijika-pet` 时先核对旧条目，不重复注册。PowerShell 使用 `$env:LOCALAPPDATA` 展开安装目录，不要照抄 CMD 的 `%LOCALAPPDATA%`：
 
    ```powershell
-   $mcpExe = Join-Path $env:LOCALAPPDATA 'NijikaDesktopPet\app\dist\虹夏MCP-v2.exe'
+   $mcpExe = Join-Path $env:LOCALAPPDATA 'NijikaDesktopPet\app\dist\虹夏MCP-v2\虹夏MCP-v2.exe'
    claude mcp add -s user nijika-pet -e 'NIJIKA_AGENT_NAME=Claude code' -- $mcpExe
    claude mcp list
    ```
 
-   源码方式将 `$mcpExe` 改为项目 `dist\虹夏MCP-v2.exe` 的绝对路径。用户级配置写入上述 `.claude.json`；在新会话中确认四个工具可见：`show_completion`、`request_decision`、`wait_for_reply`、`get_reply`，以客户端实际工具前缀为准。
+   源码方式将 `$mcpExe` 改为项目 `dist\虹夏MCP-v2\虹夏MCP-v2.exe` 的绝对路径。用户级配置写入上述 `.claude.json`；在新会话中确认四个工具可见：`show_completion`、`request_decision`、`wait_for_reply`、`get_reply`，以客户端实际工具前缀为准。
 2. 提醒规则：把何时提醒、同一请求连续等待、恢复会话先 `get_reply` 的规则合并进 `%USERPROFILE%\.claude\CLAUDE.md`；仓库级 `AGENTS.md` 只覆盖本仓库。
 3. 可选技能：把 `skills\nijika-desktop-dialog\SKILL.md` 复制到 `%USERPROFILE%\.claude\skills\nijika-desktop-dialog\`。
 
@@ -264,7 +270,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\integrations\claude-code\i
 
 ### ChatGPT 桌面客户端 Work（本机任务）
 
-源码插件位于 `plugins/nijika-work-local/`，`mcp.json` 使用可移植标记，由启动脚本查找本项目的 `dist/虹夏MCP-v2.exe`、`NIJIKA_MCP_EXE` 指定的程序，或默认安装目录。确保 `python.exe` 和 `codex` 都能从 PowerShell 找到，再从项目根目录运行：
+源码插件位于 `plugins/nijika-work-local/`，`mcp.json` 使用可移植标记，由启动脚本查找本项目的 `dist/虹夏MCP-v2/虹夏MCP-v2.exe`、`NIJIKA_MCP_EXE` 指定的程序，或默认安装目录。确保 `python.exe` 和 `codex` 都能从 PowerShell 找到，再从项目根目录运行：
 
 ```powershell
 codex plugin marketplace add . --json
@@ -292,7 +298,7 @@ powershell -ExecutionPolicy Bypass -File .\integrations\dsh\install.ps1
 {
   "mcpServers": {
     "nijika-pet": {
-      "command": "C:/path/to/虹夏MCP-v2.exe",
+      "command": "C:/path/to/虹夏MCP-v2/虹夏MCP-v2.exe",
       "args": [],
       "env": {"NIJIKA_AGENT_NAME": "MyAgent"}
     }

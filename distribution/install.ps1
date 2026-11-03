@@ -23,7 +23,7 @@ if ($targetRoot.Equals($sourceRoot, [StringComparison]::OrdinalIgnoreCase) -or
 }
 if (-not [Environment]::Is64BitOperatingSystem) { throw 'Windows x64 is required.' }
 
-foreach ($relative in @('dist\虹夏桌宠.exe', 'dist\虹夏MCP-v2.exe', 'dist\虹夏审批提醒.exe',
+foreach ($relative in @('dist\虹夏桌宠.exe', 'dist\虹夏MCP-v2\虹夏MCP-v2.exe', 'dist\虹夏审批提醒.exe',
         'assets\icons\nijika-shortcut.ico', 'skills\nijika-desktop-dialog\SKILL.md',
         'plugins\nijika-work-local\mcp.json', 'integrations\claude-code\install-hooks.ps1',
         'integrations\dsh\install.ps1', 'integrations\dsh\lifecycle-bridge.mjs',
@@ -56,7 +56,7 @@ Get-ChildItem -LiteralPath $sourceRoot -File -Recurse | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination $destination -Force
 }
 $petExe = Join-Path $targetRoot 'dist\虹夏桌宠.exe'
-$mcpExe = Join-Path $targetRoot 'dist\虹夏MCP-v2.exe'
+$mcpExe = Join-Path $targetRoot 'dist\虹夏MCP-v2\虹夏MCP-v2.exe'
 $icon = Join-Path $targetRoot 'assets\icons\nijika-shortcut.ico'
 $manifestPath = Join-Path $targetRoot 'plugins\nijika-work-local\mcp.json'
 $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json

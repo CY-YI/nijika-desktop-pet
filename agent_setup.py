@@ -13,6 +13,7 @@ import tomllib
 import uuid
 from pathlib import Path
 
+from app_layout import bundled_mcp_path
 from control_store import ControlStore, IDENTIFIER
 from notice_source import resolve_source
 from notification_capabilities import notification_capability
@@ -119,13 +120,14 @@ def client_guide(client: str) -> dict:
 
 
 def client_files(client: str, mcp: Path, directory: Path, bundle: Path,
-                 data_root: Path) -> list[dict]:
+                 data_root: Path, application_root: Path | None = None) -> list[dict]:
     """List the concrete files each client needs, with absolute paths.
 
     ``exists`` is measured on the current machine so the settings window can show
     which pieces are already in place and which the user still has to create.
     """
     skill = directory / "skills" / "nijika-desktop-dialog" / "SKILL.md"
+    root = application_root or mcp.parent.parent
     entries = [
         {"label": "虹夏 MCP 程序（所有客户端共用）", "path": str(mcp), "kind": "程序", "required": True},
         {"label": "已保存的 MCP 配置", "path": str(bundle / "nijika-mcp.json"),
@@ -138,11 +140,10 @@ def client_files(client: str, mcp: Path, directory: Path, bundle: Path,
          "kind": "能力清单", "required": True},
         {"label": "可供客户端安装的交互技能", "path": str(bundle / "SKILL.md"),
          "kind": "技能副本", "required": False},
-        {"label": "接入手册（含手动接入说明）", "path": str(mcp.parent.parent / "AGENT_SETUP.md"),
+        {"label": "接入手册（含手动接入说明）", "path": str(root / "AGENT_SETUP.md"),
          "kind": "文档", "required": False},
     ]
     if client == "codex":
-        root = mcp.parent.parent
         entries += [
             {"label": "Codex 配置（写入 MCP 服务）", "path": str(directory / "config.toml"), "kind": "配置", "required": True},
             {"label": "Codex 主动提醒规则", "path": str(directory / "AGENTS.md"), "kind": "规则", "required": True},
@@ -153,9 +154,9 @@ def client_files(client: str, mcp: Path, directory: Path, bundle: Path,
         ]
     elif client == "dsh":
         entries += [
-            {"label": "DSH 实时事件转接模块", "path": str(mcp.parent.parent / "integrations/dsh/lifecycle-bridge.mjs"),
+            {"label": "DSH 实时事件转接模块", "path": str(root / "integrations/dsh/lifecycle-bridge.mjs"),
              "kind": "事件模块", "required": False},
-            {"label": "统一生命周期程序", "path": str(mcp.parent / "虹夏审批提醒.exe"),
+            {"label": "统一生命周期程序", "path": str(root / "dist/虹夏审批提醒.exe"),
              "kind": "事件程序", "required": False},
             {"label": "DSH desktop 配置", "path": str(directory / "profiles" / "desktop" / "cordis.patch.yml"),
              "kind": "配置", "required": True},
@@ -275,7 +276,7 @@ class AgentSetup:
         self.root, self.store = root, store
         self.home = (home or Path.home()).resolve()
         self.use_environment = home is None
-        self.mcp = root / "dist" / "虹夏MCP-v2.exe"
+        self.mcp = bundled_mcp_path(root)
         self.plans: dict[str, dict] = {}
         self.batches: dict[str, dict] = {}
         self.lock = threading.Lock()
@@ -373,7 +374,7 @@ class AgentSetup:
         directory = Path(agent["location"])
         bundle = self.bundle_directory(agent["id"])
         config = self.export_agent(agent)
-        files = client_files(client, self.mcp, directory, bundle, self.store.root)
+        files = client_files(client, self.mcp, directory, bundle, self.store.root, self.root)
         editor = (client == "custom" and
                   str(agent.get("software", "")).casefold() in {"vs code", "vs code insiders"})
         route = route_for(agent.get("agent_identity", "")) if editor else None
@@ -661,7 +662,7 @@ class AgentSetup:
                            (isinstance(v, dict) and v.get("command") == str(self.mcp))
                            for key, v in p["mcpServers"].items()) for p in projects.values()):
                     raise ValueError("Claude 项目作用域存在虹夏服务，请先核对，避免覆盖用户级来源。")
-            updated = json_service_update(document, self.mcp, environment, client)
+            updated = json_service_update(document, self.mcp, environment, client, self.root)
             if document != updated:
                 self._add_file(files, path, json.dumps(updated, ensure_ascii=False, indent=2) + "\n",
                                "合并用户级 MCP，保留其他服务和设置", digest(raw))

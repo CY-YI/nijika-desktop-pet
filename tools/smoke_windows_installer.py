@@ -115,16 +115,17 @@ def verify(setup: Path, work: Path, *, disposable_session: bool = False) -> dict
     # Use real shell folders only inside a disposable Windows session. Never
     # redirect the user's known folders through registry edits.
     run([str(setup), *common])
-    expected = {name for name in (*package_release.FILES, "SHA256SUMS.json")}
+    expected = {*package_release.release_file_names(), "SHA256SUMS.json"}
     for name in expected:
         assert (install / name).is_file(), name
     manifest = json.loads((install / "plugins/nijika-work-local/mcp.json").read_text(encoding="utf-8"))
     executable = manifest["mcpServers"]["nijika-work-pet"]["args"][-1]
-    assert Path(executable) == install / "dist/虹夏MCP-v2.exe", executable
+    assert Path(executable) == install / "dist/虹夏MCP-v2/虹夏MCP-v2.exe", executable
     assert "AUTO_LOCAL_MCP" not in executable
     source_digests = {
         name: hashlib.sha256((install / name).read_bytes()).hexdigest()
-        for name in package_release.FILES if name != "plugins/nijika-work-local/mcp.json"
+        for name in package_release.release_file_names()
+        if name != "plugins/nijika-work-local/mcp.json"
     }
     uninstallers = list(install.glob("unins*.exe"))
     assert len(uninstallers) == 1

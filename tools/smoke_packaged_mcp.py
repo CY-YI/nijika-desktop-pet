@@ -16,7 +16,8 @@ from notification_store import NotificationStore  # noqa: E402
 
 
 async def main() -> None:
-    executable = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "dist" / "虹夏MCP-v2.exe"
+    executable = (Path(sys.argv[1]) if len(sys.argv) > 1 else
+                  ROOT / "dist" / "虹夏MCP-v2" / "虹夏MCP-v2.exe")
     if not executable.is_file():
         raise SystemExit(f"Missing packaged MCP server: {executable}")
     with tempfile.TemporaryDirectory() as directory:

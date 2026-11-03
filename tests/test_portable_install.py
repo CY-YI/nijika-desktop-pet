@@ -23,7 +23,8 @@ class PortableInstallTests(unittest.TestCase):
                      self.write(package, "distribution/install.ps1"))
         for relative in (
             "dist/虹夏桌宠.exe",
-            "dist/虹夏MCP-v2.exe",
+            "dist/虹夏MCP-v2/虹夏MCP-v2.exe",
+            "dist/虹夏MCP-v2/_internal/python312.dll",
             "dist/虹夏审批提醒.exe",
             "assets/icons/nijika-shortcut.ico",
             "skills/nijika-desktop-dialog/SKILL.md",
@@ -76,7 +77,7 @@ class PortableInstallTests(unittest.TestCase):
             installed = json.loads(
                 (install / "plugins/nijika-work-local/mcp.json").read_text(encoding="utf-8"))
             mcp_path = installed["mcpServers"]["nijika-work-pet"]["args"][-1]
-            self.assertEqual(Path(mcp_path), install / "dist/虹夏MCP-v2.exe")
+            self.assertEqual(Path(mcp_path), install / "dist/虹夏MCP-v2/虹夏MCP-v2.exe")
             self.assertNotIn(str(package), json.dumps(installed, ensure_ascii=False))
 
     def test_custom_codex_home_is_exported_to_cli(self):
@@ -120,7 +121,7 @@ class PortableInstallTests(unittest.TestCase):
             calls = log.read_text(encoding="utf-8")
             self.assertIn(f"home={codex_home}", calls)
             self.assertIn("args=mcp add nijika-pet --", calls)
-            self.assertIn(str(install / "dist/虹夏MCP-v2.exe"), calls)
+            self.assertIn(str(install / "dist/虹夏MCP-v2/虹夏MCP-v2.exe"), calls)
             self.assertTrue((codex_home / "skills/nijika-desktop-dialog/SKILL.md").is_file())
 
 

@@ -31,23 +31,25 @@ def repair_orphan_dsh_marker(original: str) -> str:
 
 
 def json_service_update(document: dict, mcp: Path, environment: dict[str, str],
-                        client: str) -> dict:
+                        client: str, application_root: Path | None = None) -> dict:
     """Merge owned stdio services only; preserve unrelated fields and options."""
     result = copy.deepcopy(document)
     servers = result.setdefault("mcpServers", {})
     if not isinstance(servers, dict):
         raise ValueError("MCP 服务列表格式无效；没有写入。")
     selected = {}
+    legacy = ((application_root or mcp.parents[2]) / "dist" / "虹夏MCP-v2.exe").resolve()
     for key, entry in servers.items():
         command = entry.get("command") if isinstance(entry, dict) else None
         path = Path(command) if isinstance(command, str) and command else None
         current = path is not None and path.is_absolute() and path.resolve() == mcp.resolve()
         candidate = path is not None and path.name.casefold() in ("虹夏mcp-v2.exe", "虹夏mcp.exe")
+        known_legacy = path is not None and path.resolve() == legacy
         if key not in ("nijika-pet", "nijika_pet") and not current and not candidate:
             continue
         same = (candidate and path.is_file() and mcp.is_file() and
                 hashlib.sha256(path.read_bytes()).digest() == hashlib.sha256(mcp.read_bytes()).digest())
-        if not (current or same) or not path.is_file():
+        if not (current or same or known_legacy) or (not known_legacy and not path.is_file()):
             raise ValueError("同名服务或旧虹夏程序无法核实；没有写入或新增重复服务。")
         if entry.get("args", []) != [] or entry.get("type", "stdio") not in ("stdio", "local"):
             raise ValueError("已有虹夏服务参数或传输方式需人工核对；没有写入。")
@@ -166,11 +168,13 @@ def codex_service_update(original: str, mcp: Path, root: Path,
         same_binary = (path is not None and path.name in ("虹夏MCP.exe", "虹夏MCP-v2.exe")
                        and path.is_file() and hashlib.sha256(path.read_bytes()).digest()
                        == hashlib.sha256(mcp.read_bytes()).digest())
-        if not (current or source or same_binary):
+        known_legacy = (path is not None and
+                        path.resolve() == (root / "dist" / "虹夏MCP-v2.exe").resolve())
+        if not (current or source or same_binary or known_legacy):
             raise ValueError(f"服务 {key} 指向未知服务或无法核实的旧虹夏程序，请先人工核对旧路径；没有写入，也未新增重复服务。")
-        if not path.is_file():
+        if not known_legacy and not path.is_file():
             raise ValueError(f"服务 {key} 的原程序不存在，请先核对；没有写入。")
-        if same_binary and not current and entry.get("args"):
+        if (same_binary or known_legacy) and not current and entry.get("args"):
             raise ValueError("旧虹夏程序带有额外参数，不能自动迁移；没有写入。")
         selected[key] = entry
     if not selected:

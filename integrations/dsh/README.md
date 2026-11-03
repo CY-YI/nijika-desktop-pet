@@ -16,7 +16,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\integrations\dsh\install.p
 
 维护者测试：`node --test tests/dsh_lifecycle.test.mjs`（可通过 `NIJIKA_DSH_TEST_MODULES` 指向 DSH 内部模块目录验证真实 SessionStore）；`node tools/smoke_dsh_lifecycle.mjs <DSH内部模块目录> <审批程序.exe> <Python.exe>` 检查真实事件组件到冻结程序链路，仍不代替用户运行中的模型会话和气泡观察。
 
-本目录把现有 `dist/虹夏MCP-v2.exe` 注册为 DeepSeek Harness（DSH）的 stdio MCP 工具，并安装 `nijika-dsh-dialog` 技能。DSH Agent 需要用户做短决策或审阅成果时，可调用 `mcp__nijika_pet__request_decision`；长成果用 `mcp__nijika_pet__show_completion` 提醒。选择由桌宠气泡回传给发起请求的 DSH 会话。桌宠与 DSH 必须在同一台 Windows 用户会话中运行；无需新服务或网络端口。
+本目录把现有完整目录 `dist/虹夏MCP-v2/` 中的 `虹夏MCP-v2.exe` 注册为 DeepSeek Harness（DSH）的 stdio MCP 工具，并安装 `nijika-dsh-dialog` 技能。该 EXE 必须与同级 `_internal/` 一起保留。DSH Agent 需要用户做短决策或审阅成果时，可调用 `mcp__nijika_pet__request_decision`；长成果用 `mcp__nijika_pet__show_completion` 提醒。选择由桌宠气泡回传给发起请求的 DSH 会话。桌宠与 DSH 必须在同一台 Windows 用户会话中运行；无需新服务或网络端口。
 
 DSH 默认来源固定为 `Agent · DSH`，因为同一宿主可以切换多家模型。标准连接应省略 MCP 的单次 `agent_name` 和 `software` 参数；服务端也会把误传的 `Codex · DSH`、`DSH · DSH`、`WorkBuddy · DSH` 纠正为 `Agent · DSH`。明确知道真实模型时才使用具体名称，例如 `DeepSeek · DSH`。
 

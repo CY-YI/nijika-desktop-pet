@@ -1,5 +1,17 @@
 # 虹夏桌宠：重做需求
 
+## 2026-11-03 MCP onedir 与临时目录治理
+
+- 用户原话：“那就按照你的这个步骤和想法然后跟着我的sop开始执行然后自己做好验收，然后在处理这文件的时候要注意不要误碰系统文件”。
+- 用户已批准安全清理旧版残留，并把 MCP 从 PyInstaller onefile 改为 onedir；沿用 Full + Web、本机 stdio/SQLite/回环设置中心，不新增公网服务或桌宠功能。
+- 根因：`虹夏MCP-v2.exe` 的 onefile bootloader 每次启动会解包至 `%TEMP%\_MEI*`；异常退出和高频重启造成旧目录残留。父子进程数量约为活动 `_MEI` 数量的两倍属于 onefile 机制，不能用它单独证明程序无限创建进程。
+- Must：清理工具默认只读，仅处理 `%TEMP%` 直属 `_MEI*`；目录必须同时具备旧 MCP 的 `python312.dll`、`base_library.zip`、`_sqlite3.pyd`、`_socket.pyd`、`_wmi.pyd` 文件以及 `httpx2-2.13.1.dist-info`、`opentelemetry_api-1.45.1.dist-info`、`pydantic_core` 目录签名，排除重解析点、未满最小年龄及任何运行进程正在引用的目录。
+- Must：MCP 只改为 onedir，桌宠和审批程序继续使用 onefile；构建、启动包装器、自动接入、旧路径迁移、便携安装、Inno Setup、试用包、源码包与 Work 插件都只指向 `dist\虹夏MCP-v2\虹夏MCP-v2.exe`。
+- Must：升级安装只删除精确旧文件 `{app}\dist\虹夏MCP-v2.exe`；保留用户消息库、设置、Agent 档案、MAGPIE 服务、其他客户端配置和 Hook 信任。旧客户端重连后才能释放已加载的旧 MCP 映像，维护流程不批量结束用户进程。
+- Won't：不删除所有通用 `_MEI*`，不触碰 `%TEMP%` 外的系统或用户文件，不把清理范围扩大到其他 PyInstaller 软件，不重放或改写历史通知。
+- 验收：清理前后报告、活动目录与失败项可追溯；onedir EXE 连续启动前后不新增 `_MEI`；源码、冻结 MCP、前端、Hook、安装器、自动配置、DSH/Work 路径和全量回归通过；Git 提交与推送完成后再关闭本轮缺陷。
+- 现场清理证据：只读扫描 5,379 个 `_MEI` 目录，其中 1,327 个符合旧 MCP 指纹且可回收约 50.02 GB，12 个活动目录跳过；实际删除 1,327 个、失败 0，C 盘可用空间由约 38.09 GB 增至约 85.04 GB。证据见 `diagnostics/mcp-onedir-20261103/cleanup-*.json`。
+
 ## 2026-10-31 完整工程学习包
 
 - 用户原话：“我朋友说现在他想要整个工程所有内容包括源码这些他想要自己去改一些和学习帮我这个也出一个压缩包吧把文档之类的最好也加上去然后在之前你先做好清理”。

@@ -1,5 +1,18 @@
 # 当前待办
 
+## 当前任务：MCP onedir 与临时目录治理（2026-11-03）
+
+- 分支 `codex/interaction-settings-20261017`，基线 `458da30`；用户已授权按 SOP 实施、验收和收尾，要求不误碰系统文件。无关未跟踪文件 `challenge-cup-notice.pdf` 与 `ppt-build-20261101/` 保留不动。
+- [x] 定位 onefile 解包、异常退出残留和多客户端高频启动的叠加根因；桌宠与审批程序保持 onefile，仅将 MCP 改为 onedir。
+- [x] 新增 `app_layout.py` 与 `tools/cleanup_mcp_temp.py`；清理器默认 dry-run，使用旧 MCP 运行时指纹、临时目录直属路径、重解析点、年龄和活动进程模块多重保护。
+- [x] 只读预检：5,379 个 `_MEI`，1,327 个符合条件，预计回收 50,019,003,245 字节，12 个活动目录跳过。正式清理删除 1,327 个、失败 0，C 盘可用空间增加约 50.42 GB；报告在 `diagnostics/mcp-onedir-20261103/`。
+- [x] 修改 `build.ps1`、Work 启动包装器、设置中心自动接入、旧 onefile 精确迁移、release/source 打包、便携安装、Inno Setup 和冒烟默认路径。
+- [x] 同步最终 `0.1.9` 候选到工作区 `dist` 与正式安装目录；已先备份整个正式应用和必要客户端配置，不覆盖消息库、Agent 配置、MAGPIE 管理项或 Hook 信任。
+- [x] 重跑清理器、路径、配置迁移、全量 Python/JavaScript、冻结 MCP、Hook、前端、Work、DSH 和打包白名单回归。最终 Python 192 项（191 通过、1 项可选 PyYAML 跳过）、JavaScript 20/20、DSH 4 通过/1 可选跳过；冻结前端、MCP、审批 Hook、Work、DSH、接入审计和 173 文件标准暂存区通过。
+- [x] 更新 Codex/DSH/Work 持久技能与 Work `0.1.9` 插件；已打开客户端需重连后加载新路径。Codex/DSH 标记块与技能哈希一致，Work 清单显示安装并启用。
+- [ ] 完成敏感信息扫描、Git 差异审阅、分范围提交和推送；不覆盖已有 Release。
+- 未验证项或失败必须保留在验证记录中；本轮通过网络、浏览器或隔离代码未覆盖的宿主自然任务不写成通过。
+
 ## 当前任务：完整工程学习包（2026-10-31）
 
 - 基线 `3ca6daa`，现有分支，开工工作区干净。用户需要可自行修改学习的完整工程 ZIP，并要求先清理。

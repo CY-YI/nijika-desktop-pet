@@ -7,7 +7,7 @@
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
-$mcpExe = Join-Path $projectRoot 'dist\虹夏MCP-v2.exe'
+$mcpExe = Join-Path $projectRoot 'dist\虹夏MCP-v2\虹夏MCP-v2.exe'
 $skillSource = Join-Path $PSScriptRoot 'nijika-dsh-dialog\SKILL.md'
 $instructionsSource = Join-Path $PSScriptRoot 'global-instructions.txt'
 $lifecycleSource = Join-Path $PSScriptRoot 'lifecycle-bridge.mjs'

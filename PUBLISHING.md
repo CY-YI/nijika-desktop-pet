@@ -1,5 +1,18 @@
 # 本机候选与发布检查单
 
+## 2026-11-03 MCP onedir 临时目录治理
+
+- 根因是 MCP 使用 PyInstaller onefile，异常退出或高频重启后 `%TEMP%\_MEI*` 未回收；不是普通问答或提醒逻辑故障。桌宠和审批提醒保持 onefile，只有 MCP 改为 onedir。
+- 现场先 dry-run 再 apply：扫描 5,379 个 `_MEI`，1,327 个满足旧虹夏运行时指纹且可清理，12 个活动目录跳过；实际删除 1,327 个、失败 0，观察到的 C 盘可用空间增加约 50.42 GB。报告在 `diagnostics/mcp-onedir-20261103/`。
+- 新 MCP 路径为 `dist/虹夏MCP-v2/虹夏MCP-v2.exe`，完整 `_internal/` 必须随目录分发。源码包、ZIP、Setup、便携安装、Work 包装器和自动接入均使用该路径；`0.1.9` Setup 仅精确删除旧 `{app}\dist\虹夏MCP-v2.exe`。
+- 发布验收必须覆盖连续启动前后 `_MEI` 数量不增加、旧路径迁移、目录完整性、中文空格安装路径、冻结 MCP 与前端、Work/DSH 配置和全量回归。旧客户端进程不批量结束，重连后才切换新程序。
+- 不覆盖已有 `v0.1.6` / `v0.1.7` Release；新的私下试用包和二进制发布状态以本轮最终哈希、Git 提交和完整验收记录为准。
+- 最终候选：桌宠 SHA-256 `72c09b5282c93c746c18fb03002b9ab7f3a910748b7dad5f5f041b1f64ff80bc`，onedir MCP `4632a4e7a5c6f1a0b5191fda5c74c258fccba0b949f7ee158c151c1640f3c2b9`，审批提醒 `6b2491650047017db52191075f78e154838cf5cda9cbd172fd0a379325bccce4`。工作区 `dist` 与本机正式安装的文件哈希一致，正式 onedir 含 148 个 `_internal` 文件。
+- 发布验收结果：Python 192 项（191 通过、1 项可选 PyYAML 跳过）、JavaScript 20/20、DSH 4 通过/1 可选跳过；冻结前端、冻结 MCP、19 种来源与 4 并发客户端、审批 Hook、Work 0.1.9、DSH 安装器、接入审计均通过。173 个发布白名单文件和全部 SHA-256 一致，包内没有旧 onefile；onedir 连续启动前后 `_MEI` 均为 4,063、没有新增。最终复查旧运行时待清理项为 0。
+- Setup 0.1.9：`dist-release/installer-0.1.9/虹夏桌宠-Setup-0.1.9.exe`，64,675,999 字节，SHA-256 `c1764f642d2af4595662242e1b4839c3eeec6a54592a745cdd38e0722268bd54`，未签名。朋友私下试用 ZIP：`dist-release/friend-trial-0.1.9/虹夏桌宠-v0.1.9-朋友私下试用.zip`，64,187,974 字节，SHA-256 `074bcd530432ea4aa398b42a782db17fe0d83935223e9edd493d18b3b128644b`，ZIP 完整性和 4 项内容通过。
+- 已完成备份与正式部署：完整正式应用 43 个文件备份在 `backups/mcp-onedir-20261103/formal-app/`，客户端相关文件备份在 `client-configs/`；正式目录和 Workspace `dist` 已更新。MAGPIE 只精确迁移 `nijika-pet` 命令，保留 8 个 Agent 绑定、`NIJIKA_AGENT_NAME`、其他 MCP、instructions、skills 和 applied 记录；Work 插件为 `0.1.9`、已安装并启用。
+- 未执行项：干净、可丢弃 Windows 环境的 Setup 实际安装/升级/桌面启动/卸载；正式桌宠运行时额外启动一个隔离桌宠窗口的 IPC 冒烟；各外部宿主重连后的自然任务复验。因此本轮标记 `PASS_WITH_DOCUMENTED_LIMITS`，不标记整个项目 `ALL_FINISH`。合并证据见 `diagnostics/mcp-onedir-20261103/verification.json`。
+
 ## 2026-10-31 统一提醒核心私下试用
 
 - 本机部署只更新共享 Hook 和独立 DSH 事件块，保留旧 MCP/桌宠、MAGPIE 服务、权限及数据。用户在实际 DSH 桌面确认两条测试气泡和无重复；两次都主动调用工具。无工具补发由已安装的 rc.2/rc.3 真实 SessionStore → 转接 → 冻结程序隔离链路验证，仍保留自然会话视觉补验项。Work 等未适配宿主仅主动调用。
@@ -22,7 +35,7 @@
 - 目标验证：ambient-suggestions JSON 与 Codex 私有 helper 固定对象均静默；普通用户 JSON、简单问答和等待答复仍提醒；主动通知去重、重复 Stop、无有效轮次和显式子任务边界保持。
 - 部署要求：先备份，再重建 `虹夏审批提醒.exe`；只同步工作区 `dist/` 与正式安装目录中的审批程序，保留消息库、Agent 配置、MAGPIE 服务、Hook 信任和其他两个 EXE。
 - 发布边界：本轮完成源码修复和本机验证；是否制作新的 GitHub Release 版本另行按最终产物哈希记录，不覆盖已发布 `v0.1.6` / `v0.1.7`。
-- 完成状态：26 项目标回归、全量 Python 168 项（1 项可选跳过）、JavaScript 20/20、冻结与正式安装 Hook、MCP、标准目录前端、Work 0.1.8、DSH 安装器及接入审计通过。工作区和正式安装 Hook 的 SHA-256 均为 `5CD44E9F738D96AE68E0ECCFE25AD9467EEA18C48FC882BE2D254198B8C8F717`；历史误提醒保留为诊断证据。证据见 `diagnostics/internal-task-guard-20261031-v2/`。
+- 完成状态：26 项目标回归、全量 Python 168 项（1 项可选跳过）、JavaScript 20/20、冻结与正式安装 Hook、MCP、标准目录前端、Work 0.1.8、DSH 安装器及接入审计通过。工作区和正式安装 Hook 的 SHA-256 均为 `5CD44E9F738D96AE68E0ECCFE25AD9467EEA18C48FC882BE2D254198B8C8F717`；历史误提醒保留为诊断证据。后续 `0.1.9` 的 MCP onedir 迁移状态见上方最新章节，不复用本条作为其回归结论。
 
 ## 2026-10-31 每轮回复提醒修复安装器
 
@@ -86,7 +99,7 @@
 
 ## VS Code 具体 Agent 候选（2026-10-30）
 
-- 候选 ZIP：`dist-next/vscode-agents-20261030/vscode-agents-candidate.zip`，SHA256 `112e7d8309c8bde27660b5b3917a7d9f210b9878ce645a5d79ec3b8a934626e2`。22 项清单哈希通过；无用户数据库、备份文件、`C:\\Users\\CY` 路径或测试赞助资料。
+- 候选 ZIP：`dist-next/vscode-agents-20261030/vscode-agents-candidate.zip`，SHA256 `112e7d8309c8bde27660b5b3917a7d9f210b9878ce645a5d79ec3b8a934626e2`。22 项清单哈希通过；无用户数据库、备份文件、发送者绝对用户路径或测试赞助资料。
 - 本轮新增：扫描 VS Code stable/Insiders 已知扩展并按 `VS Code · Codex`、`VS Code · Claude Code`、`VS Code · DSH`、`VS Code · CodeBuddy` 分开显示；接入向导预填 Agent/扩展，生成条件来源规则和完整验证提示词。
 - 冻结验证：142 项 Python（141 通过、1 可选 YAML 跳过）、系统 YAML 6 项、20 项 JavaScript；候选 App/MCP、来源回执并发、浏览器 360/1280 检查通过，控制台无错误。证据见 `diagnostics/vscode-agents-20261029/`。
 - 上述候选现已正式纳入本机安装；真实客户端配置仍未由该流程写入，扩展是否启用、是否具备 MCP、宿主自然任务和原生权限事件仍需在实际客户端单独验证。

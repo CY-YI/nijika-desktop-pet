@@ -181,7 +181,10 @@ class AgentSetupTests(unittest.TestCase):
         plan = self.setup.plan("custom", "自定义助手", agent_identity="Claude", software="VS Code")
         self.assertFalse(plan["files"])
         self.assertFalse(plan["external_action"])
-        self.assertEqual(plan["export"]["mcpServers"]["nijika-pet"]["command"], str(ROOT / "dist/虹夏MCP-v2.exe"))
+        self.assertEqual(
+            plan["export"]["mcpServers"]["nijika-pet"]["command"],
+            str(ROOT / "dist/虹夏MCP-v2/虹夏MCP-v2.exe"),
+        )
         result = self.setup.apply(plan["plan_id"])
         self.assertEqual(result["agent"]["status"], "exported")
         self.assertFalse((self.home / ".dsh").exists())
@@ -398,7 +401,8 @@ class LocalAPITests(unittest.TestCase):
         self.assertEqual(result["agent"]["guide"]["title"], "复制给 AI，自动完成配置")
         self.assertIn("nijika-pet", result["agent"]["guide"]["prompt"])
         files = result["agent"]["needed_files"]
-        self.assertTrue(any(str(ROOT / "dist/虹夏MCP-v2.exe") == item["path"] for item in files))
+        self.assertTrue(any(
+            str(ROOT / "dist/虹夏MCP-v2/虹夏MCP-v2.exe") == item["path"] for item in files))
         self.assertTrue(all("label" in item and "exists" in item for item in files))
         first = self.call("/api/agents/test", {"id":result["agent"]["id"]})
         second = self.call("/api/agents/test", {"id":result["agent"]["id"]})

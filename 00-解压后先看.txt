@@ -33,7 +33,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".\distribution\install.ps1"
 Obsidian、WorkBuddy 等同类入口也按相同方式生成指引。
 复制提示词给能操作本机的 AI，由它核对具体扩展或工作区后接入。
 也可用右上角“添加 Agent”单独指定配置目录。不要把固定来源共用到所有软件。
-普通网页聊天不能配置本机 MCP。不要双击“虹夏MCP-v2.exe”，它由 AI 客户端启动。
+普通网页聊天不能配置本机 MCP。不要双击“虹夏MCP-v2.exe”，它由 AI 客户端启动。安装后位于 `dist\虹夏MCP-v2\虹夏MCP-v2.exe`，必须与同级 `_internal\` 一起保留，不能单独复制 EXE。
 
 三、做一次真实测试
 在接入后的 AI 新任务里，复制发送：

@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.1.8"
+  #define AppVersion "0.1.9"
 #endif
 #ifndef SourceDir
   #error SourceDir must point to the clean staging directory
@@ -72,6 +72,12 @@ Filename: "{app}\dist\虹夏桌宠.exe"; WorkingDir: "{app}\dist"; Description: 
 ; configuration live outside {app} and are deliberately never listed here.
 Type: files; Name: "{app}\dist\nijika-notice.log"
 
+[InstallDelete]
+; The previous release shipped a onefile MCP that extracted into %TEMP% on
+; every launch. Remove only that exact obsolete program after Setup has closed
+; running copies; never touch other files in {app}\dist.
+Type: files; Name: "{app}\dist\虹夏MCP-v2.exe"
+
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
 var
@@ -85,7 +91,7 @@ begin
     ManifestPath := ExpandConstant('{app}\plugins\nijika-work-local\mcp.json');
     if LoadStringsFromFile(ManifestPath, Manifest) then
     begin
-      ExecutablePath := ExpandConstant('{app}\dist\虹夏MCP-v2.exe');
+      ExecutablePath := ExpandConstant('{app}\dist\虹夏MCP-v2\虹夏MCP-v2.exe');
       StringChangeEx(ExecutablePath, '\', '\\', True);
       for I := 0 to GetArrayLength(Manifest) - 1 do
         StringChangeEx(Manifest[I], 'AUTO_LOCAL_MCP', ExecutablePath, True);
