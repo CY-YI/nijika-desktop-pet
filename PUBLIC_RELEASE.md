@@ -5,7 +5,7 @@ public open-source repository.
 
 ## Audited snapshot
 
-- Audited commit: `eb4fddcf32d9090c9be9de1de5662a76b34a6932`
+- Audited commit: `417e45dcb4d83306be716507cf2e0b6619e25921`
 - Audited branch: `codex/interaction-settings-20261017`
 - Current default branch at the audit: `main`
 - Python tests: 196 passed, 1 optional PyYAML test skipped
