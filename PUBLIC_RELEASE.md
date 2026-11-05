@@ -3,11 +3,13 @@
 This document records the checks required before changing the repository to a
 public open-source repository.
 
-## Audited snapshot
+## Public snapshot
 
-- Audited commit: `417e45dcb4d83306be716507cf2e0b6619e25921`
-- Audited branch: `codex/interaction-settings-20261017`
-- Current default branch at the audit: `main`
+- Final audited development commit: `5c6cd6e2da7d9ed3d6b1f0f250cdba4ed440196a`
+- Clean public branch: `public-snapshot-20261105`
+- Public default branch: `main`, serving the same clean root commit
+- Public history boundary: the public snapshot has no parent commit and does not
+  inherit the development branch's author metadata or development paths
 - Python tests: 196 passed, 1 optional PyYAML test skipped
 - JavaScript tests: 20 passed
 - Release/source package scan: no SQLite database, log, private key, token, or
@@ -32,6 +34,17 @@ public open-source repository.
 5. Rebuild and re-scan the final public package after any asset or history
    change. Keep the installer marked as prerelease until clean Windows
    install/upgrade/uninstall testing is complete.
+
+## Completed publication boundary
+
+The clean `public-snapshot-20261105` branch and `main` were replaced with a
+new root commit created from the final audited tree. The root commit uses the
+GitHub noreply identity and does not include the development branch history.
+
+Other remote development branches and historical tags can still expose their
+own old commits while they remain published. Replacing `main` does not erase
+GitHub caches, forks, clones, old branch refs or tags. Deleting or replacing
+those refs requires a separate destructive history cleanup decision.
 
 The clean Windows test sequence is recorded in
 `CLEAN_WINDOWS_INSTALL_PLAN.md`; it is a release gate and has not been run on
