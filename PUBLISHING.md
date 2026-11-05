@@ -1,5 +1,12 @@
 # 本机候选与发布检查单
 
+## 2026-11-05 公开开源审计与整改
+
+- 只读审计报告：`diagnostics/public-open-source-audit-20261105/report.json`。当前源码、标准暂存区和 v0.1.10 源码包均未发现 SQLite 数据库、日志、私钥、令牌或用户 Agent 配置；Python 196 项通过、1 项可选 PyYAML 跳过，JavaScript 20 项通过。
+- 已补入 `LICENSE`、`THIRD_PARTY_NOTICES.md` 和 `PUBLIC_RELEASE.md`。MIT 只覆盖原创代码；角色、图标、截图和 `distribution/support.png` 仍需要单独的公开分发依据。
+- 当前工作树中的开发机路径历史说明已改为占位符。Git 历史仍保留旧 QQ 作者邮箱和早期开发路径；公开仓库前需要新建干净公开历史或审慎重写所有要公开的 refs。
+- 当前审计分支比 `main` 新 43 个提交；公开前必须让审计版本成为默认分支内容。没有在本轮直接改默认分支、公开仓库或重写历史。
+
 ## 2026-11-03 v0.1.10 公开投喂资料随包
 
 - 发布器默认读取仓库 `distribution/support.json` 和 `distribution/support.png`，经摘要与图片白名单校验后自动打入安装器、朋友试用包和完整源码包。显式 `--support-bundle` 仍可覆盖；用户消息库、Agent 档案和客户端配置不进入包。

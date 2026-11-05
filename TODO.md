@@ -1,5 +1,15 @@
 # 当前待办
 
+## 当前任务：公开开源审计整改（2026-11-05）
+
+- [x] 审计当前源码、Git 历史、标准安装暂存区和 v0.1.10 源码包；源码包无 SQLite、日志、私钥、令牌或用户 Agent 配置。
+- [x] 新增 `LICENSE`、`THIRD_PARTY_NOTICES.md` 和 `PUBLIC_RELEASE.md`；明确 MIT 仅覆盖原创代码，角色、图标、截图和收款图另行处理。
+- [x] 清理当前文档中的开发机绝对路径；两个无关未跟踪文件继续保留，不进入提交和发布包。
+- [ ] 处理 Git 历史中的个人 QQ 作者邮箱和早期开发路径；需要新建公开历史或审慎重写公开 refs，不在日常分支直接强制改写。
+- [ ] 将审计提交合并到 `main` 或调整默认分支，并在改变仓库可见性前复核所有分支和标签。
+- [ ] 取得虹夏角色、图标和截图的公开分发依据，或生成不含这些素材的代码公开包。
+- [ ] 在干净 Windows 环境完成安装、升级和卸载验证；当前 v0.1.10 仍按预发布处理。
+
 ## 当前任务：公开投喂资料随发布包保留（2026-11-03）
 
 - [x] 用户决定开源和发布版本保留开发者投喂入口，真实微信收款码属于明确希望公开的资料。
@@ -450,7 +460,7 @@
 
 - [x] 真实受限权限下，工作区外写入被拒绝；随后经 Codex 原生审批请求执行临时标记创建。PermissionRequest 自动生成虹夏请求 `62834892f46a4f8e992aed0be8855041`，用户点击“知道了”，MCP 只读查询返回 answered；助手已在聊天复述回执，原生命令另获授权后文件确实创建。该次验证没有手动模拟审批通知。
 - [x] 用户随后要求“不主动调用 MCP 然后向我发送信息”：该轮没有主动调用桌宠发送工具，结束后用户回传“有”，确认自动气泡实际出现。结合只读事件与信任检查，完成本机 Codex Stop 兜底现场验收；记录见 `diagnostics/stop-fallback-current-turn.json`。
-- [ ] 本次空测试标记 `C:\Users\CY\.nijika-desktop-pet\codex-approval-probe-20261017-f9137c62.txt` 仍存在；先前清理调用在中断后未取得完成结果，最新只读检查确认尚未删除。在受限权限下应另经允许清理该单一空文件，不绕过审批；当前先完成用户要求的无主动 MCP 自动提醒测试。
+- [ ] 本次空测试标记位于用户数据目录的 `codex-approval-probe-<timestamp>.txt` 仍存在；先前清理调用在中断后未取得完成结果，最新只读检查确认尚未删除。在受限权限下应另经允许清理该单一空文件，不绕过审批；当前先完成用户要求的无主动 MCP 自动提醒测试。
 
 - 用户决定：“可以先做codex的”。本轮仅增加 Codex 完成提醒兜底，按 SOP Full 通道局部修复；Work、DSH、Claude Code 的完成事件接入仍在本轮范围外。
 - 接手基线：`55e7096`，分支 `codex/codex-stop-reminder`；另一个互动工作树不参与修改。已有 39 项回归基线通过。
@@ -492,7 +502,7 @@
 
 ## 当前任务：统一安装路径并改指全部本机客户端（2026-10-16）
 
-- 用户原话：“不要让他们只在这一个工作区生效让他们跟正常的那些嗯路径都统一不然的话以后我想找都找不到”。目标：桌宠与各客户端不再依赖开发目录 `D:\deepseekharnes work\提示功能作用的桌宠`，统一到标准安装位置 `%LOCALAPPDATA%\NijikaDesktopPet\app`（安装根目录下的 `notifications.sqlite3` 只是旧版迁移候选，运行时数据仍统一在 `%USERPROFILE%\.nijika-desktop-pet\`）。
+- 用户原话：“不要让他们只在这一个工作区生效让他们跟正常的那些嗯路径都统一不然的话以后我想找都找不到”。目标：桌宠与各客户端不再依赖开发目录 `<项目目录>`，统一到标准安装位置 `%LOCALAPPDATA%\NijikaDesktopPet\app`（安装根目录下的 `notifications.sqlite3` 只是旧版迁移候选，运行时数据仍统一在 `%USERPROFILE%\.nijika-desktop-pet\`）。
 - [x] 重建 `dist\虹夏审批提醒.exe`（含去重修复与 `--source claude-code` 支持），经 `tools\package_release.py` 生成试用包并运行 `distribution\install.ps1 -Dsh -CodexHooks -AutoStart -NoLaunch` 安装。
 - [x] 快捷方式（桌面“虹夏桌宠”“虹夏桌宠设置”、开机自启）、Work 插件 manifest、DSH desktop/web 配置与技能、Codex 审批钩子全部改指安装目录；DSH 原文件以 `.bak-nijika-*` 备份，聚合快照在 `%USERPROFILE%\.nijika-desktop-pet\backup-before-unify-20261016\`。
 - [x] Claude Code：MCP 用户级注册改指安装版（`claude mcp remove/add -s user`）；审批钩子改用新脚本 `integrations/claude-code/install-hooks.ps1`（exec 形式、合并保留其他钩子、备份到 `.claude\backups\`、重复执行幂等、全新机器可直接建文件），调用安装版 EXE。
@@ -607,7 +617,7 @@
 ## 当前任务：管理界面与快捷添加 Agent（2026-10-15）
 
 - 目标：新增 Agent 接入向导、皮肤替换、动作设置和投喂入口；优先完成 Agent 的便捷接入闭环。
-- 已恢复：工作区为 `D:\deepseekharnes work\提示功能作用的桌宠`，分支 `main`，基线提交 `5e52fa5`，开工前工作区干净；此前普通通知与 Codex CLI 权限提醒的验收记录保留。
+- 已恢复：工作区为 `<项目目录>`，分支 `main`，基线提交 `5e52fa5`，开工前工作区干净；此前普通通知与 Codex CLI 权限提醒的验收记录保留。
 - [x] 读取需求、待办、最新变更、架构、接口及现有安装脚本；加载用户指定 SOP、虹夏交互 skill 与 Web 扩展。
 - [x] 核对成熟桌宠 VPet 官方仓库的动画、模组、主题与设置模块，登记增量需求 N20–N23。
 - [x] 用户在虹夏选择“独立设置窗口”；采用 pywebview/WebView2 + 本机管理服务，登记模块和接口。

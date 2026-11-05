@@ -2,6 +2,11 @@
 
 准备学习或修改源码，请先读 [源码开发指南](DEVELOPMENT.md)：包含环境搭建、隔离运行、模块地图、测试与构建步骤。完整工程包额外附带已验证程序和 `SOURCE_MANIFEST.json`，不包含个人配置或运行数据。
 
+源码按 [MIT License](LICENSE) 发布；依赖和安装器翻译的声明见
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。角色、图标、截图和作者投喂图片
+属于单独的素材授权范围，不能因源码采用 MIT 就自动获得再分发权。公开仓库前请先读
+[公开发布检查单](PUBLIC_RELEASE.md)。
+
 ## MCP onedir 与临时目录治理（2026-11-03）
 
 `虹夏MCP-v2` 已从 PyInstaller onefile 改为 onedir。新入口是 `dist\虹夏MCP-v2\虹夏MCP-v2.exe`，必须连同同目录的 `_internal\` 一起复制或安装；客户端不再在每次启动时把运行时解包到 `%TEMP%\_MEI*`。桌宠和审批提醒仍使用 onefile。
@@ -114,7 +119,7 @@ Codex 全局技能和本机 Work 插件 0.1.9 均要求最终回复前主动检�
 
 DSH 本机接入脚本在 `integrations/dsh/install.ps1`，默认注册 desktop 和 web 两个配置，安装专用技能及全局触发规则。本机已写入配置并通过 DSH web 合成配置检查、打包 MCP 握手及隔离选择回传测试。DSH 新会话已自主调用虹夏并显示带 DSH 来源的气泡；用户较晚点击后，回复保存在消息库，但 DSH 原任务已结束，未自动读回。技能现要求重复等待并在会话恢复时读取旧请求；无时限自动唤醒尚未实现。操作和限制见 `integrations/dsh/README.md`。
 
-运行环境为 Windows 10/11 x64；源码使用 Python 3.12、Pillow 12.2、官方 MCP Python SDK 2.3，打包使用 PyInstaller 6.20。本机消息保存在用户目录的 SQLite 文件；已处理消息 7 天后清理，未处理消息 30 天后过期。MCP 只走本机 stdio，不开放网络端口。需求与验收见 `REQUIREMENTS.md`，待办见 `TODO.md`，架构与内部接口分别见 `ARCHITECTURE.md` 和 `INTERFACES.md`。这是非官方同人练习；仓库没有声明可供第三方复用角色素材的许可证。
+运行环境为 Windows 10/11 x64；源码使用 Python 3.12、Pillow 12.2、官方 MCP Python SDK 2.3，打包使用 PyInstaller 6.20。本机消息保存在用户目录的 SQLite 文件；已处理消息 7 天后清理，未处理消息 30 天后过期。MCP 只走本机 stdio，不开放网络端口。需求与验收见 `REQUIREMENTS.md`，待办见 `TODO.md`，架构与内部接口分别见 `ARCHITECTURE.md` 和 `INTERFACES.md`。这是非官方同人练习；默认虹夏角色、图标和配套截图仍需单独核对公开再分发权。
 # 2026-10-26 发布候选准备
 
 本轮为既有 MVP 补充多 Agent 能力差异/冲突检查、透明 PNG 多帧待机皮肤，以及可随包携带的作者赞助资料。100 项 Python、20 项 JS、标准展开包冻结冒烟和实际浏览器流程通过；候选位于 `dist-next/release-readiness-20261026/release-candidate.zip`。未替换正式安装；准确范围及尚缺材料见 `TODO.md` 和 `PUBLISHING.md`。自制角色格式和试用步骤见 [SKIN_FORMAT.md](SKIN_FORMAT.md)。
