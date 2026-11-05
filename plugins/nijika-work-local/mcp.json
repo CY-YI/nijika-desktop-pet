@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "nijika-work-pet": {
+      "type": "stdio",
+      "command": "python.exe",
+      "args": [
+        "-u",
+        "${PLUGIN_ROOT}/scripts/run_mcp.py",
+        "AUTO_LOCAL_MCP"
+      ],
+      "env": {
+        "NIJIKA_AGENT_NAME": "ChatGPT",
+        "NIJIKA_HOST_NAME": "Work"
+      }
+    }
+  }
+}

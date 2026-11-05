@@ -1,0 +1,221 @@
+# 本机候选与发布检查单
+
+## 2026-11-05 公开开源审计与整改
+
+- 只读审计报告：`diagnostics/public-open-source-audit-20261105/report.json`。当前源码、标准暂存区和 v0.1.10 源码包均未发现 SQLite 数据库、日志、私钥、令牌或用户 Agent 配置；Python 196 项通过、1 项可选 PyYAML 跳过，JavaScript 20 项通过。
+- 已补入 `LICENSE`、`THIRD_PARTY_NOTICES.md` 和 `PUBLIC_RELEASE.md`。MIT 只覆盖原创代码；角色、图标、截图和 `distribution/support.png` 仍需要单独的公开分发依据。
+- 当前工作树中的开发机路径历史说明已改为占位符。Git 历史仍保留旧 QQ 作者邮箱和早期开发路径；公开仓库前需要新建干净公开历史或审慎重写所有要公开的 refs。
+- 当前审计分支比 `main` 新 43 个提交；公开前必须让审计版本成为默认分支内容。没有在本轮直接改默认分支、公开仓库或重写历史。
+
+## 2026-11-03 v0.1.10 公开投喂资料随包
+
+- 发布器默认读取仓库 `distribution/support.json` 和 `distribution/support.png`，经摘要与图片白名单校验后自动打入安装器、朋友试用包和完整源码包。显式 `--support-bundle` 仍可覆盖；用户消息库、Agent 档案和客户端配置不进入包。
+- 安装器：`dist-release/installer-0.1.10/虹夏桌宠-Setup-0.1.10.exe`，65,051,396 字节，SHA-256 `063805df2fa9716b6d6313916d4f8ebae05267f8e0b7420a2f9822bce4f1b8f9`，未签名。
+- 朋友试用包：`dist-release/friend-trial-0.1.10/虹夏桌宠-v0.1.10-朋友试用包.zip`，64,565,693 字节，SHA-256 `07996787dd8da54f182f1db87851137a11a9b622efa902fe81d75e9293596c9c`；ZIP 完整性和 5 项内容通过，快速说明含公开投喂入口。
+- 标准暂存区：`build/installer-staging/0.1.10`，175 个清单文件、176 个实际文件；`distribution/support.json` 与 `support.png` 的清单哈希与仓库文件逐项一致。冻结设置中心、Agent、养成、皮肤和赞助导出冒烟通过。
+- 最终 Python 197 项（196 通过、1 项可选 PyYAML 跳过）、JavaScript 20/20、Python/JavaScript/PowerShell 语法与 `git diff --check` 通过。
+- 未执行项：在可丢弃的干净 Windows 环境实际运行 Setup 安装、升级和卸载。临时安装尝试被本机自动审批策略拒绝，没有绕过；当前结果属于编译、标准暂存区和冻结运行验收，不宣称真实安装全流程通过。
+- `v0.1.9` 预发布保持原样；本版使用 `v0.1.10` 单独发布，避免覆盖旧附件。
+
+## 2026-11-03 自动接入防重复候选
+
+- 自动配置现在同时校验 `虹夏MCP-v2.exe` 与同级 `_internal\`；缺失运行时会在写入前拒绝。批量扫描禁止同时选择 Codex 与 ChatGPT Work，前端实际点击验证为选择 Work 后自动取消 Codex。
+- 最终桌宠：`build/agent-config-guard-20261103/stage/dist/虹夏桌宠.exe`，40,209,627 字节，SHA-256 `A3ECD0B147C77D83C962D7D2EA2CB29208D67DE833D9BD7091AF66068CCCE479`；工作区 `dist` 与本机正式安装已同步，正式文件仅备份后重启本应用完成替换。
+- 更新 Setup：`dist-release/installer-0.1.9-guard/虹夏桌宠-Setup-0.1.9.exe`，SHA-256 `e22bcff0f00ba14392346e1c572ba6fa969d0dd88e1eb09113bc2ea0d2eaf3c9`，未签名。朋友私下试用 ZIP：`dist-release/friend-trial-0.1.9-guard/虹夏桌宠-v0.1.9-朋友私下试用.zip`，64,192,192 字节，SHA-256 `ba6b0284a2fbf6029e3057337bfb812c33a9fb42a7af02da83d62f91ab42a223`，4 项内容核对通过。
+- 最新朋友发布包：`dist-release/friend-trial-0.1.9-release/虹夏桌宠-v0.1.9-朋友试用包.zip`，64,194,541 字节，SHA-256 `1461e0779acf635332fd61ed10bf2236c871ec7da8185bbfc2677e4efb7d1934`。包含 Setup、安装器清单、完整 `AGENT_SETUP.md`、`FRIEND_TRIAL_GUIDE.md` 和简明文本说明，共 5 项；ZIP 完整性检查与禁用内容扫描通过。
+- GitHub Release 附件目录：`dist-release/github-release-v0.1.9/`，包含安装器、朋友试用 ZIP、快速说明、完整接入说明和 `SHA256SUMS.txt`。发布使用 `v0.1.9` 标签和预发布状态，因为安装器尚未在一次性干净 Windows 环境中完成安装/升级/卸载验收。
+- GitHub 预发布已完成：[v0.1.9 朋友试用版](https://github.com/CY-YI/nijika-desktop-pet/releases/tag/v0.1.9)，Release ID `432721227`，`prerelease=true`、`draft=false`。附件为 `NijikaDesktopPet-Setup-0.1.9.exe`、`NijikaDesktopPet-v0.1.9-friend-trial.zip`、`NijikaDesktopPet-v0.1.9-friend-guide.md`、`AGENT_SETUP-v0.1.9.md`、`SHA256SUMS-v0.1.9.txt`。五个附件已从 GitHub 重新下载并与本地逐项比较，文件大小和 SHA-256 全部一致。浏览器当前未登录私有仓库，发布页返回 404；API 发布、附件状态和下载校验均已确认，不把浏览器未登录写成发布失败。
+- 验收：Python 194 项（193 通过、1 项可选 PyYAML 跳过）、JavaScript 20/20、DSH 4 通过/1 可选跳过；冻结前端、接入指引、MCP、内置浏览器实际勾选和定向安装打包回归通过。证据在 `diagnostics/agent-config-guard-20261103/`。
+- 收尾验收补记：电脑重启后先清理 1 个明确的旧 MCP 残留目录（37,785,966 字节），随后复核可清理项为 0；当前 5 个活动 MCP 全部从 onedir 目录启动，引用 `%TEMP%\_MEI*` 的数量为 0。DSH 桌面客户端在不额外提示使用虹夏的一轮自然短问答中自动调用 MCP，聊天气泡显示 `Agent · DSH` 和具体结果，通知 ID 为 `dcfb19d6d0da488e90eecd0d192f617a`。证据见 `diagnostics/post-reboot-cleanup-20261103.json`、`diagnostics/post-reboot-cleanup-confirm-20261103.json` 和 `diagnostics/agent-config-guard-final-20261103/verification.json`。
+- 未执行项：可丢弃干净 Windows 中的 Setup 安装/升级/卸载，以及其他外部宿主重连后的自然任务调用。本机没有 Windows Sandbox，且已有正式安装；测试工具会拒绝在日常账户执行破坏性安装流程。发布前仍须按本文件和最终新版本哈希复核。
+
+## 2026-11-03 MCP onedir 临时目录治理
+
+- 根因是 MCP 使用 PyInstaller onefile，异常退出或高频重启后 `%TEMP%\_MEI*` 未回收；不是普通问答或提醒逻辑故障。桌宠和审批提醒保持 onefile，只有 MCP 改为 onedir。
+- 现场先 dry-run 再 apply：扫描 5,379 个 `_MEI`，1,327 个满足旧虹夏运行时指纹且可清理，12 个活动目录跳过；实际删除 1,327 个、失败 0，观察到的 C 盘可用空间增加约 50.42 GB。报告在 `diagnostics/mcp-onedir-20261103/`。
+- 新 MCP 路径为 `dist/虹夏MCP-v2/虹夏MCP-v2.exe`，完整 `_internal/` 必须随目录分发。源码包、ZIP、Setup、便携安装、Work 包装器和自动接入均使用该路径；`0.1.9` Setup 仅精确删除旧 `{app}\dist\虹夏MCP-v2.exe`。
+- 发布验收必须覆盖连续启动前后 `_MEI` 数量不增加、旧路径迁移、目录完整性、中文空格安装路径、冻结 MCP 与前端、Work/DSH 配置和全量回归。旧客户端进程不批量结束，重连后才切换新程序。
+- 不覆盖已有 `v0.1.6` / `v0.1.7` Release；新的私下试用包和二进制发布状态以本轮最终哈希、Git 提交和完整验收记录为准。
+- 最终候选：桌宠 SHA-256 `72c09b5282c93c746c18fb03002b9ab7f3a910748b7dad5f5f041b1f64ff80bc`，onedir MCP `4632a4e7a5c6f1a0b5191fda5c74c258fccba0b949f7ee158c151c1640f3c2b9`，审批提醒 `6b2491650047017db52191075f78e154838cf5cda9cbd172fd0a379325bccce4`。工作区 `dist` 与本机正式安装的文件哈希一致，正式 onedir 含 148 个 `_internal` 文件。
+- 发布验收结果：Python 192 项（191 通过、1 项可选 PyYAML 跳过）、JavaScript 20/20、DSH 4 通过/1 可选跳过；冻结前端、冻结 MCP、19 种来源与 4 并发客户端、审批 Hook、Work 0.1.9、DSH 安装器、接入审计均通过。173 个发布白名单文件和全部 SHA-256 一致，包内没有旧 onefile；onedir 连续启动前后 `_MEI` 均为 4,063、没有新增。最终复查旧运行时待清理项为 0。
+- Setup 0.1.9：`dist-release/installer-0.1.9/虹夏桌宠-Setup-0.1.9.exe`，64,675,999 字节，SHA-256 `c1764f642d2af4595662242e1b4839c3eeec6a54592a745cdd38e0722268bd54`，未签名。朋友私下试用 ZIP：`dist-release/friend-trial-0.1.9/虹夏桌宠-v0.1.9-朋友私下试用.zip`，64,187,974 字节，SHA-256 `074bcd530432ea4aa398b42a782db17fe0d83935223e9edd493d18b3b128644b`，ZIP 完整性和 4 项内容通过。
+- 已完成备份与正式部署：完整正式应用 43 个文件备份在 `backups/mcp-onedir-20261103/formal-app/`，客户端相关文件备份在 `client-configs/`；正式目录和 Workspace `dist` 已更新。MAGPIE 只精确迁移 `nijika-pet` 命令，保留 8 个 Agent 绑定、`NIJIKA_AGENT_NAME`、其他 MCP、instructions、skills 和 applied 记录；Work 插件为 `0.1.9`、已安装并启用。
+- 未执行项：干净、可丢弃 Windows 环境的 Setup 实际安装/升级/桌面启动/卸载；正式桌宠运行时额外启动一个隔离桌宠窗口的 IPC 冒烟；各外部宿主重连后的自然任务复验。因此本轮标记 `PASS_WITH_DOCUMENTED_LIMITS`，不标记整个项目 `ALL_FINISH`。合并证据见 `diagnostics/mcp-onedir-20261103/verification.json`。
+
+## 2026-10-31 统一提醒核心私下试用
+
+- 本机部署只更新共享 Hook 和独立 DSH 事件块，保留旧 MCP/桌宠、MAGPIE 服务、权限及数据。用户在实际 DSH 桌面确认两条测试气泡和无重复；两次都主动调用工具。无工具补发由已安装的 rc.2/rc.3 真实 SessionStore → 转接 → 冻结程序隔离链路验证，仍保留自然会话视觉补验项。Work 等未适配宿主仅主动调用。
+- 最终构建：`dist-next/shared-notifications-final-20261031/`。`package_release.py` 的 `--app-exe`、`--mcp-exe`、`--approval-exe` 应同时指向这份构建；避免将新主程序和旧 Hook 混包，不需要替换本机正在使用的程序来打包。
+- 当前私下试用 ZIP：`dist-release/shared-notifications-0.1.8/虹夏桌宠-v0.1.8-统一提醒-私下试用.zip`，70,686,481 字节，SHA-256 `cb9a99f77184fde0cfb3cae24e50e42ceb71aa9fb8a9638a8367597883e8af0d`。含 25 项白名单文件与 `SHA256SUMS.json`；已逐项校验、检查无用户数据/配置，并运行从该 ZIP 解出的程序做隔离核心流程验证。随包包含 `00-解压后先看.txt`、`AGENT_SETUP.md`、`NOTIFICATION_PROTOCOL.md` 与 DSH 说明。
+- Setup 0.1.8 已从同一构建编译到 `dist-release/installer-0.1.8/`，SHA-256 `4aa2ceafde95d09347c6f09a79b502ddd5cfe3c9707d3f2ed6c4c4548db97fa5`。本轮不在日常账户执行安装/升级/卸载；干净 Windows Sandbox/VM 全流程尚待，不将其作为已完成验收的安装器发布。
+- 源码测试：Python 188 项（187 通过、1 项可选依赖跳过）、JavaScript 20/20、两个 DSH 版本各 5/5，冻结 Hook/MCP、DSH 安装幂等与配置保护、Work MCP 启动器、Agent 配置引导及冻结前端通过。证据在 `diagnostics/shared-notifications-20261031/`。协议与组件通过不等于所有宿主实机通过。
+- 分发仍限已授权的私下试用；不覆盖旧 Release，公开素材分发权与新版安装器验收未解决前不创建新的公开二进制发布。
+- 源码与验收说明已提交 `1ca0cd0` 并推送现有 `codex/interaction-settings-20261017` 分支。生成包未纳入 Git；GitHub 旧 Release 下载内容不因本次分支推送自动更新。
+
+## 2026-10-31 安装冒烟隔离勘误
+
+- 旧安装测试通过改写 User Shell Folders 来“隔离”快捷方式；异常时可遗留目录重定向，且宿主缓存可使安装器仍写入真实桌面。因此旧报告中的 `production_install_unchanged` 不能作为真实桌面、启动目录或卸载登记未受影响的证据。
+- 本机已备份并恢复虹夏三个入口及四项受污染目录记录。测试脚本已删除目录注册表写入，默认拒绝执行，必须在可丢弃 Windows Sandbox/VM 内显式传入 `--disposable-windows-session`；检测到已有安装、卸载登记或快捷方式仍拒绝。
+- 本轮仅验证入口修复和测试保护分支，不在日常账户执行实际安装升级卸载；新的沙盒全流程安装测试尚待专门执行，不沿用旧结果宣称通过。
+
+## 2026-10-31 Codex 内部后台任务误提醒修复
+
+- 本候选只修改 Codex Stop Hook 分类、通知安全摘要、持久规则和测试，不新增桌宠功能，不修改角色、皮肤、动画、前端或 MCP 工具。
+- 目标验证：ambient-suggestions JSON 与 Codex 私有 helper 固定对象均静默；普通用户 JSON、简单问答和等待答复仍提醒；主动通知去重、重复 Stop、无有效轮次和显式子任务边界保持。
+- 部署要求：先备份，再重建 `虹夏审批提醒.exe`；只同步工作区 `dist/` 与正式安装目录中的审批程序，保留消息库、Agent 配置、MAGPIE 服务、Hook 信任和其他两个 EXE。
+- 发布边界：本轮完成源码修复和本机验证；是否制作新的 GitHub Release 版本另行按最终产物哈希记录，不覆盖已发布 `v0.1.6` / `v0.1.7`。
+- 完成状态：26 项目标回归、全量 Python 168 项（1 项可选跳过）、JavaScript 20/20、冻结与正式安装 Hook、MCP、标准目录前端、Work 0.1.8、DSH 安装器及接入审计通过。工作区和正式安装 Hook 的 SHA-256 均为 `5CD44E9F738D96AE68E0ECCFE25AD9467EEA18C48FC882BE2D254198B8C8F717`；历史误提醒保留为诊断证据。后续 `0.1.9` 的 MCP onedir 迁移状态见上方最新章节，不复用本条作为其回归结论。
+
+## 2026-10-31 每轮回复提醒修复安装器
+
+- 新安装器应使用 `v0.1.7`：它基于提交 `bf4e324`，包含每个有效 Agent 轮次结束都发送虹夏提醒的修复，覆盖简单事实问答、无工具短答和等待用户回答的短句；同一轮已经主动发送 `show_completion` 或 `request_decision` 时仍保持去重。
+- 构建命令：`powershell -ExecutionPolicy Bypass -File tools\build_installer.ps1 -Version 0.1.7 -OutputDirectory dist-release\installer-0.1.7`。旧 `v0.1.6` 保留作历史版本，不应继续作为最新下载入口。
+- 当前候选：`dist-release/installer-0.1.7/虹夏桌宠-Setup-0.1.7.exe`，大小 72,630,210 字节，SHA-256 `9ee17469433a0ab97df2830a4f358423461521cd2d787c405d14b304fdd5fb31`；配套 `installer-manifest.json` 与隔离安装证据在 `diagnostics/installer-20261031/`。
+- 发布前必须核对新 Setup EXE 的 `installer-manifest.json`、隔离安装/卸载证据和 GitHub Release 附件哈希；安装器不写收件人的外部 Agent 配置，首次接入仍从设置中心完成。
+
+## 2026-10-31 朋友私下试用包
+
+- 使用 `python tools/package_friend_trial.py` 生成四文件 ZIP：安装器、安装器清单、最新 `AGENT_SETUP.md` 和简明试用说明；不包含用户数据库、Agent 配置、备份、诊断或发送者路径。
+- 当前包：`dist-release/friend-trial-0.1.7/虹夏桌宠-v0.1.7-朋友私下试用.zip`，大小 72,138,853 字节，SHA-256 `c34098b822b2d48ff6339d804b21dbf007e559bc135d94dd6d6ef434d0166ccc`。
+- 这是私下测试包；收件人解压后双击 Setup，安装后从“虹夏桌宠设置 → Agent 接入”完成自己的客户端配置。角色和图标素材的公开再分发权仍未解决，不作为公开下载包。
+
+## 2026-10-31 每轮回复提醒修复
+
+- 新审批 Hook 候选：`dist-next/every-reply-reminder-20261031/虹夏审批提醒.exe`，SHA-256 `59934E1A38A0207F18FB1D3A5EB80D6A9145F655A9FC034D64595E1DA277439A`。
+- 已备份旧 Hook 到 `backups/every-reply-reminder-20261031/`，并同步工作区 `dist/` 与正式安装目录 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\`；桌宠、MCP、消息库、MAGPIE 和用户客户端配置未覆盖。
+- 隔离验证：21 项提醒单元、打包 Hook 冒烟、Codex `question`/`work`/主动 `notice` 三场景通过；真实 CLI 的用户 `config.toml`、notify 和 Hook 信任摘要保持不变。
+- 详细哈希与检查记录：`diagnostics/every-reply-reminder-20261031/verification.json`。
+- Work 插件源、Codex/DSH 技能和设置中心文案已同步；当前客户端进程占用插件缓存，卸载重装未强制执行，重启客户端后按新规则加载。外部宿主自然任务的可见性仍需新会话观察。
+
+## 2026-10-31 标准 Windows 安装器
+
+- 已发布私有仓库 Release `v0.1.6`：https://github.com/CY-YI/nijika-desktop-pet/releases/tag/v0.1.6 。实际附件名为 `NijikaDesktopPet-Setup-0.1.6.exe`；GitHub CLI 上传中文文件名时丢失了前缀，因此使用 ASCII 附件名保证链接可识别。下载复核为 72,630,838 字节，SHA-256 `15cce50ff95ae6dd24460abef5460f0597c615480a0f5833a74aa0bcff91cc15`，与本地完全一致。
+- 构建：`powershell -ExecutionPolicy Bypass -File tools\build_installer.ps1`。产物 `dist-release\installer\虹夏桌宠-Setup-0.1.6.exe`，配套 `installer-manifest.json` 记录字节数和 SHA-256。生成物不提交 Git。
+- Inno Setup 6.7.3 便携编译器从官方 GitHub Release 下载，数字签名验证有效。简体中文语言文件来自官方 `jrsoftware/issrc` 的 `Files/Languages/ChineseSimplified.isl`，随 `installer/` 保存来源说明。
+- 真实 Setup EXE 在临时中文空格目录完成安装、覆盖升级和卸载，23 项白名单文件、Work MCP 路径、快捷方式、用户数据保留和卸载进程退出全部通过。证据在 `diagnostics\installer-20261031\install-checks.json`。
+- 默认只安装程序，不自动写 Codex/Work/DSH 等客户端；用户从设置中心预览并确认接入。卸载不删除消息库、皮肤、Agent 档案或外部配置。
+- 本安装器没有代码签名证书，发布时提供 SHA-256，并如实说明 Windows SmartScreen 可能显示未知发布者；不要求关闭安全防护。角色/图标再分发权仍未解决，当前二进制只供私下试用，不作为公开上架许可。
+
+## 配置一致性与可移植性审计（2026-10-30）
+
+- 维护审计工具把技能内容不一致、同一客户端重复副本、选中皮肤缺失、皮肤帧损坏和完整 Agent 键重复判为阻塞，CLI 非零退出。旧来源修复工具会跳过 MAGPIE 管理的客户端，且不再把纯序列化格式变化列为待修改。
+- 安装测试同时覆盖空格、中文和自定义 `CodexHome`：Work MCP 路径、Codex CLI 的配置根和收件人安装目录都由实际参数生成，不沿用发送者路径。
+- 本机只读检查未发现皮肤损坏或皮肤 ID 重复；当前默认皮肤和 4 个自制皮肤有效，8 个 Agent 档案可读且没有完整键重复。两个身份字段缺失的旧 `custom` 档案保留，避免把名称猜测成模型或软件。
+- 本机三个已确认无用目标已由安全清理工具实际删除，回退副本在 `backups/config-cleanup-20261030/safe-tool-apply/`。清理后 `agent-integrations-after-cleanup.json` 与本机状态审计均为 `clean`，证据在 `diagnostics/config-cleanup-20261030/`。
+- 最新完整回归为 Python 159 项（158 通过、1 项可选 PyYAML 跳过）；补跑系统 Python 的完整来源修复测试 8/8 通过；JavaScript 20/20 通过；Python/JavaScript/PowerShell 语法与 `git diff --check` 通过。合并证据见 `diagnostics/config-cleanup-20261030/final-verification.json`。
+- 本轮没有替换正式 EXE、没有改真实客户端 MCP、MAGPIE、Hook 信任、消息库或皮肤数据；因此既有候选 SHA256 不变。
+
+## 提醒可靠性与 DSH 来源加固（2026-10-30，正式安装）
+
+- 本轮修复针对自动配置后复发的两类回归：Codex 只剩无信息量 Stop 兜底，以及 DSH 出现 `Codex · DSH`。源码范围包括安全结果摘要、服务端多模型来源守卫、DSH 孤立标记修复、三个宿主持久规则与 Work 插件 0.1.7。
+- 冻结构建位于 `build/reminder-source-hardening-20261030/`。正式桌宠 SHA256 `DE3553927024511445E57D57B510249B77B1CF73B7D75872BB4D2FC7BA7E5F77`，MCP `BA8A70AA0CB594B936917CCDD3AF01B9F45DC219B4DEAD1AD5C55B5765EFD9E5`，审批提醒 `571DFD53D021814556071C352CF362829236719247614E50B7EDB20C5389BDA2`；工作区 `dist` 与标准安装目录逐字节一致。
+- 更新前三个 EXE、SQLite 一致性快照、Codex 规则/技能、正式 Work 插件源、DSH 实际配置和正式运行资源均已备份到 `backups/reminder-source-hardening-20261030/`。正式目录不存在 `AGENTS.md` 的旧错误假设已移除，运行资源按实际存在文件单独记录摘要。
+- 全量验证为 Python 147 项通过、1 项可选 PyYAML 跳过，JavaScript 20 项通过；Python/JavaScript 语法和 `git diff --check` 通过。正式安装版另通过 19 种 MCP 来源、显式编辑器元数据与 4 个并发客户端独立回执、审批 Hook、DSH 安装器、Work 插件和接入指引隔离冒烟。
+- 正式用户库真实气泡验收：故意提交 `Codex/DSH` 时落库显示 `Agent/DSH`，真实 `DeepSeek/DSH` 保持原身份；两次均确认窗口实际可见后才清理测试通知。证据在 `diagnostics/reminder-source-hardening-20261030/live-bubble-acceptance.json`。
+- 正式用户库模拟 `PermissionRequest` 后，命令审批提醒气泡实际可见，随后以 `PostToolUse` 收起测试项；整个过程不授予或拒绝权限。`config.toml` 中四个虹夏 Hook 的 `trusted_hash` 仍在且路径未变。证据在 `diagnostics/reminder-source-hardening-20261030/approval-bubble-acceptance.json`。
+- Codex 全局规则与技能、DSH desktop/web 实际配置和 Work 插件 0.1.7 已同步；MAGPIE 的 `magpie-mcp-nijika-pet` 服务、Hook 信任、消息和设置保持不变。服务端来源守卫会保护仍在发送旧参数的新连接；已打开客户端要加载新的主动提醒规则，仍需重连 MCP 或新建任务。
+- 本轮仍为 Windows 本机回环试用范围，不自动提交、推送、合并 `main` 或创建公开 Release。真实 DSH/Work 宿主自然任务、公开发布素材权利和干净 Windows 验收继续作为独立边界。
+
+## VS Code 具体 Agent 正式纳入（2026-10-30）
+
+- 正式安装已更新：`%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏桌宠.exe`、`虹夏MCP-v2.exe`、`虹夏审批提醒.exe` 与冻结候选对应文件一致。工作区 `dist` 已同步。
+- 正式 EXE SHA256：桌宠 `F40E2313671CC582B43DCE8C4694DCD0BF47BAA31A14EB8AD28F8A5DB7E5CA21`；MCP `CA327906509B941464043719465DA8B379A229183E1BD47E5CA479E0C7B29EBD`；审批提醒 `3FE39FA6FB46EA74ED7D83808731E8ABDD440F1B5A0BE221D170CB4FEBD70083`。
+- 更新前三个程序和 SQLite 一致性快照保存在 `backups/vscode-agents-formal-20261030/`。默认回退只恢复所需程序，保留更新后的用户消息和设置；旧 MCP 映像仅供仍持有旧文件的进程，不是启动入口。
+- 正式安装页真实扫描识别 VS Code 中 Codex、Claude Code、DSH、CodeBuddy 四个具体扩展。正式安装冻结冒烟通过；MCP 验证通过 16 种来源、显式编辑器元数据及 4 个并发客户端独立回执。
+- 最新私下试用包：`dist-next/vscode-agents-formal-20261030/虹夏桌宠-VS-Code-Agent正式试用-20261030.zip`，SHA256 `314d8c2589278e30b721366fc9aa3dc7b886e438f559ebb7a440abd07f8145d2`。包内 22 项文件清单全部匹配，解压后的精确 EXE 冻结冒烟通过，不包含测试数据库、回退映像或发送者路径。
+- 安全边界：安装脚本未启用任何 `-Codex/-Work/-Dsh/-*Hooks` 配置开关，扫描为只读，未接管 MAGPIE、未覆盖真实客户端配置。新增或重载真实会话后才能激活新版 MCP 来源识别。
+- 公开发行仍待实际多宿主自然任务验收、真实赞助资料、自制角色试导入、角色/图标再分发依据及干净 Windows 机器验收。本次安装不合并 `main`、不创建公开 Release。
+
+## VS Code 具体 Agent 候选（2026-10-30）
+
+- 候选 ZIP：`dist-next/vscode-agents-20261030/vscode-agents-candidate.zip`，SHA256 `112e7d8309c8bde27660b5b3917a7d9f210b9878ce645a5d79ec3b8a934626e2`。22 项清单哈希通过；无用户数据库、备份文件、发送者绝对用户路径或测试赞助资料。
+- 本轮新增：扫描 VS Code stable/Insiders 已知扩展并按 `VS Code · Codex`、`VS Code · Claude Code`、`VS Code · DSH`、`VS Code · CodeBuddy` 分开显示；接入向导预填 Agent/扩展，生成条件来源规则和完整验证提示词。
+- 冻结验证：142 项 Python（141 通过、1 可选 YAML 跳过）、系统 YAML 6 项、20 项 JavaScript；候选 App/MCP、来源回执并发、浏览器 360/1280 检查通过，控制台无错误。证据见 `diagnostics/vscode-agents-20261029/`。
+- 上述候选现已正式纳入本机安装；真实客户端配置仍未由该流程写入，扩展是否启用、是否具备 MCP、宿主自然任务和原生权限事件仍需在实际客户端单独验证。
+
+## 本机发现候选（2026-10-29，本轮最新）
+
+- 独立候选：`dist-next/discovery-20261029/discovery-candidate.zip`，SHA256 `cc834c47682bb95e57a6543c429b74521a7c90d0fc1c8f0ac9f39c81c15d3443`。22 项显式文件清单及 ZIP 完整性通过，包含新版 App/MCP、既有 Hook、安装脚本、简明上手与接入文档；不含真实用户库、配置、赞助测试资料或本机发送者路径文本。
+- 134 项 Python：133 通过、1 项可选 YAML 跳过；系统对应 YAML 组 6 项通过；20 项 JavaScript 和语法检查通过。最终 EXE 接口冒烟覆盖扫描、批量配置、管理归属、来源导出，以及既有皮肤/赞助/互动；MCP 冻结验证覆盖16种来源、编辑器显式参数和4客户端独立回执。自然宿主登录、新会话及所有原生事件未全部实测，不能把协议用例当成实际宿主验收。
+- 浏览器隔离验收覆盖正常/冲突/管理器保留三种结果及1280/360像素布局；最终冻结候选已打开隔离预览，源预览服务关闭。证据与测试日志在 `diagnostics/discovery-20261029/`。最终包仅重新整理了文档，运行程序逐字节等同于通过最终冒烟的文件。
+- 正式安装 App/MCP/Hook 未替换，真实客户端仅只读扫描，没有自动接管 MAGPIE 或关闭现有任务。该候选不等同于已安装、已推送、已公开发布；尚待的发行素材与权利核对沿用下文，不标记项目 ALL_FINISH。
+
+## 当前交付快照（2026-10-29）
+
+- 历史分享压缩包已按用户授权精简：当前候选和 10 月 28 日 DSH 修复候选保留，其余旧试用/审阅 ZIP 已删除；文末旧路径只作历史记录。详细清单见 TODO.md 压缩包清理检查点及本地 `diagnostics/archive-cleanup-20261029/`。
+- 最新本机候选：`dist-next/setup-fix-20261029/setup-fix-candidate.zip`，补入根目录 `00-解压后先看.txt` 后的 SHA256 为 `15fca73a6e4a9b09b7688106e0fd3147b81fdc831c4b86307669ae1e83df7f94`；22 项文件清单及 ZIP 完整性通过。此次只新增简明说明并更新包内 distribution/README.md，所有程序、脚本和其他旧条目逐字节不变，程序仍与正式安装一致。其余文档为打包时快照。
+- 正式桌宠 EXE SHA256：`075179a005c686831e2d0c9b051b989ec772c4489a56379cd095d9d0b3aa3c2a`。本次只清理和归档源码，不替换已运行的程序或客户端配置。
+- 候选和精确安装程序已通过冻结接口冒烟；最终源码 119 项 Python（118 通过、1 项可选 YAML 跳过）、系统 YAML 组 6 项、20 项 JavaScript 通过。前端接入与来源的详细验收边界见 TODO.md 最新记录。
+- 用户已授权将当前源码分组提交、推送到既有开发分支；不等同于合并 main 或发布可下载 EXE。二进制和用户数据不入 Git。
+- 公开发行仍待：真实赞助链接/收款图、自制角色按教程试导入、默认角色和图标的再分发依据或替换素材、另一台干净 Windows 机器试用。未新增许可，也不将合成握手/隔离测试算作所有宿主自然任务已验收。
+
+以下按日期保留历史记录；“未安装／暂不上传”等表述仅适用于对应的历史轮次。
+
+更新触发：形成新候选、复测失败、动作范围变化或准备替换正式安装时。
+
+## 分享发布准备：当前候选（2026-10-26）
+
+- [x] 候选 `dist-next/release-readiness-20261026/release-candidate.zip`：标准结构、21 项 SHA256 清单；本轮正式安装不变，候选沿用私下试用名称，尚不能作为公开下载成品。
+- [x] 100 项 Python、20 项 JS；真实已安装 MCP 的 7 个来源和 4 个独立进程共库并发测试通过。技能差异审计不读取私密配置，也不代表所有客户端的原生审批事件均通过。
+- [x] 扩展冻结冒烟覆盖资源一致、鉴权、养成、Agent 导出/能力矩阵、模板导入/应用、多帧预览、赞助白名单导出；实际浏览器走通下载/上传/保存/导出，360/1280 宽度无整页溢出，控制台错误 0。独立真实桌宠窗口加载已导入多帧皮肤。
+- [x] 多帧/赞助相关接口、接入差异、教程与格式手册同步；包中增加 `SKIN_FORMAT.md`。详细证据保留在 `diagnostics/release-readiness-20261026/`。
+- [x] 收到真实赞助材料并纳入源码：从设置中心导出公开资料后，校验并提交 `distribution/support.json` 与 `distribution/support.png`；发布器自动带入安装包、朋友试用包和完整源码包。也可用 `--support-bundle` 覆盖仓库资料。只纳入公开 JSON/可选 PNG；消息库、Agent 档案和私人配置不进入包。
+- [ ] 用户按衣橱提示词试制自己的角色并试导入；核对素材可公开分发，尤其默认角色与桌面图标。未擅自添加许可证。
+- [ ] 按实际改动组整理 Git 存档、审阅最终公开说明和发布附件；本轮不批量提交历史混合工作树，也不自动上传。
+
+上述软件验证不代替新角色美术验收、收款图归属确认或另一台干净 Windows 机器测试。完整 N34 和动画精修继续后置，不阻塞已测 MVP，但也不宣称这些目标已完成。
+
+## MVP 功能优先级（2026-10-26）
+
+- [x] 用户确认动画以“不闪烁、不阻塞操作”为本期门槛；设置页切换修复通过后不再因 AN01 美术质量阻塞功能开发。
+- [x] 源码接入 N30/N32/N34 的最小桌面闭环：分区点击、基础右键/双击动作、投喂短期事件消费、开关和异常降级；90 项 Python 与 20 项 JavaScript 回归通过。
+- [x] 隔离候选 `dist-next/mvp-functional-20261026/` 已重建并验证：桌面分区点击、双击、右键动作/停止、点心/喝水顺序消费、设置页状态和 Agent 气泡优先级均在真实窗口检查；90 项 Python 与 20 项 JavaScript 回归通过。候选 ZIP 为 `mvp-review.zip`，20 项清单摘要一致。
+- [x] 同源码正式构建已备份更新至本机标准安装目录和工作区 dist；默认数据启动心跳确认互动已连接，设置页试映及真实外部 Agent 气泡通过。原设置、3 个 Agent 档案和桌面/自启入口保留，MCP/Hook/客户端配置未修改；备份在 `backups/mvp-formal-20261026/`。
+- [ ] 动作美术精修、AN02/AN03、完整转身、抓取摇晃/抛掷和专业绑定放到后续阶段；本次正式更新使用稳定的 PNG 渲染，未安装视频样片。
+- 收尾证据：`diagnostics/mvp-formal-20261026/`。首次冻结冒烟因与解压错误并行而找不到文件，顺序重跑通过；原生设置窗口截图捕获异常未被记为通过，实际页面验收使用同一正式服务的内置浏览器。原 90 项 Python/20 项 JS 结果继续适用于本轮未改动的运行源码。
+
+## 2026-10-26 待机审阅单元
+
+- [x] 复用 V4 和原始源片，新建独立 VP9-alpha/源片对照及只读维护页；不更改正式安装或已有两份 EXE 候选。两边 480 帧/24 fps/20 秒，平台标识保留；4 项真实视频/HTTP、81 项完整 Python 与 20 项 JS 回归通过。
+- [x] 内置浏览器检查播放、暂停、重播、逐帧、慢放、往返转向/循环、三种背景及 360 宽度，未观察到整页横向溢出或控制台错误；原生视频零丢帧样本只属于本机浏览器审阅，不是正式桌面性能承诺。
+- [ ] AN01 美术一致性仍待用户集中审阅，源片脸型/姿态漂移不因转码而消失。新样片、对照视频与诊断目录均不进入安装包或 Git，工具源码与维护页面可入库。
+
+## 2026-10-25 点击闪烁 / 来源复发候选
+
+- 增量：预加载解码后替换图片、统一静态/动态几何框；MCP 按明确请求客户端纠正内置旧标签，不改工具输入与队列结构。素材美术改进仍独立待验收。
+- [x] 77 项 Python、20 项 JavaScript、语法与空白检查；真实页面八种动作、快速切换、重播/停止、离页返回均加载完整图片，尺寸及 padding 一致，控制台错误为零。
+- [x] 七个冻结 MCP stdio 场景：Codex 现代/legacy、DSH、Claude code、Work、自定义、未知客户端；完成/选择和回执均正确。真实 Codex CLI 在故意错误 DSH 环境下分别调用源码与确切安装版，均写入 Codex，真实配置摘要不变。
+- [x] 新前端冻结程序的资源、鉴权、养成/冷却、动画与 Agent 导出冒烟通过，ZIP 20 项白名单清单校验通过。应用首轮构建因相对资源路径失败，改绝对资源路径后构建和运行检查通过，失败日志保留。
+- 本机仅更新已验证 MCP，正式桌宠/Hook 与来源配置未改；旧服务映像有备份。已打开旧会话的 Restart 仍需客户端操作，不把磁盘更新写成全会话已热加载。
+- 新旧候选均保留于忽略的 `dist-next/`；不公开发布、不自动提交当前混合工作区。最终文件名和摘要见 `diagnostics/source-flash-20261025/acceptance.json`。
+
+## 2026-10-25 前端候选
+
+- 范围：既有七页设置中心、草稿保护、互动设置/试映与本机养成；保持本机回环服务，不增加网络部署。用户授权能自行验收的步骤自主推进。
+- 候选：`dist-next/frontend-20261025/frontend-review.zip`；展开目录为旁边的 `review/虹夏桌宠-Windows私下试用/`。EXE 在标准 `dist/` 下，必须保留同包脚本、插件和说明供 Agent 向导使用。
+- 复现：按 `build.ps1` 的桌宠打包参数使用独立输出目录，数据参数使用绝对资源路径；然后 `python tools/package_release.py --app-exe <候选EXE> --output <候选ZIP>`。该选项只替换包内桌宠来源，MCP/审批程序继续取既有 `dist/`，不重配真实客户端。
+- 候选来自当前工作树，包含先前 Agent 来源修复；动画准备工具、源视频和新动画样片不入包。未以混合未提交改动冒充独立版本提交。
+
+## 已通过
+
+- [x] 75 项 Python 回归、17 项前端控制器回归与 JS 语法检查。
+- [x] 七页在 360/768/1280 宽度无页面横向溢出；实际浏览器互动点击、保存、冷却及刷新恢复。
+- [x] 五个内嵌 UI 文件逐字节等于源码；20 项私下试用包清单摘要一致。
+- [x] 本机 WebView2 窗口实际打开，角色与脚本正常加载并完成摸头播放。
+- [x] `tools/smoke_frontend_candidate.py <标准展开目录/dist/虹夏桌宠.exe>` 通过：隔离启动、无令牌拒绝、设置与冷却恢复、动画解码、通用 Agent 配置导出。测试目录自动清理。
+- [x] 源码仍使用同源令牌、Host/Origin 检查、CSP、禁止跨域、参数化数据库查询；新增前端不使用动态 HTML 注入或外部 CDN。候选不携带真实配置、消息库、私钥或动画诊断素材。
+
+本轮 85 个源文件常见凭据模式扫描为 0，证据见 `diagnostics/frontend-20261025/acceptance.json`；模式扫描不代表任意秘密格式都可被识别。删除本轮 `build/frontend-20261025/` 的组合命令被自动审批审查拦截，仅返回 `blocked by policy`；中间目录仍保留供构建复核，不绕过限制，正式交付前清理项未勾选。
+
+## 完整互动版本仍须完成
+
+- [ ] AN01 美术审阅：V4 已复用区域清色并去掉往返端点长停顿，但脸部/姿态一致性及反向感仍待确认；保留原片与平台标识，不能靠编码指标宣称视觉达标。先验收这一段，再处理已有 AN02 与尚未取回核实的 AN03。
+- [ ] N30/N34 的完整转身、桌面分区触摸/抓取/摇晃/抛出等目标没有全部实现。旧变形试映只用于操作预览。
+- [ ] 完整动作资源预算、真实桌面输入、通知优先级和桌面播放性能验收。
+- [ ] 选择性整理仍待提交的动画准备、Agent 来源和前端改动，核对版本、回退点后再形成正式安装更新；构建产物不入 Git。
+
+项目当前为私下试用；未新增开源许可证或第三方素材授权。此候选没有安装到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，也没有改变 MCP、审批信任或生产消息库。上述功能欠项未完成前，不标记整体 `ALL_FINISH`。
+
+## 2026-10-29 接入修复候选
+
+候选位于 dist-next/setup-fix-20261029/setup-fix-candidate.zip，正式安装已更新本轮桌宠程序。候选和安装 EXE 均通过冻结接口冒烟，21 项文件白名单与摘要检查通过；没有真实赞助资料或用户数据库。公开发布仍待赞助材料、原创角色试导入与分发权利核对，各外部宿主自然任务不等于合成测试已通过。未公开上传。
