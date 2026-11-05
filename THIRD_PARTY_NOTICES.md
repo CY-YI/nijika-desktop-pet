@@ -26,14 +26,12 @@ modifying the installer language file.
 
 ## Character, icon and support materials
 
-The files under `assets/`, `art/`, `web-demo/` and the default character
-references in the UI are project materials with a separate rights status.
-The repository does not grant a blanket license to reuse the Nijika-derived
-character or icon artwork. `distribution/support.png` is an author-provided
-public payment image; it is included by explicit author choice, but this does
-not grant reuse rights for the image or its payment identifier.
+The author confirmed on 2026-11-05 that the role, icon and accompanying
+screenshots in this repository were created by the author and may be publicly
+distributed with the project. This confirmation applies to the project
+materials listed above; it does not change the licenses of third-party
+dependencies or referenced external works.
 
-Before publishing a source snapshot with these files, obtain redistribution
-permission, replace them with original or permissively licensed artwork, or
-publish the code with those materials removed and document how users provide
-their own assets.
+`distribution/support.png` is an author-provided public payment image. It is
+included by explicit author choice, but the MIT code license does not grant
+reuse rights for the image or its payment identifier.

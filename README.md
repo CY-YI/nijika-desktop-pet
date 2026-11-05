@@ -7,6 +7,10 @@
 属于单独的素材授权范围，不能因源码采用 MIT 就自动获得再分发权。公开仓库前请先读
 [公开发布检查单](PUBLIC_RELEASE.md)。
 
+2026-11-05：作者确认仓库中的角色、图标和配套截图均由本人创作，并允许随项目公开分发；
+此确认解决了本项目素材授权的待办。微信收款码继续按作者决定保留。干净 Windows 验收方案见
+[CLEAN_WINDOWS_INSTALL_PLAN.md](CLEAN_WINDOWS_INSTALL_PLAN.md)，实际执行仍待独立环境。
+
 ## MCP onedir 与临时目录治理（2026-11-03）
 
 `虹夏MCP-v2` 已从 PyInstaller onefile 改为 onedir。新入口是 `dist\虹夏MCP-v2\虹夏MCP-v2.exe`，必须连同同目录的 `_internal\` 一起复制或安装；客户端不再在每次启动时把运行时解包到 `%TEMP%\_MEI*`。桌宠和审批提醒仍使用 onefile。
@@ -53,7 +57,7 @@ Codex 的 Stop Hook 现在只静默两类已确认的后台输出：同时具备
 
 当前源码完成 194 项 Python 回归（193 通过、1 项可选 PyYAML 跳过），20 项 JavaScript、4 项 DSH 事件测试通过（1 项真实 SessionStore 测试因未提供当前安装路径而跳过），冻结前端、接入指引、MCP、内置浏览器实际勾选、Setup 构建及朋友试用 ZIP 核对通过。最新结果见 [发布检查单](PUBLISHING.md) 和 `diagnostics/agent-config-guard-20261103/`；这些结果不表示每个外部宿主的新会话和原生权限事件均已实测，也不替代干净 Windows 上的安装/卸载全流程。
 
-当前源码和 `v0.1.10` 安装器候选保存在现有开发分支的工作区；二进制是否作为 GitHub Release 下载，仍以 PUBLISHING.md 的附件哈希和私下试用授权为准。真实微信收款图已纳入公开白名单，安装包、朋友试用包和完整源码包会保留该投喂入口。正式公开发行仍待自制角色试导入与角色/图标分发权利核对；尚未实现的完整动作及宿主桥接见 [TODO.md](TODO.md)。历史记录中的“未安装／暂不提交”仅描述对应日期的操作，以本节及最新检查点为准。
+当前源码和 `v0.1.10` 安装器候选保存在现有开发分支的工作区；二进制是否作为 GitHub Release 下载，仍以 PUBLISHING.md 的附件哈希和安装验收为准。真实微信收款图已纳入公开白名单，安装包、朋友试用包和完整源码包会保留该投喂入口。作者已确认角色、图标和配套截图可公开分发；尚未实现的完整动作及宿主桥接见 [TODO.md](TODO.md)。历史记录中的“未安装／暂不提交”仅描述对应日期的操作，以本节及最新检查点为准。
 
 使用入口：[安装与运行](INSTALL.md) · [Agent 接入](AGENT_SETUP.md) · [自制皮肤格式](SKIN_FORMAT.md) · [架构](ARCHITECTURE.md) · [回退](ROLLBACK.md)。下方日期段落保留为历史记录。
 
@@ -105,7 +109,7 @@ Windows 桌面上的 Q 版坐姿虹夏：完整双腿、透明背景、八种表
 
 对外分享文档可运行 `.\.venv\Scripts\python.exe tools\package_docs.py` 从当前源码生成压缩包；旧压缩包不作为最新工程状态的依据。
 
-给熟人私下试用优先运行 `powershell -ExecutionPolicy Bypass -File tools\build_installer.ps1` 生成单个 Windows Setup EXE。收件人双击安装器即可选择安装目录、桌面快捷方式和开机自启，默认安装到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，无需管理员权限或 PowerShell。安装、覆盖升级和卸载保留用户消息、皮肤与 Agent 档案，不自动改外部客户端配置。`tools\package_release.py` 保留为旧 ZIP/脚本安装通道。公开发布的素材权利仍需另行确认。
+给熟人私下试用优先运行 `powershell -ExecutionPolicy Bypass -File tools\build_installer.ps1` 生成单个 Windows Setup EXE。收件人双击安装器即可选择安装目录、桌面快捷方式和开机自启，默认安装到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，无需管理员权限或 PowerShell。安装、覆盖升级和卸载保留用户消息、皮肤与 Agent 档案，不自动改外部客户端配置。`tools\package_release.py` 保留为旧 ZIP/脚本安装通道。公开发布前仍需完成独立 Windows 环境的安装、升级和卸载验收。
 
 给朋友测试时可直接使用 `python tools\package_friend_trial.py` 生成小型私下试用 ZIP；当前脚本位于 `tools/package_friend_trial.py`，默认输出到 `dist-release/friend-trial-0.1.10/`。包内包含带公开投喂资料的 `v0.1.10` Setup、校验清单、最新 `AGENT_SETUP.md`、快速说明 `FRIEND_TRIAL_GUIDE.md` 和简明文本说明。旧 `dist-next` 候选和构建缓存属于可再生历史产物，清理前仍保留诊断与回退证据。
 
@@ -119,7 +123,7 @@ Codex 全局技能和本机 Work 插件 0.1.9 均要求最终回复前主动检�
 
 DSH 本机接入脚本在 `integrations/dsh/install.ps1`，默认注册 desktop 和 web 两个配置，安装专用技能及全局触发规则。本机已写入配置并通过 DSH web 合成配置检查、打包 MCP 握手及隔离选择回传测试。DSH 新会话已自主调用虹夏并显示带 DSH 来源的气泡；用户较晚点击后，回复保存在消息库，但 DSH 原任务已结束，未自动读回。技能现要求重复等待并在会话恢复时读取旧请求；无时限自动唤醒尚未实现。操作和限制见 `integrations/dsh/README.md`。
 
-运行环境为 Windows 10/11 x64；源码使用 Python 3.12、Pillow 12.2、官方 MCP Python SDK 2.3，打包使用 PyInstaller 6.20。本机消息保存在用户目录的 SQLite 文件；已处理消息 7 天后清理，未处理消息 30 天后过期。MCP 只走本机 stdio，不开放网络端口。需求与验收见 `REQUIREMENTS.md`，待办见 `TODO.md`，架构与内部接口分别见 `ARCHITECTURE.md` 和 `INTERFACES.md`。这是非官方同人练习；默认虹夏角色、图标和配套截图仍需单独核对公开再分发权。
+运行环境为 Windows 10/11 x64；源码使用 Python 3.12、Pillow 12.2、官方 MCP Python SDK 2.3，打包使用 PyInstaller 6.20。本机消息保存在用户目录的 SQLite 文件；已处理消息 7 天后清理，未处理消息 30 天后过期。MCP 只走本机 stdio，不开放网络端口。需求与验收见 `REQUIREMENTS.md`，待办见 `TODO.md`，架构与内部接口分别见 `ARCHITECTURE.md` 和 `INTERFACES.md`。这是作者原创的非官方同人练习，公开分发范围以本仓库许可证和第三方声明为准。
 # 2026-10-26 发布候选准备
 
 本轮为既有 MVP 补充多 Agent 能力差异/冲突检查、透明 PNG 多帧待机皮肤，以及可随包携带的作者赞助资料。100 项 Python、20 项 JS、标准展开包冻结冒烟和实际浏览器流程通过；候选位于 `dist-next/release-readiness-20261026/release-candidate.zip`。未替换正式安装；准确范围及尚缺材料见 `TODO.md` 和 `PUBLISHING.md`。自制角色格式和试用步骤见 [SKIN_FORMAT.md](SKIN_FORMAT.md)。

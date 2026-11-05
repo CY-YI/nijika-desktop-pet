@@ -17,8 +17,12 @@ public open-source repository.
 
 1. Keep `LICENSE` and `THIRD_PARTY_NOTICES.md` with the source.
 2. Resolve the separate rights status of the character, icon, screenshots,
-   and payment image. The MIT license covers original code only.
-3. Remove personal author emails and old development paths from published Git
+   and payment image. The author confirmed on 2026-11-05 that the character,
+   icon and screenshots are author-created and may be publicly distributed;
+   the payment image remains intentionally public but is not covered by the
+   MIT code license.
+3. Use the clean `public-snapshot-20261105` branch or a new public repository;
+   remove personal author emails and old development paths from published Git
    history. A `.mailmap` does not remove those values from raw commits. The
    safe option is a new public repository or a new squashed history created
    from the audited snapshot. Do not force-rewrite the existing shared history
@@ -28,6 +32,10 @@ public open-source repository.
 5. Rebuild and re-scan the final public package after any asset or history
    change. Keep the installer marked as prerelease until clean Windows
    install/upgrade/uninstall testing is complete.
+
+The clean Windows test sequence is recorded in
+`CLEAN_WINDOWS_INSTALL_PLAN.md`; it is a release gate and has not been run on
+this computer.
 
 ## Intentionally public data
 
