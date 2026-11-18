@@ -25,6 +25,12 @@ MAGPIE 已在本机同时管理 Codex、DSH 与 DS Bot，三个客户端都实�
 
 DS Bot 使用 `integrations/dsbot/install.ps1` 安装到用户目录的稳定 bundle `%USERPROFILE%\.ds-bot\integrations\nijika-dsbot-mcp`，不在共享模板里写死开发机路径。安装器会备份 profile 与 `AGENTS.md`，首次安装、重复执行、路径改写、单份技能与结束提醒规则由 `tests/test_dsbot_installer.py` 覆盖。重启后的新任务再次显示 `Agent · DS Bot` 与唯一正文 `5+5=10`，点击后消息状态为 `answered`。完整客户端步骤见 [AGENT_SETUP.md](AGENT_SETUP.md)。
 
+## Grok Build 来源识别（2026-11-18）
+
+Grok 1.0.88 已可自动显示为 `Grok · Grok Build`。其 MCP 握手使用 `grok-shell-<服务器名>` 动态名称，新版共享 MCP 会识别这个真实协议指纹；未知客户端仍保守显示 `Agent · 未识别软件`，不会按任务正文或最近活动猜测身份。
+
+正式安装版 onedir MCP 与冻结候选一致，SHA-256 为 `CCA1C807E71923C8F05CEDD3F33A747CCFF8E4C0F08EBF5E2F49473EE15703CE`。真实 Grok 的隔离 E2E 已写入 `Grok / Grok Build`，请求 `3443b276899342d1b260301cfd175862` 状态为 `pending`；这只证明队列写入。已打开的 Grok 任务需要新建任务或重新连接 `nijika-pet`，再核对桌面气泡是否可见。
+
 ## 统一提醒核心（2026-10-31）
 
 各客户端共用同一生命周期协议、安全摘要、来源解析和通知去重；详见 [NOTIFICATION_PROTOCOL.md](NOTIFICATION_PROTOCOL.md)。Codex 原生事件与 DSH 实时会话模块只负责转交事件。DSH 已核对 `0.2.1-rc.2 / 0.2.1-rc.3` 的接口；Work 等其他客户端目前仍只支持主动 MCP 调用，不承诺漏调时自动补发。

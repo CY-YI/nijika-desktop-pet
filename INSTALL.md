@@ -1,5 +1,11 @@
 # 安装与运行
 
+## 2026-11-18 Grok Build 来源更新
+
+本机正式安装的 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏MCP-v2\虹夏MCP-v2.exe` 已更新为支持 Grok 握手的版本，SHA-256 为 `CCA1C807E71923C8F05CEDD3F33A747CCFF8E4C0F08EBF5E2F49473EE15703CE`。完整 onedir 目录必须整体保留，不能只替换或复制 EXE 后遗漏 `_internal\`。
+
+Grok 已配置好的用户无需改 JSON、模型或权限。退出旧任务并在 Grok 中新建任务或重新连接 `nijika-pet` 后，来源会自动识别为 `Grok · Grok Build`。更新不会热替换正在运行的 Grok MCP 进程；`pending` 仅表示已排队，真实气泡应在重连后的普通任务中另做一次可见性核对。
+
 ## 2026-11-03 MCP onedir 升级
 
 `0.1.9` 起，MCP 的正式路径为 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏MCP-v2\虹夏MCP-v2.exe`，并依赖同级 `_internal\`。不要把目录内的 EXE 单独复制到别处。升级安装器只删除精确旧文件 `...\dist\虹夏MCP-v2.exe`，再安装完整 onedir 目录；消息库、皮肤、设置、Agent 档案、客户端配置、MAGPIE 管理项和 Hook 信任均保留。

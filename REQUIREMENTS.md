@@ -1,5 +1,15 @@
 # 虹夏桌宠：重做需求
 
+## 2026-11-18 Grok Build 来源识别
+
+- 用户反馈：Grok 已能调用虹夏 MCP，但气泡头部显示 `Agent · 未识别软件`；期望自动显示 `Grok · Grok Build`，不需要每次在对话中手工补充来源。
+- 根因：真实 Grok 1.0.88 的 MCP 握手把 `clientInfo.name` 写成 `grok-shell-<配置的服务名>`，例如 `grok-shell-nijika-pet`。旧实现只识别固定名称 `grok` / `grok-cli` / `grok-build`，因此安全降级为未知软件。
+- Must：精确识别 `grok-shell-` 前缀并统一映射为 Agent `Grok`、软件 `Grok Build`；原有精确名称、显式来源参数和未知客户端的保守降级保持不变。
+- Must：来源识别继续由共享 MCP 服务端统一执行，不依赖 Grok 是否遵守提示词，也不增加第二份 MCP、模型代理、公网服务或新的权限入口。
+- 验收：真实 Grok 1.0.88 使用正式安装目录中的 onedir MCP，在隔离用户配置和隔离消息库中成功发送 `GR-F05 Grok source check`；落库来源为 `Grok / Grok Build`，请求 `3443b276899342d1b260301cfd175862` 状态为 `pending`。隔离测试写入的临时 Grok 配置已恢复为测试前摘要。
+- 边界：`pending` 只表示消息已进入队列，不代表已完成真实桌面可见性验收。Grok 中已经打开的会话仍持有旧 MCP 进程，须新建任务或重新连接 `nijika-pet` 后才加载修复版。
+- 发布：冻结候选与本机正式安装的 `虹夏MCP-v2.exe` 逐文件一致，SHA-256 为 `CCA1C807E71923C8F05CEDD3F33A747CCFF8E4C0F08EBF5E2F49473EE15703CE`。
+
 ## 2026-11-18 DS Bot 与 MAGPIE 多客户端提醒
 
 - 用户要求直接操作已运行的 MAGPIE，把 Codex、DSH 与 DS Bot 全部接入虹夏，并用自然任务检查各客户端是否产生气泡、正文是否串用，以及头部是否正确显示“Agent · 软件”。

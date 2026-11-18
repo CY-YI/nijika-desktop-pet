@@ -26,6 +26,22 @@ class NoticeSourceTests(unittest.TestCase):
         self.assertEqual(resolve_source("ChatGPT", "Obsidian", "dsh-mcp-client").heading,
                          "ChatGPT · Obsidian")
 
+    def test_shared_magpie_auto_config_identifies_additional_mcp_hosts(self):
+        for caller, heading in (
+            ("grok-cli", "Grok · Grok Build"),
+            ("grok-build", "Grok · Grok Build"),
+            ("grok-shell-nijika-pet", "Grok · Grok Build"),
+            ("grok-shell-other-server", "Grok · Grok Build"),
+            ("cursor-agent", "Agent · Cursor"),
+            ("antigravity", "Agent · Antigravity"),
+            ("codebuddy", "Agent · CodeBuddy"),
+            ("openmausbot", "Agent · OpenMausBot"),
+            ("openclaw", "Agent · OpenClaw"),
+            ("claude-desktop", "Claude · Claude Desktop"),
+        ):
+            with self.subTest(caller=caller):
+                self.assertEqual(resolve_source("auto", "", caller).heading, heading)
+
     def test_multimodel_host_never_uses_host_product_as_agent_name(self):
         for caller, software, agent_name in (
             ("dsh-mcp-client", "", "Codex"),
@@ -33,6 +49,11 @@ class NoticeSourceTests(unittest.TestCase):
             ("dsh-mcp-client", "DSH", "DSH"),
             ("workbuddy", "WorkBuddy", "Work"),
             ("workbuddy", "WorkBuddy AI", "ChatGPT"),
+            ("cursor-agent", "Cursor", "Cursor"),
+            ("antigravity", "Antigravity", "Antigravity"),
+            ("codebuddy", "CodeBuddy", "CodeBuddy"),
+            ("openmausbot", "OpenMausBot", "OpenMausBot"),
+            ("openclaw", "OpenClaw", "OpenClaw"),
         ):
             with self.subTest(caller=caller, software=software, agent_name=agent_name):
                 self.assertEqual(

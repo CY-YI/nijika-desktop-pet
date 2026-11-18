@@ -1,5 +1,12 @@
 # 架构
 
+## Grok 来源握手（2026-11-18）
+
+- Grok 1.0.88 的 MCP `initialize` 请求会以 `grok-shell-<配置服务名>` 作为 `clientInfo.name`，而不是稳定的 `grok` 或 `grok-build`。`notice_source._caller_defaults()` 先匹配全部精确来源，再仅对 `grok-shell-` 前缀映射为 Agent `Grok`、软件 `Grok Build`。
+- 该规则只解决已由真实协议观察确认的 Grok 动态名称；未知客户端仍显示 `Agent · 未识别软件`，不从任务正文、提示词或当前活动窗口猜测来源。显式 `agent_name/software` 与既有内置客户端的优先顺序不变。
+- 来源解析位于共享 MCP 服务端，因此同一配置分发到 Codex、DSH、DS Bot、Grok 或其他客户端时仍按连接隔离，不引入全局“最近来源”。`pending` 仍只表示 SQLite 排队，不是桌面显示回执或权限批准。
+- 真实客户端在 stdio 进程中缓存已加载代码；磁盘替换只影响新进程。Grok 用户须新建任务或重新连接 `nijika-pet`，无需重装其他客户端或重新授予权限。
+
 ## MCP onedir 运行时（2026-11-03）
 
 - 当前 MCP 入口固定为 `dist/虹夏MCP-v2/虹夏MCP-v2.exe`，其 `_internal/` 必须与 EXE 一同分发。设置中心、Work 启动包装器、自动接入和安装器均通过 `app_layout.bundled_mcp_path()` 或等价的同一路径读取；自动接入在规划前调用 `validate_bundled_mcp()` 同时检查 EXE 与运行时目录。批量扫描还会阻止 Codex 与 Work 同时提交，避免同一本机 Codex 环境建立两套 MCP。

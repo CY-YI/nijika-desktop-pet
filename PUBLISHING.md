@@ -1,5 +1,14 @@
 # 本机候选与发布检查单
 
+## 2026-11-18 Grok Build 来源修复
+
+- 根因是 Grok 1.0.88 的真实 MCP 握手名采用 `grok-shell-<服务器名>`，旧来源表只匹配固定名称。共享 `notice_source.py` 现在先保留全部精确匹配，再仅识别 `grok-shell-` 前缀为 `Grok · Grok Build`；其他未知来源继续降级。
+- 真实 Grok E2E 使用正式安装目录中的 onedir MCP、隔离 Grok 用户目录和隔离 SQLite。`GR-F05 Grok source check` 请求 `3443b276899342d1b260301cfd175862` 落库为 `Grok / Grok Build`、状态 `pending`；没有写入用户日常 Grok 配置。
+- 测试后已恢复隔离目录中的 Grok 配置备份，恢复文件 SHA-256 与测试前备份一致。`pending` 只表示已排队，不能作为桌面可见、用户已点击或已批准的发布证据。
+- 冻结候选与本机正式安装的 MCP EXE 大小和 SHA-256 一致：7,418,801 字节、`CCA1C807E71923C8F05CEDD3F33A747CCFF8E4C0F08EBF5E2F49473EE15703CE`。正式 onedir `_internal\` 已同步，活动旧连接未强制终止。
+- 发布说明必须要求 Grok 用户新建任务或重连 `nijika-pet`。共享来源修复不改变 MCP 工具 schema、队列协议、模型 API、MAGPIE 配置或其他客户端入口。
+- 最终回归：项目 Python 200 项（199 通过、1 项可选 PyYAML 跳过；系统 Python 补齐该组 8/8）、JavaScript 20/20、定向 38 项、Python 语法和 `git diff --check` 通过；正式安装版冻结 MCP 的 20 种来源、显式编辑器元数据和 4 个并发客户端冒烟通过。
+
 ## 2026-11-05 公开开源审计与整改
 
 - 只读审计报告：`diagnostics/public-open-source-audit-20261105/report.json`。当前源码、标准暂存区和 v0.1.10 源码包均未发现 SQLite 数据库、日志、私钥、令牌或用户 Agent 配置；Python 196 项通过、1 项可选 PyYAML 跳过，JavaScript 20 项通过。

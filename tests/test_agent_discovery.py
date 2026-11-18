@@ -53,6 +53,24 @@ class DiscoveryTests(unittest.TestCase):
         self.assertTrue(next(i for i in scan(self.home, self.setup.mcp, which=lambda _: None)
                              if i["id"] == "gemini")["issue"])
 
+    def test_scan_covers_magpie_compatible_extra_hosts_without_claiming_connection(self):
+        self.write(".cursor/mcp.json", {"mcpServers": {"nijika-pet": self.service()}})
+        self.write(".codebuddy/mcp.json", {"mcpServers": {"nijika-pet": self.service()}})
+        self.write(".openmausbot/config.json", {"mcpServers": {"nijika-pet": self.service()}})
+        grok = self.home / ".grok/config.toml"
+        grok.parent.mkdir(parents=True)
+        grok.write_text(
+            '[mcp_servers.nijika-pet]\ncommand = ' +
+            json.dumps(str(self.setup.mcp)) + '\n',
+            encoding="utf-8",
+        )
+        items = {item["id"]: item for item in
+                 scan(self.home, self.setup.mcp, which=lambda _: None)}
+        for client in ("grok", "cursor", "codebuddy", "openmausbot"):
+            with self.subTest(client=client):
+                self.assertEqual(items[client]["configuration"], "found")
+                self.assertEqual(items[client]["verification"], "尚未验证宿主调用")
+
     def test_duplicate_json_invalid_manager_and_oversize_block_safe_writes(self):
         path = self.write(".gemini/settings.json", {})
         path.write_text('{"mcpServers":{},"mcpServers":{}}', encoding="utf-8")

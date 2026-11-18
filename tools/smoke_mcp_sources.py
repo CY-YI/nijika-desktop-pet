@@ -32,6 +32,7 @@ async def verify(executable: Path) -> None:
         ("DSH", "workbuddy", "Agent", "WorkBuddy", "auto"),
         ("DSH", "workbuddy-ai", "Agent", "WorkBuddy AI", "auto"),
         ("DSH", "claude-desktop", "Claude", "Claude Desktop", "auto"),
+        ("auto", "grok-shell-nijika-pet", "Grok", "Grok Build", "auto"),
         ("auto", "vscode", "Agent", "VS Code", "auto"),
         ("auto", "obsidian", "Agent", "Obsidian", "auto"),
         ("auto", "dsh-mcp-client", "Agent", "DSH", "auto"),

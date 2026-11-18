@@ -1,5 +1,13 @@
 # 变更记录
 
+## Unreleased - 2026-11-18 Grok Build 来源识别
+
+- 修复真实 Grok 1.0.88 调用虹夏时显示 `Agent · 未识别软件`：Grok 的 MCP 握手指纹会发送 `grok-shell-<服务器名>`，现统一识别为 `Grok · Grok Build`，未知来源仍保守降级。
+- 来源修正位于共享 MCP 服务端，Grok 无需额外提示词、第二名 MCP 服务或特殊权限；已打开的 Grok 会话需要新建任务或重连才能加载新版进程。
+- 使用正式安装版 onedir MCP 和隔离数据库完成真实 Grok E2E，请求 `3443b276899342d1b260301cfd175862` 落库为 `Grok / Grok Build`、状态 `pending`。该状态只表示已排队，桌面可见性仍须在新会话单独观察。
+- 正式与冻结候选 MCP 的 SHA-256 均为 `CCA1C807E71923C8F05CEDD3F33A747CCFF8E4C0F08EBF5E2F49473EE15703CE`；隔离测试配置已恢复到测试前摘要。
+- 验证通过：项目全量 Python 200 项（199 通过、1 项可选 PyYAML 跳过；系统 Python 补齐该组 8/8）、JavaScript 20/20、正式安装版冻结 MCP 的 20 种来源、显式编辑器元数据和 4 个并发客户端冒烟。
+
 ## Unreleased - 2026-11-18 DS Bot 与 MAGPIE 三客户端验证
 
 - 在 MAGPIE 同时连接 Codex、DSH 与 DS Bot 后，实际验证三个客户端均启动同一个 onedir MCP；气泡来源分别显示 `ChatGPT · Codex`、`Agent · DSH`、`Agent · DS Bot`，独立正文与点击回写没有串用。

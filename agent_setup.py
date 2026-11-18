@@ -602,9 +602,20 @@ class AgentSetup:
         agent_id = existing["id"] if existing else uuid.uuid4().hex
         manager_client = client
         if client == "custom":
-            manager_client = {"workbuddy": "workbuddy", "workbuddy ai": "workbuddy-ai",
-                "vs code": "vscode", "obsidian": "obsidian", "claude desktop": "claude-desktop"}.get(
-                    software.casefold(), "custom")
+            manager_client = {
+                "workbuddy": "workbuddy",
+                "workbuddy ai": "workbuddy-ai",
+                "vs code": "vscode",
+                "vs code insiders": "vscode",
+                "obsidian": "obsidian",
+                "claude desktop": "claude-desktop",
+                "grok build": "grok",
+                "cursor": "cursor",
+                "antigravity": "antigravity",
+                "codebuddy": "codebuddy",
+                "openmausbot": "openmausbot",
+                "openclaw": "openclaw",
+            }.get(software.casefold(), "custom")
             if software.casefold() in {"vs code", "vs code insiders"}:
                 route = route_for(agent_identity)
                 if route:

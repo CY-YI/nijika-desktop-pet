@@ -1,5 +1,12 @@
 # 内部接口
 
+## Grok 来源解析（2026-11-18）
+
+- MCP 四工具的输入、输出和 `request_id` 回执不变。`resolve_source(...)` 继续返回独立的 `(agent, software)` 显示字段；新增真实 Grok 握手兼容：`grok-shell-*` 映射为 `("Grok", "Grok Build")`。
+- 精确名称 `grok`、`grok-cli`、`grok-build`、`grok build` 与 `xai-grok` 仍按原规则识别。显式来源参数和已知环境变量仍优先；未命中规则时不根据正文、模型名或窗口标题猜测。
+- 该字段只是显示元数据，不是身份认证或权限边界。共享 MCP 多进程并发时仍按每个 stdio 会话的 `clientInfo` 独立解析，不使用“最近一次调用”。
+- 正式程序隔离 E2E 已验证 `show_completion` 落库为 `Grok / Grok Build`。状态 `pending` 只表示队列写入成功；是否在桌面实际显示、是否点击以及晚到点击能否唤醒已结束任务分别验收。
+
 ## MCP 启动路径（2026-11-03）
 
 - 所有新配置的 MCP `command` 必须指向 `<安装根>\dist\虹夏MCP-v2\虹夏MCP-v2.exe`，不得单独复制 EXE 而遗漏同级 `_internal/`。

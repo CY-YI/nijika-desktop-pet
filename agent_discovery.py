@@ -79,6 +79,33 @@ def nijika_candidate(entry: object) -> bool:
             in {"虹夏mcp-v2.exe", "虹夏mcp.exe"})
 
 
+def service_entries(path: Path) -> list[dict]:
+    """Read only a conventional top-level MCP service table from one config."""
+    raw = bounded_bytes(path)
+    if path.suffix.casefold() == ".toml":
+        data = tomllib.loads(raw.decode("utf-8-sig"))
+        services = data.get("mcp_servers", data.get("mcpServers", {}))
+    else:
+        data = parse_json(raw)
+        services = data.get("mcpServers", data.get("mcp_servers", data.get("mcp", {})))
+    if not isinstance(services, dict):
+        raise ValueError("Invalid servers")
+    return [entry for key, entry in services.items()
+            if key in ("nijika-pet", "nijika_pet") or nijika_candidate(entry)]
+
+
+def preferred_config(paths: list[Path]) -> Path:
+    """Use an existing config that actually contains an MCP table when possible."""
+    existing = [path for path in paths if path.is_file()]
+    for path in existing:
+        try:
+            service_entries(path)
+            return path
+        except (OSError, ValueError, TypeError):
+            continue
+    return existing[0] if existing else paths[0]
+
+
 def magpie_state(home: Path, client: str) -> dict:
     """Inspect only Nijika routing; never return configuration or credential values."""
     path = home / ".config/magpie/library.json"
@@ -175,27 +202,63 @@ def scan(home: Path, executable: Path, *, use_environment: bool = False,
                        "发现 Work 启动依赖" if evidence and client == "work" else
                        "已发现入口" if evidence else "未发现入口",
                        "verification": "尚未验证宿主调用"})
-    for client, label, relative, software in (
-        ("workbuddy", "WorkBuddy", ".workbuddy/mcp.json", "WorkBuddy"),
-        ("workbuddy-ai", "WorkBuddy AI", ".workbuddy-ai/mcp.json", "WorkBuddy AI"),
-        ("vscode", "VS Code", "AppData/Roaming/Code/User/settings.json", "VS Code"),
-        ("obsidian", "Obsidian", "AppData/Roaming/obsidian/obsidian.json", "Obsidian"),
-        ("claude-desktop", "Claude Desktop", "AppData/Roaming/Claude/claude_desktop_config.json", "Claude Desktop"),
-    ):
-        path = home / relative
-        # Also inspect the known Store distribution, without reading account data.
-        if client == "claude-desktop" and not path.is_file():
-            store = home / "AppData/Local/Packages/Claude_pzs8sxrjxfjjc/LocalCache/Roaming/Claude/claude_desktop_config.json"
-            if store.is_file():
-                path = store
-        found = path.is_file() or (client == "vscode" and bool(which("code")))
-        result.append({"id": client, "label": label, "detected": found, "mode": "guided",
-                       "location": str(path.parent), "config_path": str(path),
-                       "evidence": ["找到已知入口/配置"] if found else [],
-                       "manager": "magpie" if magpie_state(home, client)["managed"] else "nijika",
-                       "configuration": "not_verified", "software": software,
-                       "status": "可生成指引" if found else "未发现入口",
-                       "issue": "", "verification": "扩展/工作区格式需接收方 AI 核实"})
+    extra_specs = (
+        ("workbuddy", "WorkBuddy", [".workbuddy/mcp.json"], "WorkBuddy", None),
+        ("workbuddy-ai", "WorkBuddy AI", [".workbuddy-ai/mcp.json"], "WorkBuddy AI", None),
+        ("grok", "Grok Build", [".grok/config.toml"], "Grok Build", "grok"),
+        ("cursor", "Cursor", [".cursor/mcp.json"], "Cursor", "cursor-agent"),
+        ("antigravity", "Antigravity",
+         [".antigravity/mcp.json", ".antigravity/settings.json"], "Antigravity", "antigravity"),
+        ("codebuddy", "CodeBuddy", [".codebuddy/mcp.json"], "CodeBuddy", "codebuddy"),
+        ("openmausbot", "OpenMausBot", [".openmausbot/config.json"], "OpenMausBot", None),
+        ("openclaw", "OpenClaw", [".openclaw/openclaw.json"], "OpenClaw", "openclaw"),
+        ("vscode", "VS Code", ["AppData/Roaming/Code/User/mcp.json",
+                               "AppData/Roaming/Code/User/settings.json"], "VS Code", "code"),
+        ("obsidian", "Obsidian", ["AppData/Roaming/obsidian/obsidian.json"], "Obsidian", None),
+        ("claude-desktop", "Claude Desktop",
+         ["AppData/Local/Claude/claude_desktop_config.json",
+          "AppData/Roaming/Claude/claude_desktop_config.json",
+          "AppData/Local/Claude-3p/claude_desktop_config.json",
+          "AppData/Roaming/Claude-3p/claude_desktop_config.json",
+          "AppData/Local/Packages/Claude_pzs8sxrjxfjjc/LocalCache/Roaming/Claude/claude_desktop_config.json"],
+         "Claude Desktop", None),
+    )
+    for client, label, relatives, software, command in extra_specs:
+        paths = [home / relative for relative in relatives]
+        path = preferred_config(paths)
+        evidence, entries, issue = [], [], ""
+        if path.is_file():
+            evidence.append("找到已知配置")
+            try:
+                entries = service_entries(path)
+            except (OSError, ValueError, TypeError):
+                issue = "配置无法安全读取，请先核对格式或文件大小；未返回配置内容。"
+        if command and which(command):
+            evidence.append("找到命令入口")
+        exact = len(entries) == 1 and known_service(entries[0], executable)
+        if len(entries) > 1:
+            issue = "发现多个虹夏服务，接入前需预览去重。"
+        elif entries and not exact:
+            issue = "虹夏服务路径需核对，预览时只接受可验证程序。"
+        manager = magpie_state(home, client)
+        if manager["error"]:
+            issue = "MAGPIE 库无法安全读取，不能确定管理归属。"
+        found = bool(evidence)
+        result.append({
+            "id": client, "label": label, "detected": found, "mode": "guided",
+            "location": str(path.parent), "config_path": str(path),
+            "evidence": evidence,
+            "manager": "magpie" if manager["managed"] else "nijika",
+            "configuration": "found" if exact else "not_verified",
+            "software": software,
+            "status": ("需核对" if issue else
+                       "MAGPIE 管理" if manager["managed"] else
+                       "发现虹夏配置" if exact else
+                       "已发现入口" if found else "未发现入口"),
+            "issue": issue,
+            "verification": "尚未验证宿主调用" if exact else
+                            "具体格式或作用域仍需在真实宿主核对",
+        })
     # VS Code extensions are separate routes.  Keep the generic editor entry
     # for manual configuration, then add only manifests we can verify locally.
     try:

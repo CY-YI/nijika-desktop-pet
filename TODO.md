@@ -1,5 +1,16 @@
 # 当前待办
 
+## 当前任务：Grok Build 来源识别（2026-11-18）
+
+- 用户反馈真实 Grok 调用已进入虹夏 MCP，但气泡头部显示 `Agent · 未识别软件`，期望自动显示 `Grok · Grok Build`。
+- [x] 确认 Grok 1.0.88 的握手名为 `grok-shell-<服务器名>`；旧代码没有匹配这个动态后缀。
+- [x] `notice_source.py` 增加受控的 `grok-shell-` 前缀识别；其他未知来源仍显示 `Agent · 未识别软件`，不进行模糊推断。
+- [x] 覆盖来源解析、MCP 协议、生命周期并发、本机扫描和冻结 MCP 冒烟；定向 38 项、项目全量 Python 200 项（199 通过、1 项可选 PyYAML 跳过；系统 Python 补齐该组 8/8）、JavaScript 20/20 均通过。
+- [x] 使用正式安装版 onedir MCP 与真实 Grok 1.0.88 完成隔离 E2E，通知请求 `3443b276899342d1b260301cfd175862` 落库为 `Grok / Grok Build`、状态 `pending`。
+- [x] 恢复隔离测试目录中临时使用的 Grok 配置；恢复前后 SHA-256 已核对，测试没有改动日常 Grok 配置。
+- [x] 冻结候选与本机正式安装 MCP 均为 SHA-256 `CCA1C807E71923C8F05CEDD3F33A747CCFF8E4C0F08EBF5E2F49473EE15703CE`。
+- [x] 文档、验证记录与本轮相关源码已进入 Git 交付；`pending` 不记为桌面可见性通过，新 Grok 会话或重连后需观察一次真实气泡。
+
 ## 当前任务：DS Bot 与 MAGPIE 三客户端验收（2026-11-18）
 
 - 用户要求实际操作 MAGPIE，把 Codex、DSH、DS Bot 接入虹夏，并以自然短问答验证气泡、内容隔离和来源标签。

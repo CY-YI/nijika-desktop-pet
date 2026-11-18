@@ -11,6 +11,7 @@ HOSTS = {
     "work": ("ChatGPT", "Work"), "chatgpt work": ("ChatGPT", "Work"),
     "claude-code": ("Claude", "Claude Code"), "claude code": ("Claude", "Claude Code"),
     "claude-desktop": ("Claude", "Claude Desktop"), "claude desktop": ("Claude", "Claude Desktop"),
+    "claude-ai": ("Claude", "Claude Desktop"),
     "dsh": ("Agent", "DSH"), "deepseek harness": ("Agent", "DSH"),
     "deepseek-harness": ("Agent", "DSH"), "@deepseek-ai/dsh-mcp-client": ("Agent", "DSH"),
     # Actual initialize.clientInfo.name in the installed DSH desktop bridge.
@@ -22,15 +23,29 @@ HOSTS = {
     "copilot cli": ("Copilot", "Copilot CLI"), "github-copilot": ("Copilot", "Copilot CLI"),
     "workbuddy": ("Agent", "WorkBuddy"), "workbuddy-ai": ("Agent", "WorkBuddy AI"),
     "workbuddy ai": ("Agent", "WorkBuddy AI"),
+    "grok": ("Grok", "Grok Build"), "grok-cli": ("Grok", "Grok Build"),
+    "grok-build": ("Grok", "Grok Build"), "grok build": ("Grok", "Grok Build"),
+    "xai-grok": ("Grok", "Grok Build"), "grok-shell": ("Grok", "Grok Build"),
+    "cursor": ("Agent", "Cursor"), "cursor-agent": ("Agent", "Cursor"),
+    "cursor-cli": ("Agent", "Cursor"), "cursor cli": ("Agent", "Cursor"),
+    "antigravity": ("Agent", "Antigravity"),
+    "antigravity-cli": ("Agent", "Antigravity"),
+    "codebuddy": ("Agent", "CodeBuddy"), "codebuddy-cli": ("Agent", "CodeBuddy"),
+    "openmausbot": ("Agent", "OpenMausBot"), "mausbot": ("Agent", "OpenMausBot"),
+    "openclaw": ("Agent", "OpenClaw"),
     "vscode": ("Agent", "VS Code"), "vs code": ("Agent", "VS Code"),
     "obsidian": ("Agent", "Obsidian"),
 }
 GENERIC = {"", "auto", "agent"}
-MULTIMODEL_SOFTWARE = {"dsh", "workbuddy", "workbuddy ai"}
+MULTIMODEL_SOFTWARE = {
+    "dsh", "workbuddy", "workbuddy ai", "cursor", "antigravity", "codebuddy",
+    "openmausbot", "openclaw",
+}
 HOST_PRODUCT_LABELS = {
     "chatgpt", "chatgpt work", "codex", "work", "dsh", "deepseek harness",
     "claude code", "claude desktop", "workbuddy", "workbuddy ai",
-    "vs code", "vs code insiders", "obsidian",
+    "grok", "grok build", "cursor", "antigravity", "codebuddy",
+    "openmausbot", "openclaw", "vs code", "vs code insiders", "obsidian",
 }
 
 
@@ -53,6 +68,18 @@ def _safe_agent_for_host(agent: str, software: str) -> str:
     return agent or "Agent"
 
 
+def _caller_defaults(caller: str) -> tuple[str, str] | None:
+    """Resolve known handshakes, including Grok's server-qualified stdio name."""
+    key = caller.strip().casefold()
+    known = HOSTS.get(key)
+    if known:
+        return known
+    # Grok 1.0.88 sends clientInfo.name as "grok-shell-<configured server>".
+    if key.startswith("grok-shell-"):
+        return HOSTS["grok"]
+    return None
+
+
 def clean(value: str | None, maximum: int) -> str:
     if value is None:
         return ""
@@ -71,7 +98,7 @@ def resolve_source(configured: str = "auto", host: str = "", caller: str = "",
     """
     configured, host = clean(configured, 20), clean(host, 40)
     agent_name, software = clean(agent_name, 20), clean(software, 40)
-    known = HOSTS.get(caller.strip().casefold())
+    known = _caller_defaults(caller)
     legacy = HOSTS.get(configured.casefold())
     if host or software:
         selected_host = software or host
