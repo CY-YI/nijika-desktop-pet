@@ -160,10 +160,31 @@ def verify(executable: Path) -> None:
             assert json.loads((client_home / ".copilot/mcp-config.json").read_text(encoding="utf-8"))["mcpServers"]["nijika-pet"]["type"] == "local"
             manager = client_home / ".config/magpie/library.json"
             manager.parent.mkdir(parents=True)
-            manager.write_text(json.dumps({"mcp":[{"command":mcp_path,"agents":["gemini"]}]}), encoding="utf-8")
+            manager.write_text(json.dumps({"mcpHub": True, "mcp": [
+                {"name": "nijika-pet", "command": mcp_path, "agents": ["gemini", "codex"]}]}), encoding="utf-8")
+            library_before = manager.read_bytes()
+            preview = json.loads(call("/api/agents/magpie-direct-preview", {"client": "gemini"}))
+            assert preview["targets"] == ["gemini", "codex"] and not preview["can_apply"] and preview["plan_id"] is None
             managed = json.loads(call("/api/agents/plan", {"client":"gemini","name":"Managed Gemini"}))
             assert managed["manager"] == "magpie" and not managed["files"]
             assert json.loads(call("/api/agents/apply", {"plan_id":managed["plan_id"]}))["agent"]["status"] == "managed"
+            assert manager.read_bytes() == library_before
+            bot_root = client_home / ".ds-bot"
+            bot_profile = bot_root / "profiles/ds-bot/cordis.patch.yml"
+            bot_profile.parent.mkdir(parents=True)
+            bot_profile.write_text("[]", encoding="utf-8")
+            scan = json.loads(call("/api/agents/scan", {}))
+            assert scan["magpie_command"] == mcp_path
+            bot = next(row for row in scan["clients"] if row["id"] == "ds-bot")
+            assert bot["detected"] and bot["location"] == str(bot_root)
+            info = json.loads(call("/api/agents/plan", {"client": "custom", "name": "DS Bot",
+                              "software": bot["software"], "location": bot["location"]}))
+            assert not info["files"]
+            saved_bot = json.loads(call("/api/agents/apply", {"plan_id": info["plan_id"]}))["agent"]
+            prompt = (Path(saved_bot["bundle_directory"]) / "nijika-setup-prompt.txt").read_text(encoding="utf-8")
+            assert saved_bot["status"] == "exported" and "设置 → 能力" in prompt
+            assert '"NIJIKA_HOST_NAME": "DS Bot"' in prompt and "逐个验证" in prompt
+            assert bot_profile.read_text(encoding="utf-8") == "[]"
             template = call("/api/skins/template")
             with ZipFile(io.BytesIO(template)) as archive:
                 manifest = json.loads(archive.read("manifest.json"))

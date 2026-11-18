@@ -124,6 +124,10 @@ class ControlApplication:
     def post(self, route: str, data: dict) -> dict:
         if route == "/api/agents/scan":
             return self.setup.discover()
+        if route == "/api/agents/magpie-direct-preview":
+            return self.setup.magpie_route.preview(data.get("client", ""))
+        if route == "/api/agents/magpie-direct-apply":
+            return self.setup.magpie_route.apply(data.get("plan_id", ""))
         if route == "/api/agents/batch-plan":
             return self.setup.batch_plan(data.get("clients"))
         if route == "/api/agents/batch-apply":
@@ -401,7 +405,8 @@ def run_panel(argv: list[str] | None = None) -> None:
             thread.join()
         else:
             import webview
-            webview.create_window(WINDOW_TITLE, server.origin, width=1220, height=820, min_size=(950, 680))
+            title = WINDOW_TITLE + "（隔离接入预览）" if args.agent_home else WINDOW_TITLE
+            webview.create_window(title, server.origin, width=1220, height=820, min_size=(950, 680))
             webview.start(gui="edgechromium", debug=False, private_mode=True)
     except KeyboardInterrupt:
         pass

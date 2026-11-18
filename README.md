@@ -1,5 +1,7 @@
 # 虹夏桌宠 · 2D 坐姿版
 
+多客户端接入候选版支持在 Magpie 中统一分发虹夏，也提供 DS Bot 独立版的逐 Bot 配置说明。入口在设置中心的「Agent 接入 → 扫描本机」。[多客户端与 DS Bot 接入步骤](AGENT_SETUP.md)
+
 准备学习或修改源码，请先读 [源码开发指南](DEVELOPMENT.md)：包含环境搭建、隔离运行、模块地图、测试与构建步骤。完整工程包额外附带已验证程序和 `SOURCE_MANIFEST.json`，不包含个人配置或运行数据。
 
 源码按 [MIT License](LICENSE) 发布；依赖和安装器翻译的声明见

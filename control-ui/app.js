@@ -171,6 +171,9 @@ function testLabel(agent) {
   if (agent.test.visible) return "测试正在显示";
   return {pending:"测试已排队",dismissed:"测试已关闭",expired:"测试已过期",not_found:"测试待重试"}[agent.test.status] || "等待测试";
 }
+function isStandaloneBot(agent) {
+  return agent?.client === "custom" && ["ds bot", "ds-bot"].includes((agent.software || "").toLowerCase());
+}
 function renderAgents() {
   const list = $("#agents-list"); list.replaceChildren();
   $("#empty-agents").hidden = state.agents.length !== 0;
@@ -207,7 +210,8 @@ function renderAgents() {
       "宿主调用已记录：" + agent.host_activity.agent + " · " + agent.host_activity.software +
       (agent.host_activity.answered ? "；该条桌面消息已点击。" : "；桌面回执尚未确认。") :
       "尚未收到带此档案编号的宿主调用。面板测试、旧配置或 MAGPIE 共享连接不能冒充此项验证。"));
-    const description = agent.status === "exported" ? "复制自动配置提示词给能操作本机的 AI，由它完成接入；文件保存在固定目录。" :
+    const description = isStandaloneBot(agent) ? "打开接入步骤，在 DS Bot 为目标 Bot 启用虹夏，再到该 Bot 的对话里验证。" :
+      agent.status === "exported" ? "复制自动配置提示词给能操作本机的 AI，由它完成接入；文件保存在固定目录。" :
       agent.test?.status === "answered" ? "桌面显示与点击回传已验证。请在客户端新任务中确认 Agent 主动调用。" :
       "准备好后，先发一条桌面测试提醒；客户端需重启或新建任务后验证。";
     card.append(node("p","",description));
@@ -258,8 +262,37 @@ function renderDiscovery() {
     }
     heading.append(node("strong","",item.label),node("span","agent-status",item.status));
     card.append(heading,node("p","field-help",item.evidence.join("；") || "未找到已知入口，可通过单独向导指定目录。"),
-      node("code","file-path",item.config_path),
+      node("code","file-path",item.id === "ds-bot" ? (item.location ? "用于识别的 DS Bot 数据目录：" + item.location : "在 DS Bot 的「设置 → 能力」中接入") : item.config_path),
       node("p","field-help",(item.manager === "magpie" ? "MAGPIE 管理；保留分发，不直接写配置。" : "") + item.verification));
+    if (!item.issue && item.manager === "magpie" && item.magpie_route === "shared") {
+      card.append(node("p","field-help","资源库已启用共享路由。经它转发时，气泡可能认不出来源。预览直连可查看涉及哪些客户端。切换时 MAGPIE 会同步资源库，其他受管条目也可能更新。"));
+      const preview = node("div", "magpie-route-preview");
+      preview.setAttribute("aria-live", "polite");
+      const previewButton = button("预览虹夏直连", "button small secondary", () => discoveryAction(async () => {
+        const plan = await api("/api/agents/magpie-direct-preview", {client:item.id});
+        preview.replaceChildren(node("p", "field-help", "将同步的客户端：" + (plan.targets.join("、") || "无")),
+          node("p", "field-help", plan.note));
+        if (plan.can_apply) {
+          const confirm = button("确认并切换", "button small primary", () => discoveryAction(async () => {
+            confirm.remove();
+            $("#scan-status").textContent = "正在等待 MAGPIE 同步…";
+            const result = await api("/api/agents/magpie-direct-apply", {plan_id:plan.plan_id});
+            $("#scan-status").textContent = result.note;
+            try {
+              const updated = await api("/api/agents/scan", {});
+              discovery.items = updated.clients; clearDiscoveryPlan(); renderDiscovery();
+            } catch {
+              $("#scan-status").textContent += " 列表刷新失败，请重新扫描。";
+            }
+          }));
+          preview.append(confirm);
+        }
+        $("#scan-status").textContent = "直连预览完成，尚未修改 MAGPIE；请先核对受影响的客户端。";
+      }));
+      card.append(previewButton, preview);
+    } else if (!item.issue && item.manager === "magpie" && item.magpie_route === "direct") {
+      card.append(node("p","field-help","虹夏使用独立连接；仍需在此客户端实际验证来源和提醒。"));
+    }
     if (item.id === "codex" || item.id === "work") {
       card.append(node("p","field-help","Codex 与 ChatGPT Work 共用本机 Codex 环境，只能选择一个接入方式，避免重复 MCP。"));
     }
@@ -290,11 +323,18 @@ async function discoveryAction(action) {
 $("#scan-agents").addEventListener("click", () => discoveryAction(async () => {
   $("#scan-status").textContent = "正在检查已知入口…";
   const result = await api("/api/agents/scan",{});
+  $("#magpie-registration").hidden = false;
+  $("#magpie-command").textContent = result.magpie_command || "请先补齐本机虹夏 MCP 程序及同级 _internal 目录，再重新扫描。";
+  $("#copy-magpie-command").disabled = !result.magpie_command;
   discovery.items = result.clients;
   clearDiscoveryPlan(); renderDiscovery();
   $("#scan-status").textContent = (result.scope ? result.scope + "。 " : "") + "扫描完成：" + result.clients.filter(item => item.detected).length +
     " 个入口有证据。请选择客户端；未发现的入口也可选择预览，缺依赖会单独提示。";
 }));
+$("#copy-magpie-command").addEventListener("click", () => {
+  const control = $("#copy-magpie-command");
+  guarded(() => copyText($("#magpie-command").textContent, control, "已复制本机 MCP 程序路径。"), control);
+});
 $("#preview-discovery").addEventListener("click", () => discoveryAction(async () => {
   clearDiscoveryPlan();
   const result = await api("/api/agents/batch-plan",{clients:[...discovery.selected]});
@@ -330,8 +370,10 @@ $("#apply-discovery").addEventListener("click", () => discoveryAction(async () =
 async function openGuide(agent) {
   agent = (await api("/api/agents/prepare",{id:agent.id})).agent;
   wizard = {step:3,client:agent.client,plan:{guide:agent.guide},agent,busy:false,guideOnly:true};
-  $("#wizard-success-title").textContent = "接入 " + agent.name + " · 自动配置";
-  $("#wizard-success-text").textContent = "接入文件已保存。复制提示词发给有本机操作能力的 AI，由它配置并验证。";
+  const botGuide = isStandaloneBot(agent);
+  $("#wizard-success-title").textContent = agent.manager === "magpie" ? "核对 MAGPIE 连接" : botGuide ? "DS Bot 接入步骤" : "接入 " + agent.name + " · 自动配置";
+  $("#wizard-success-text").textContent = agent.manager === "magpie" ? "重连客户端，在新会话中验证已有虹夏工具。" : botGuide ? "请在 DS Bot 启用能力，再从目标 Bot 验证。" :
+    "接入文件已保存。复制提示词发给有本机操作能力的 AI，由它配置并验证。";
   $("#success-notes").replaceChildren();
   renderGuide(agent.guide, agent.needed_files, agent.bundle_directory);
   renderWizard();
@@ -526,6 +568,8 @@ function chooseClient(client) {
 function renderGuide(guide, neededFiles, bundleDirectory="") {
   if (!guide) return;
   $("#guide-title").textContent = guide.title;
+  $("#copy-guide-prompt").textContent = guide.prompt_label || "复制自动配置提示词";
+  $("#guide-tag").textContent = guide.prompt_label ? "按步骤验证" : "复制即用";
   const steps = $("#guide-steps"); steps.replaceChildren();
   for (const text of guide.steps) steps.append(node("li", "", text));
   $("#guide-prompt").textContent = guide.prompt;
@@ -573,8 +617,8 @@ function renderWizard() {
   $$(".stepper li").forEach((item,index) => {item.classList.toggle("current",index+1 === wizard.step); item.classList.toggle("done",index+1 < wizard.step);});
   $("#wizard-back").textContent = wizard.step === 1 ? "取消" : wizard.step === 2 ? "← 上一步" : "完成";
   $("#wizard-next").textContent = wizard.step === 1 ? "检测并继续 →" : wizard.step === 2 ?
-    wizard.client === "custom" ? "生成并保存接入文件" : "应用并添加" : wizard.guideOnly ? "复制自动配置提示词" :
-    wizard.client === "custom" ? "复制自动配置提示词" : "发送测试提醒";
+    wizard.client === "custom" ? "生成并保存接入文件" : "应用并添加" :
+    wizard.guideOnly || wizard.client === "custom" ? wizard.plan?.guide?.prompt_label || "复制自动配置提示词" : "发送测试提醒";
   $("#wizard-next").disabled = wizard.busy; $("#wizard-back").disabled = wizard.busy; $("#close-wizard").disabled = wizard.busy;
   $("#wizard-error").hidden = true;
 }
@@ -624,8 +668,9 @@ $("#agent-form").addEventListener("submit",async event => {
       wizard.step = 2;
     } else if (wizard.step === 2) {
       const result = await api("/api/agents/apply",{plan_id:wizard.plan.plan_id}); wizard.agent = result.agent;
-      $("#wizard-success-title").textContent = wizard.client === "custom" ? "配置已准备好" : "伙伴已添加";
-      $("#wizard-success-text").textContent = wizard.client === "custom" ? "MCP 配置、规则和提示词已保存到下方目录，无需手动下载。复制提示词给 AI 即可开始自动配置。" :
+      const botGuide = isStandaloneBot(result.agent);
+      $("#wizard-success-title").textContent = botGuide ? "DS Bot 接入资料已生成" : wizard.client === "custom" ? "配置已准备好" : "伙伴已添加";
+      $("#wizard-success-text").textContent = result.agent.manager === "magpie" ? "档案已保存。请在对应客户端中验证 MAGPIE 分发的工具。" : botGuide ? "请在 DS Bot 完成能力配置，再从目标 Bot 验证连接。" : wizard.client === "custom" ? "MCP 配置、规则和提示词已保存到下方目录，无需手动下载。复制提示词给 AI 即可开始自动配置。" :
         "已保存配置；" + (result.backup_count ? result.backup_count + " 个原文件已备份。" : "原有配置均已保留。");
       $("#success-notes").replaceChildren(...result.notes.map(text => node("p","",text)));
       renderGuide(result.agent.guide, result.agent.needed_files, result.agent.bundle_directory);

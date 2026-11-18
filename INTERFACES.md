@@ -1,5 +1,17 @@
 # 内部接口
 
+## Magpie 路由与 DS Bot 接入（2026-11-18）
+
+接口沿用本机设置中心的 Host、Origin 和会话令牌校验。路径依据当前安装生成。
+
+| POST 路径 | 输入 | 返回及含义 |
+| --- | --- | --- |
+| `/api/agents/scan` | `{}` | `clients[].magpie_route` 为 `shared/direct/unknown`，`magpie_command` 为已校验的本机程序路径或 null。DS Bot 独立版为 `id=ds-bot, mode=guided`。 |
+| `/api/agents/magpie-direct-preview` | `{"client":"codex"}` | `service, targets, note, can_apply, plan_id`。预览不写配置。缺少已核实的 CLI 或处于隔离模式时，只展示可核对的范围。 |
+| `/api/agents/magpie-direct-apply` | `{"plan_id":"<预览编号>"}` | 成功返回 `route, targets, note`，表示资源库已保存策略。编号限当前设置中心会话，10 分钟内使用一次。库、程序或服务发生变化时拒绝过期计划。若外部同步已开始但结果不明，返回错误，须先在 Magpie 核对结果。 |
+
+DS Bot 复用现有 `plan/apply/prepare` 的自定义客户端档案，默认宿主为 `DS Bot`。提示词提供 `name/kind/transport/command/args/env` 能力字段；建档和导出不改 Bot 状态，不表示真实 Bot 已读取工具。
+
 ## MCP 启动路径（2026-11-03）
 
 - 所有新配置的 MCP `command` 必须指向 `<安装根>\dist\虹夏MCP-v2\虹夏MCP-v2.exe`，不得单独复制 EXE 而遗漏同级 `_internal/`。

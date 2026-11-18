@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_discovery import scan, read_json, magpie_state, MAX_CONFIG
+from agent_discovery import scan, read_json, magpie_state, ds_bot_location, MAX_CONFIG
 from agent_setup import AgentSetup
 from app_layout import bundled_mcp_path
 from control_store import ControlStore
@@ -66,6 +66,107 @@ class DiscoveryTests(unittest.TestCase):
             self.setup.plan("codex", "Codex")
         manager.write_bytes(b"x" * (MAX_CONFIG + 1))
         self.assertTrue(magpie_state(self.home, "codex")["error"])
+
+    def test_magpie_router_modes_are_read_only_and_never_return_environment_values(self):
+        service = {"name": "nijika-pet", **self.service(env={"PRIVATE": "not-for-output"}),
+                   "agents": ["codex"]}
+        path = self.write(".config/magpie/library.json", {"mcpHub": True, "mcp": [service]})
+        before = path.read_bytes()
+        info = magpie_state(self.home, "codex")
+        self.assertTrue(info["managed"])
+        self.assertEqual(info["route"], "shared")
+        self.assertNotIn("not-for-output", json.dumps(info))
+        item = next(i for i in scan(self.home, self.setup.mcp, which=lambda _: None) if i["id"] == "codex")
+        self.assertEqual(item["magpie_route"], "shared")
+        self.assertEqual(path.read_bytes(), before)
+
+        service["hub"] = "direct"
+        self.write(".config/magpie/library.json", {"mcpHub": True, "mcp": [service]})
+        self.assertEqual(magpie_state(self.home, "codex")["route"], "direct")
+        self.write(".config/magpie/library.json", {"mcpHub": False, "mcp": [service]})
+        self.assertEqual(magpie_state(self.home, "codex")["route"], "direct")
+        service["hub"] = "unrecognized"
+        self.write(".config/magpie/library.json", {"mcpHub": True, "mcp": [service]})
+        self.assertTrue(magpie_state(self.home, "codex")["error"])
+
+    def test_magpie_clients_that_cannot_use_the_hub_keep_direct_entries(self):
+        service = {"name": "nijika-pet", **self.service(), "agents": ["claude-desktop", "codex"]}
+        self.write(".config/magpie/library.json", {"mcpHub": True, "mcp": [service]})
+        self.assertEqual(magpie_state(self.home, "claude-desktop")["route"], "direct")
+        self.write(".config/magpie/library.json", {"mcpHub": True, "mcp": [service, {"name": "magpie"}]})
+        self.assertEqual(magpie_state(self.home, "codex")["route"], "direct")
+
+    def test_shared_guide_and_registration_do_not_apply_a_route_change(self):
+        service = {"name": "nijika-pet", **self.service(), "agents": ["codex"]}
+        path = self.write(".config/magpie/library.json", {"mcpHub": True, "mcp": [service]})
+        before = path.read_bytes()
+        plan = self.setup.plan("codex", "Codex")
+        self.assertEqual(plan["manager"], "magpie")
+        self.assertFalse(plan["files"])
+        self.assertTrue(any("共享路由" in note for note in plan["notes"]))
+        self.assertTrue(any("通过 MCP 路由" in step for step in plan["guide"]["steps"]))
+        self.assertEqual(path.read_bytes(), before)
+        self.setup.apply(plan["plan_id"])
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_magpie_duplicate_services_and_invalid_router_do_not_allow_writes(self):
+        service = {"name": "nijika-pet", **self.service(), "agents": ["codex"]}
+        for document in ({"mcpHub": True, "mcp": [service, service]},
+                         {"mcpHub": True, "mcp": [{**service, "agents": ["dsh"]}, service]},
+                         {"mcpHub": "true", "mcp": [service]}):
+            path = self.write(".config/magpie/library.json", document)
+            before = path.read_bytes()
+            self.assertTrue(magpie_state(self.home, "codex")["error"])
+            with self.assertRaisesRegex(ValueError, "MAGPIE"):
+                self.setup.plan("codex", "Codex")
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_magpie_custom_config_root_only_used_when_requested(self):
+        config_root = self.home / "custom-config"
+        path = config_root / "magpie/library.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps({"mcpHub": True, "mcp": [
+            {"name": "nijika-pet", **self.service(), "agents": ["codex"]}]}), encoding="utf-8")
+        with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(config_root)}):
+            self.assertFalse(magpie_state(self.home, "codex")["managed"])
+            self.assertEqual(magpie_state(self.home, "codex", use_environment=True)["route"], "shared")
+
+    def test_ds_bot_standalone_uses_its_recorded_home_without_reading_bot_state(self):
+        directory = self.home / "separate-bot-home"
+        profile = directory / "profiles/ds-bot/cordis.patch.yml"
+        profile.parent.mkdir(parents=True)
+        profile.write_text("unrelated", encoding="utf-8")
+        self.write("AppData/Roaming/DS Bot/locations.json", {"dataDir": str(directory)})
+        state = self.write("separate-bot-home/bot/state.json", {"private": "not-for-discovery-output"})
+        before = state.read_bytes()
+        item = next(i for i in scan(self.home, self.setup.mcp, which=lambda _: None) if i["id"] == "ds-bot")
+        self.assertTrue(item["detected"])
+        self.assertEqual(item["location"], str(directory.resolve()))
+        self.assertEqual(item["config_path"], str(profile.resolve()))
+        self.assertEqual(item["mode"], "guided")
+        self.assertNotIn("not-for-discovery-output", json.dumps(item))
+        self.assertEqual(state.read_bytes(), before)
+
+    def test_invalid_ds_bot_location_does_not_fall_back_to_another_home(self):
+        fallback = self.home / ".ds-bot/profiles/ds-bot/cordis.patch.yml"
+        fallback.parent.mkdir(parents=True)
+        fallback.write_text("keep", encoding="utf-8")
+        self.write("AppData/Roaming/DS Bot/locations.json", {"dataDir": "relative-path"})
+        result = ds_bot_location(self.home)
+        self.assertEqual(result["location"], "")
+        self.assertIn("无法安全确认", result["issue"])
+
+    def test_ds_bot_guidance_uses_its_capability_interface_without_writing_bot_state(self):
+        state = self.write(".ds-bot/bot/state.json", {"bots": {"keep": {"name": "keep"}}})
+        before = state.read_bytes()
+        plan = self.setup.plan("custom", "DS Bot", str(self.home / ".ds-bot"),
+                               agent_identity="Agent", software="DS Bot")
+        self.assertFalse(plan["files"])
+        self.assertIn("设置 → 能力", plan["guide"]["prompt"])
+        self.assertIn("不直接改写 Bot 状态文件", plan["guide"]["prompt"])
+        self.assertEqual(plan["export"]["mcpServers"]["nijika-pet"]["env"]["NIJIKA_HOST_NAME"], "DS Bot")
+        self.setup.apply(plan["plan_id"])
+        self.assertEqual(state.read_bytes(), before)
 
     def test_all_three_json_adapters_preserve_other_settings_dedupe_and_are_idempotent(self):
         for client, relative, identity in (

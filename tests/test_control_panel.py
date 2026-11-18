@@ -343,7 +343,8 @@ class LocalAPITests(unittest.TestCase):
             self.assertNotIn(b"NIJIKA_SESSION_TOKEN",response.read())
 
     def test_discovery_and_batch_use_existing_auth_and_preserve_verification_boundaries(self):
-        for route in ("/api/agents/scan", "/api/agents/batch-plan", "/api/agents/batch-apply"):
+        for route in ("/api/agents/scan", "/api/agents/batch-plan", "/api/agents/batch-apply",
+                      "/api/agents/magpie-direct-preview", "/api/agents/magpie-direct-apply"):
             with self.subTest(route=route):
                 with self.assertRaises(HTTPError) as error:
                     self.call(route, {}, token=False)
@@ -357,6 +358,19 @@ class LocalAPITests(unittest.TestCase):
             self.assertFalse(agent["host_activity"]["called"])
             self.call("/api/agents/test", {"id":agent["id"]})
         self.assertTrue(all(not item["host_activity"]["called"] for item in self.call("/api/state")["agents"]))
+
+    def test_magpie_route_preview_in_isolated_home_cannot_apply(self):
+        library = self.app.setup.home / ".config/magpie/library.json"
+        library.parent.mkdir(parents=True)
+        library.write_text(json.dumps({"mcpHub": True, "mcp": [{"name": "nijika-pet",
+            "command": str(self.app.setup.mcp), "args": [], "agents": ["codex"]}]}), encoding="utf-8")
+        before = library.read_bytes()
+        plan = self.call("/api/agents/magpie-direct-preview", {"client": "codex"})
+        self.assertFalse(plan["can_apply"])
+        self.assertEqual(plan["targets"], ["codex"])
+        with self.assertRaises(HTTPError):
+            self.call("/api/agents/magpie-direct-apply", {"plan_id": "anything"})
+        self.assertEqual(library.read_bytes(), before)
 
     def test_rejected_post_bodies_return_403_without_configuring_anything(self):
         original = self.app.store.settings()

@@ -137,6 +137,26 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual([isolated.get(result.structured_content["request_id"]).agent for result in results],
                                          ["ChatGPT", "Agent"])
 
+    async def test_shared_router_does_not_guess_caller_and_direct_clients_keep_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            isolated = NotificationStore(Path(directory) / "notices.sqlite3")
+            with patch.object(mcp_server, "store", isolated), patch.object(mcp_server, "AGENT_NAME", "auto"), patch.object(mcp_server, "HOST_NAME", ""):
+                async with Client(mcp_server.mcp, client_info=Implementation(name="magpie", version="test")) as shared:
+                    anonymous = await shared.call_tool("show_completion", {"task": "共享路由", "summary": "未知来源不得猜测。"})
+                    notice = isolated.get(anonymous.structured_content["request_id"])
+                    self.assertEqual((notice.agent, notice.software), ("Agent", "未识别软件"))
+                    named = await asyncio.gather(
+                        shared.call_tool("show_completion", {"task": "共享一", "summary": "明确来源一。", "agent_name": "ChatGPT", "software": "Codex"}),
+                        shared.call_tool("show_completion", {"task": "共享二", "summary": "明确来源二。", "agent_name": "DeepSeek", "software": "DSH"}),
+                    )
+                    sources = [(isolated.get(item.structured_content["request_id"]).agent,
+                                isolated.get(item.structured_content["request_id"]).software) for item in named]
+                    self.assertEqual(sources, [("ChatGPT", "Codex"), ("DeepSeek", "DSH")])
+                async with Client(mcp_server.mcp, client_info=Implementation(name="codex-mcp-client", version="test")) as direct:
+                    result = await direct.call_tool("show_completion", {"task": "直连", "summary": "保留客户端握手。"})
+                    notice = isolated.get(result.structured_content["request_id"])
+                    self.assertEqual((notice.agent, notice.software), ("ChatGPT", "Codex"))
+
     async def test_choice_width_returns_actionable_retry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             previous = mcp_server.store

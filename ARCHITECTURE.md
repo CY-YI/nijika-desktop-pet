@@ -1,5 +1,12 @@
 # 架构
 
+## 可选的 Magpie 管理与 DS Bot 宿主（2026-11-18）
+
+- 扫描按配置根读取 Magpie 资源库，只公开服务归属和路由信息。设置中心在首页扫描后提供本机 MCP 路径。原有直接接入继续使用各客户端适配器。
+- 标准共享连接由 Magpie 发起。虹夏依据握手、已配置的宿主和单次调用的显式来源生成气泡，互不借用其他调用的身份。服务直连把握手交还给具体客户端。编辑器和未知多模型宿主仍需相应来源证据。
+- `magpie_route.MagpieDirectRoute` 在用户核对目标后调用 Magpie 的 `library mcp router <服务名> direct`。执行前比对资源库、Magpie 程序摘要与虹夏 onedir 结构，执行后读回服务策略与目标列表。服务策略保存、客户端实际加载、桌面收到和点击回传分别验证。Magpie 负责整个资源库的同步，超时或读回不一致时须先检查同步结果。
+- DS Bot 使用独立数据目录。发现仅使用目录记录和已知配置文件是否存在，向导把接入资料写进虹夏自己的档案目录。启用能力、授予信任和选择 Bot 由 DS Bot 自身处理。使用 `--agent-home` 验收时禁用真实 Magpie 调用，桌宠数据另外通过 `NIJIKA_PET_DB_PATH` 隔离。
+
 ## MCP onedir 运行时（2026-11-03）
 
 - 当前 MCP 入口固定为 `dist/虹夏MCP-v2/虹夏MCP-v2.exe`，其 `_internal/` 必须与 EXE 一同分发。设置中心、Work 启动包装器、自动接入和安装器均通过 `app_layout.bundled_mcp_path()` 或等价的同一路径读取；自动接入在规划前调用 `validate_bundled_mcp()` 同时检查 EXE 与运行时目录。批量扫描还会阻止 Codex 与 Work 同时提交，避免同一本机 Codex 环境建立两套 MCP。
