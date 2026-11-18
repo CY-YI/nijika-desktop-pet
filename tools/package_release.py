@@ -13,6 +13,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from app_layout import APPROVAL_RUNTIME_DIRECTORY, PET_RUNTIME_DIRECTORY
 from support_bundle import read_bundle, read_public_bundle
 PREFIX = "虹夏桌宠-Windows私下试用"
 MCP_DIRECTORY = "dist/虹夏MCP-v2"
@@ -20,8 +21,10 @@ MCP_EXECUTABLE = f"{MCP_DIRECTORY}/虹夏MCP-v2.exe"
 FILES = (
     "00-解压后先看.txt",
     "dist/虹夏桌宠.exe",
+    f"dist/{PET_RUNTIME_DIRECTORY}",
     MCP_DIRECTORY,
     "dist/虹夏审批提醒.exe",
+    f"dist/{APPROVAL_RUNTIME_DIRECTORY}",
     "integrations/codex/hooks.example.json",
     "integrations/codex/install-hooks.ps1",
     "integrations/claude-code/install-hooks.ps1",
@@ -64,14 +67,27 @@ def _mcp_source(mcp_exe: Path | None) -> Path:
         raise FileNotFoundError(f"Missing onedir MCP directory or executable: {source}")
     if not executable.is_file():
         raise FileNotFoundError(f"Missing onedir MCP executable: {executable}")
+    runtime = source / "_internal"
+    if runtime.is_symlink() or not runtime.is_dir() or not any(p.is_file() for p in runtime.rglob("*")):
+        raise FileNotFoundError(f"Missing or empty onedir MCP runtime: {runtime}")
     return source
 
 
-def _release_sources(mcp_exe: Path | None = None) -> dict[str, Path]:
-    overrides: dict[str, Path | None] = {
-        "dist/虹夏桌宠.exe": None,
-        "dist/虹夏审批提醒.exe": None,
-    }
+def _release_sources(mcp_exe: Path | None = None, app_exe: Path | None = None,
+                     approval_exe: Path | None = None) -> dict[str, Path]:
+    overrides = {}
+    for name, executable, runtime in (
+        ("dist/虹夏桌宠.exe", app_exe, PET_RUNTIME_DIRECTORY),
+        ("dist/虹夏审批提醒.exe", approval_exe, APPROVAL_RUNTIME_DIRECTORY),
+    ):
+        if name in FILES:
+            source = executable or ROOT / name
+            support = source.parent / runtime
+            if (not source.is_file() or not (support / "base_library.zip").is_file()
+                    or not (support / "python312.dll").is_file()):
+                raise FileNotFoundError(f"Expected {source.name} and its onedir runtime: {support}")
+            overrides[name] = source
+            overrides[f"dist/{runtime}"] = support
     if MCP_DIRECTORY in FILES:
         overrides[MCP_DIRECTORY] = _mcp_source(mcp_exe)
     return {name: overrides.get(name) or ROOT / name for name in FILES}
@@ -102,7 +118,7 @@ def _collect_entries(sources: dict[str, Path]) -> list[tuple[str, Path]]:
 
 
 def release_file_names(mcp_directory: Path | None = None) -> list[str]:
-    """Return the exact allowlisted file set, including the MCP runtime tree."""
+    """Return the exact allowlisted file set, including the onedir runtime trees."""
     names = [name for name, _ in _collect_entries(_release_sources(mcp_directory))]
     names.extend(_public_support(None))
     return names
@@ -117,11 +133,7 @@ def _public_support(support_bundle: Path | None) -> dict[str, bytes]:
 
 def build(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None,
           support_bundle: Path | None = None, approval_exe: Path | None = None) -> None:
-    sources = _release_sources(mcp_exe)
-    if app_exe:
-        sources["dist/虹夏桌宠.exe"] = app_exe
-    if approval_exe:
-        sources["dist/虹夏审批提醒.exe"] = approval_exe
+    sources = _release_sources(mcp_exe, app_exe, approval_exe)
     entries = _collect_entries(sources)
     public = _public_support(support_bundle)
     manifest: dict[str, str] = {}
@@ -149,11 +161,7 @@ def stage(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None
     """Create a clean installer source tree from the same explicit allowlist."""
     if output.exists():
         raise FileExistsError(f"Installer staging directory already exists: {output}")
-    sources = _release_sources(mcp_exe)
-    if app_exe:
-        sources["dist/虹夏桌宠.exe"] = app_exe
-    if approval_exe:
-        sources["dist/虹夏审批提醒.exe"] = approval_exe
+    sources = _release_sources(mcp_exe, app_exe, approval_exe)
     entries = _collect_entries(sources)
     public = _public_support(support_bundle)
     manifest: dict[str, str] = {}

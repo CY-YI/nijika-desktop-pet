@@ -30,12 +30,31 @@ def materialize_release_source(source: Path) -> None:
             (target / "_internal").mkdir(parents=True)
             (target / "虹夏MCP-v2.exe").write_bytes(b"mcp executable")
             (target / "_internal" / "python312.dll").write_bytes(b"mcp runtime")
+        elif name in (f"dist/{package_release.PET_RUNTIME_DIRECTORY}",
+                      f"dist/{package_release.APPROVAL_RUNTIME_DIRECTORY}"):
+            target.mkdir(parents=True)
+            for file in ("base_library.zip", "python312.dll"):
+                (target / file).write_bytes(b"onedir runtime")
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(name.encode("utf-8"))
 
 
 class InstallerPackagingTests(unittest.TestCase):
+    def test_mcp_package_rejects_missing_and_empty_runtime(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executable = root / "虹夏MCP-v2.exe"
+            executable.write_bytes(b"exe")
+            with self.assertRaisesRegex(FileNotFoundError, "runtime"):
+                package_release._mcp_source(executable)
+            runtime = root / "_internal"
+            runtime.mkdir()
+            with self.assertRaisesRegex(FileNotFoundError, "runtime"):
+                package_release._mcp_source(executable)
+            (runtime / "runtime.pyd").write_bytes(b"runtime")
+            self.assertEqual(package_release._mcp_source(executable), root)
+
     def test_friend_guide_uses_actual_version_and_describes_capability_limits(self):
         from tools.package_friend_trial import build
         with tempfile.TemporaryDirectory() as directory:
@@ -124,6 +143,11 @@ class InstallerPackagingTests(unittest.TestCase):
             (base / "mcp" / "_internal" / "runtime.pyd").write_bytes(b"reviewed runtime")
             for index, candidate in enumerate(candidates):
                 candidate.write_bytes(f"reviewed candidate {index}".encode())
+            for name in (package_release.PET_RUNTIME_DIRECTORY, package_release.APPROVAL_RUNTIME_DIRECTORY):
+                runtime = base / name
+                runtime.mkdir()
+                for filename in ("base_library.zip", "python312.dll"):
+                    (runtime / filename).write_bytes(f"{name}/{filename}".encode())
             with patch.object(package_release, "ROOT", source):
                 package_release.stage(base / "stage", *candidates[:2], approval_exe=candidates[2])
                 package_release.build(base / "trial.zip", *candidates[:2], approval_exe=candidates[2])
@@ -142,6 +166,24 @@ class InstallerPackagingTests(unittest.TestCase):
                 relative = package_release.MCP_DIRECTORY + "/_internal/runtime.pyd"
                 self.assertEqual((base / "stage" / relative).read_bytes(), runtime.read_bytes())
                 self.assertEqual(archive.read(f"{package_release.PREFIX}/{relative}"), runtime.read_bytes())
+                for name in (package_release.PET_RUNTIME_DIRECTORY, package_release.APPROVAL_RUNTIME_DIRECTORY):
+                    runtime = f"{name}/python312.dll"
+                    self.assertEqual(archive.read(f"{package_release.PREFIX}/dist/{runtime}"), runtime.encode())
+                    self.assertEqual((base / "stage" / "dist" / runtime).read_bytes(), runtime.encode())
+
+    def test_missing_approval_runtime_blocks_staging_before_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            source = base / "source"
+            materialize_release_source(source)
+            exe = base / "other" / "hook.exe"
+            exe.parent.mkdir()
+            exe.write_bytes(b"exe without its runtime")
+            stage = base / "stage"
+            with patch.object(package_release, "ROOT", source):
+                with self.assertRaisesRegex(FileNotFoundError, "_nijika_hook_runtime"):
+                    package_release.stage(stage, approval_exe=exe)
+            self.assertFalse(stage.exists())
 
     @unittest.skipUnless(os.name == "nt", "PowerShell syntax check")
     def test_build_script_has_valid_powershell_syntax(self):
@@ -199,6 +241,32 @@ class InstallerSmokeSafetyTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "Existing Nijika shortcuts"):
                     self.smoke.require_disposable_session(True)
             self.assertEqual(shortcut.read_bytes(), b"existing shortcut")
+
+    def test_upgrade_guard_rejects_two_copies_of_same_installer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            previous = root / "previous.exe"
+            candidate = root / "candidate.exe"
+            for path in (previous, candidate):
+                path.write_bytes(b"same installer bytes")
+            with patch.object(self.smoke, "require_disposable_session"), patch.object(self.smoke, "run") as run:
+                with self.assertRaisesRegex(ValueError, "two distinct Setup binaries"):
+                    self.smoke.verify(candidate, root / "empty", disposable_session=True, upgrade_from=previous)
+            run.assert_not_called()
+            self.assertFalse((root / "empty").exists())
+
+    def test_existing_default_user_data_blocks_even_before_setup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            existing = root / ".nijika-desktop-pet"
+            existing.mkdir()
+            candidate = root / "candidate.exe"
+            candidate.touch()
+            with patch.object(self.smoke, "require_disposable_session"), \
+                    patch.object(self.smoke.Path, "home", return_value=root), patch.object(self.smoke, "run") as run:
+                with self.assertRaisesRegex(RuntimeError, "Existing Nijika user data"):
+                    self.smoke.verify(candidate, root / "empty", disposable_session=True)
+            run.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -29,7 +29,7 @@ class McpTempCleanupTests(unittest.TestCase):
         os.utime(directory, (old, old))
         return directory
 
-    def test_dry_run_and_apply_only_remove_stale_fingerprinted_directories(self):
+    def test_dry_run_finds_candidates_but_apply_refuses_to_delete(self):
         eligible = self.runtime()
         unrelated = self.root / "_MEIunrelated"
         unrelated.mkdir()
@@ -46,13 +46,13 @@ class McpTempCleanupTests(unittest.TestCase):
         with patch.object(cleanup_mcp_temp, "_windows_temp_roots_from_modules",
                           return_value={active}):
             candidates = cleanup_mcp_temp.scan(self.root, 24, {active})
-        self.assertEqual([Path(item.path) for item in candidates if item.eligible], [eligible])
+        self.assertEqual([Path(item.path) for item in candidates if item.matches], [eligible])
+        self.assertFalse(any(item.eligible for item in candidates))
         self.assertTrue(eligible.exists())
 
-        deleted, failed = cleanup_mcp_temp.apply(candidates, self.root)
-        self.assertEqual(deleted, [str(eligible)])
-        self.assertEqual(failed, [])
-        self.assertFalse(eligible.exists())
+        with self.assertRaisesRegex(RuntimeError, "Deletion disabled"):
+            cleanup_mcp_temp.apply(candidates, self.root)
+        self.assertTrue(eligible.exists())
         self.assertTrue(active.exists())
         self.assertTrue(unrelated.exists())
         self.assertTrue(recent.exists())
@@ -79,8 +79,19 @@ class McpTempCleanupTests(unittest.TestCase):
             self.assertEqual(cleanup_mcp_temp.main(), 0)
         report = json.loads(report_path.read_text(encoding="utf-8"))
         self.assertEqual(report["mode"], "dry-run")
-        self.assertEqual(report["eligible_directories"], 1)
+        self.assertEqual(report["matching_directories"], 1)
+        self.assertEqual(report["eligible_directories"], 0)
+        self.assertIn("not proven", report["warning"])
         self.assertNotIn("directories", report)
+        self.assertTrue(eligible.exists())
+
+    def test_apply_cli_refuses_even_in_a_matching_test_directory(self):
+        eligible = self.runtime()
+        arguments = ["cleanup_mcp_temp.py", "--temp-root", str(self.root), "--apply"]
+        with patch.object(sys, "argv", arguments), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as error:
+                cleanup_mcp_temp.main()
+        self.assertEqual(error.exception.code, 2)
         self.assertTrue(eligible.exists())
 
 

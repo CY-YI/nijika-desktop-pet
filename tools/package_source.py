@@ -8,12 +8,15 @@ import json
 import re
 import subprocess
 import tarfile
+import sys
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
-APPLICATION_ROOTS = ("虹夏桌宠.exe", "虹夏MCP-v2", "虹夏审批提醒.exe")
+sys.path.insert(0, str(ROOT))
+from tools.package_release import _collect_entries, _release_sources
+
 BLOCKED = {
     ".git", ".venv", "__pycache__", ".pytest_cache", "node_modules", "backups", "diagnostics",
     "build", "dist", "dist-dev", "dist-next", "dist-release", ".pyinstaller-cache",
@@ -60,23 +63,13 @@ def build(output: Path, applications: Path | None = None) -> dict:
         raise ValueError("The archive does not contain the complete committed source tree.")
     runtime_hashes = {}
     if applications:
-        for name in APPLICATION_ROOTS:
-            source = applications / name
-            if source.is_file():
-                entries = [(name, source)]
-            elif source.is_dir():
-                entries = [(f"{name}/{path.relative_to(source).as_posix()}", path)
-                           for path in sorted(source.rglob("*"))
-                           if path.is_file() and not path.is_symlink()]
-            else:
-                raise FileNotFoundError(f"Missing application artifact: {source}")
-            if not entries:
-                raise ValueError(f"Empty application artifact: {source}")
-            for relative_name, path in entries:
-                data = path.read_bytes()
-                relative = f"dist/{relative_name}"
-                files[relative] = data
-                runtime_hashes[relative] = hashlib.sha256(data).hexdigest()
+        sources = _release_sources(applications / "虹夏MCP-v2", applications / "虹夏桌宠.exe",
+                                   applications / "虹夏审批提醒.exe")
+        for relative, path in _collect_entries({name: path for name, path in sources.items()
+                                                if name.startswith("dist/")}):
+            data = path.read_bytes()
+            files[relative] = data
+            runtime_hashes[relative] = hashlib.sha256(data).hexdigest()
     manifest = {
         "format_version": 1, "source_commit": revision, "source_branch": branch,
         "created_at": datetime.now(timezone.utc).isoformat(),

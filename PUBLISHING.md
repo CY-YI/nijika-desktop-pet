@@ -1,5 +1,12 @@
 # 本机候选与发布检查单
 
+## 2026-11-18 0.1.11 本机升级收尾
+
+- 本机正式安装已更新并验收。桌宠和审批程序使用同级 onedir 依赖，原 EXE 路径保留。子代理实机核验桌宠窗口、原快捷方式、安装版审批程序及 MCP 退出，实际 Codex 命令结束 Hook 触发且在采样窗口内无新增 `_MEI`。
+- 回退备份 `backups/local-upgrade-0.1.11-20261118/` 包含升级前的 343 个文件、摘要及两条桌面链接备份。复核的 6 项接入配置摘要不变。备份仅供本机回退。
+- 0.1.11 候选产物在 `dist-next/runtime-20261118-exit-fix/`。Setup SHA-256 `c14883a5929caeffc7ccffc5cf128c2737ed5ead2da9ab240e392d27f7d77a1a`，便携 ZIP SHA-256 `00a109bdce8639d7096fd02605cd6fc889054a207ae8e2ae43a70ae410f366ff`。冻结产物来自验收时的开发工作树，该工作树另有 DS Bot 扫描改动，不能视为本轮范围提交的精确构建快照。
+- 本地收尾和正式发布分别记录。独立 Windows 的 Setup 新装、旧版升级和卸载，以及本轮原生权限申请实测仍待补验，详见 [独立 Windows 验收](CLEAN_WINDOWS_INSTALL_PLAN.md)。公开发布沿用 [公开分支审计](PUBLIC_RELEASE.md)。
+
 ## 2026-11-18 Grok Build 来源修复
 
 - 根因是 Grok 1.0.88 的真实 MCP 握手名采用 `grok-shell-<服务器名>`，旧来源表只匹配固定名称。共享 `notice_source.py` 现在先保留全部精确匹配，再仅识别 `grok-shell-` 前缀为 `Grok · Grok Build`；其他未知来源继续降级。

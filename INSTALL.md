@@ -1,5 +1,11 @@
 # 安装与运行
 
+## 2026-11-18 桌宠与审批程序打包候选
+
+新构建由 Setup 或完整 ZIP 提供，桌宠与审批提醒 EXE 的安装位置与旧版相同。维护便携副本时，需同时保留 `dist/_nijika_pet_runtime/`、`dist/_nijika_hook_runtime/` 和 `dist/虹夏MCP-v2/_internal/`。旧安装可沿用原目录进行后续升级测试，确认既有快捷方式与 Hook 命令仍能启动新版；实际宿主的信任和通知状态以升级验收为准。
+
+本机已按已验收的 0.1.11 候选逐项更新现用安装，保持原安装路径。三份 EXE 与候选一致，活动 MCP 锁定的标准库 ZIP 保留原容器，155 个成员与候选逐项内容相同。两个曾指向临时测试目录的桌面快捷方式均已指向正式安装，原设置参数与图标内容保留。新连接加载新版 MCP，更新前已打开的连接重连后切换。旧安装备份和回退方法见 [ROLLBACK.md](ROLLBACK.md)。本机原位更新与独立 Windows 的 Setup 安装验收分别记录。
+
 ## 2026-11-18 Grok Build 来源更新
 
 本机正式安装的 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏MCP-v2\虹夏MCP-v2.exe` 已更新为支持 Grok 握手的版本，SHA-256 为 `CCA1C807E71923C8F05CEDD3F33A747CCFF8E4C0F08EBF5E2F49473EE15703CE`。完整 onedir 目录必须整体保留，不能只替换或复制 EXE 后遗漏 `_internal\`。

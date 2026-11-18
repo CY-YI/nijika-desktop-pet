@@ -1,9 +1,9 @@
-"""Safely remove stale PyInstaller onefile directories from Nijika MCP runs.
+"""Preview directories that resemble the legacy Nijika MCP runtime.
 
 The tool is dry-run by default. It only considers direct ``_MEI*`` children of
 the selected temporary root that contain the full runtime fingerprint used by
-the previous ``虹夏MCP-v2.exe`` onefile build. Directories referenced by any
-currently running process are always skipped.
+the previous ``虹夏MCP-v2.exe`` onefile build. This fingerprint does not prove
+ownership and process enumeration can be incomplete. Deletion is disabled.
 """
 
 from __future__ import annotations
@@ -12,8 +12,6 @@ import argparse
 import ctypes
 import json
 import os
-import shutil
-import sys
 import time
 from ctypes import wintypes
 from dataclasses import asdict, dataclass
@@ -75,6 +73,7 @@ class Candidate:
     bytes: int
     age_hours: float
     active: bool
+    matches: bool
     eligible: bool
     reason: str
 
@@ -187,31 +186,16 @@ def scan(temp_root: Path, min_age_hours: float = 24.0,
         elif not fingerprint:
             reason = "runtime fingerprint mismatch"
         else:
-            reason = "stale Nijika MCP runtime"
+            reason = "unverified legacy MCP-like runtime"
         result.append(Candidate(
             str(path), size, round(age_hours, 2), active_match,
-            reason == "stale Nijika MCP runtime", reason,
+            reason == "unverified legacy MCP-like runtime", False, reason,
         ))
     return sorted(result, key=lambda item: item.path.casefold())
 
 
 def apply(candidates: list[Candidate], temp_root: Path) -> tuple[list[str], list[dict]]:
-    root = temp_root.resolve(strict=True)
-    deleted: list[str] = []
-    failed: list[dict] = []
-    for item in candidates:
-        if not item.eligible:
-            continue
-        path = Path(item.path)
-        try:
-            resolved = path.resolve(strict=True)
-            if resolved.parent != root or getattr(os.path, "isjunction", lambda _: False)(path):
-                raise OSError("path safety check changed before deletion")
-            shutil.rmtree(path)
-            deleted.append(str(path))
-        except OSError as error:
-            failed.append({"path": str(path), "error": str(error)})
-    return deleted, failed
+    raise RuntimeError("Deletion disabled: ownership and process activity cannot be verified safely")
 
 
 def main() -> int:
@@ -224,20 +208,25 @@ def main() -> int:
     parser.add_argument("--summary-only", action="store_true",
                         help="Omit the per-directory list from console and report output.")
     args = parser.parse_args()
+    if args.apply:
+        parser.error("--apply is disabled: fingerprint matches do not prove ownership or inactivity")
     if args.min_age_hours < 0:
         parser.error("--min-age-hours must be zero or greater")
     if not args.temp_root or not args.temp_root.is_dir():
         parser.error("--temp-root must be an existing directory")
     candidates = scan(args.temp_root, args.min_age_hours, _windows_temp_roots_from_modules())
-    deleted, failed = apply(candidates, args.temp_root) if args.apply else ([], [])
+    deleted, failed = [], []
     deleted_set = set(deleted)
     report = {
         "mode": "apply" if args.apply else "dry-run",
+        "warning": "Fingerprint matches are only candidates; ownership and inactivity are not proven. Deletion is disabled.",
         "temp_root": str(args.temp_root.resolve()),
         "minimum_age_hours": args.min_age_hours,
         "directories_seen": len(candidates),
-        "eligible_directories": sum(item.eligible for item in candidates),
-        "eligible_bytes": sum(item.bytes for item in candidates if item.eligible),
+        "matching_directories": sum(item.matches for item in candidates),
+        "matching_bytes": sum(item.bytes for item in candidates if item.matches),
+        "eligible_directories": 0,
+        "eligible_bytes": 0,
         "active_directories": sum(item.active for item in candidates),
         "deleted_directories": len(deleted),
         "reclaimed_bytes": sum(item.bytes for item in candidates

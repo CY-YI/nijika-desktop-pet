@@ -6,8 +6,11 @@ computer.
 
 ## Inputs
 
-- Installer: `dist-release/installer-0.1.10/虹夏桌宠-Setup-0.1.10.exe`
-- Expected installer SHA-256:
+- Candidate: `dist-next/runtime-20261118-exit-fix/setup/虹夏桌宠-Setup-0.1.11.exe`
+- Candidate SHA-256:
+  `c14883a5929caeffc7ccffc5cf128c2737ed5ead2da9ab240e392d27f7d77a1a`
+- Legacy upgrade baseline: `dist-release/installer-0.1.10/虹夏桌宠-Setup-0.1.10.exe`
+- Legacy installer SHA-256:
   `063805df2fa9716b6d6313916d4f8ebae05267f8e0b7420a2f9822bce4f1b8f9`
 - Intended install root: `%LOCALAPPDATA%\NijikaDesktopPet\app`
 - Intended user data root: `%USERPROFILE%\.nijika-desktop-pet`
@@ -22,6 +25,12 @@ computer.
    user data root, desktop shortcuts, startup folder and uninstall registry.
 3. Keep the network available only for the installer prerequisites and record
    every downloaded dependency; do not sign in to personal accounts.
+4. Run `tools/smoke_windows_installer.py <candidate> --disposable-windows-session`
+   for new installation, reinstallation and uninstallation. In a new clean
+   session, add `--upgrade-from <legacy>` to install 0.1.10 first and really
+   upgrade to 0.1.11. Use `--output <report.json>` for each run. The script checks
+   the installed file hashes and the default user-data sentinel. Window use
+   and real client Hook trust have their own checks below.
 
 ## Fresh install acceptance
 
@@ -30,7 +39,8 @@ computer.
 2. Verify the desktop pet starts without a console window and the settings
    center opens.
 3. Confirm the installed tree contains `dist\虹夏MCP-v2\虹夏MCP-v2.exe`
-   and its sibling `_internal\` directory.
+   and its sibling `_internal\` directory. The pet and approval program use
+   `dist\_nijika_pet_runtime\` and `dist\_nijika_hook_runtime\` respectively.
 4. Confirm the MCP is local stdio, no public listening port is opened, and
    repeated MCP starts do not create new `%TEMP%\_MEI*` directories.
 5. Use the settings center test reminder, then verify one local message and
@@ -50,6 +60,10 @@ computer.
 4. Verify the sentinel notification, skin, Agent profile and settings remain.
 5. Verify the exact legacy onefile MCP path is removed only when the installer
    upgrade rule targets it; unrelated files and client configuration remain.
+6. With the approval hooks already trusted in the test Codex profile, run a
+   new task that invokes a read-only command and verify the hook runs. Observe
+   the approval or completion reminder independently. Record the active EXE
+   path, trust status and any `_MEI` directory during and after the hook.
 
 ## Uninstall acceptance
 

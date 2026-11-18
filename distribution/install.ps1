@@ -27,6 +27,9 @@ if ($targetRoot.Equals($sourceRoot, [StringComparison]::OrdinalIgnoreCase) -or
 if (-not [Environment]::Is64BitOperatingSystem) { throw 'Windows x64 is required.' }
 
 foreach ($relative in @('dist\虹夏桌宠.exe', 'dist\虹夏MCP-v2\虹夏MCP-v2.exe', 'dist\虹夏审批提醒.exe',
+        'dist\_nijika_pet_runtime\base_library.zip', 'dist\_nijika_pet_runtime\python312.dll',
+        'dist\_nijika_hook_runtime\base_library.zip', 'dist\_nijika_hook_runtime\python312.dll',
+        'dist\虹夏MCP-v2\_internal\python312.dll',
         'assets\icons\nijika-shortcut.ico', 'skills\nijika-desktop-dialog\SKILL.md',
         'plugins\nijika-work-local\mcp.json', 'integrations\claude-code\install-hooks.ps1',
         'integrations\dsh\install.ps1', 'integrations\dsh\lifecycle-bridge.mjs',

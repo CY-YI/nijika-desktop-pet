@@ -27,9 +27,13 @@ def verify(executable: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="nijika-frozen-frontend-") as directory:
         isolated = Path(directory)
         database = isolated / "state" / "notifications.sqlite3"
-        environment = dict(os.environ, NIJIKA_PET_DB_PATH=str(database))
+        shutdown_file = isolated / "shutdown.signal"
+        temp = isolated / "temp"
+        temp.mkdir()
+        environment = dict(os.environ, NIJIKA_PET_DB_PATH=str(database), TEMP=str(temp), TMP=str(temp))
         process = subprocess.Popen(
-            [str(executable), "--control-panel", "--serve-only", "--agent-home", str(isolated / "user")],
+            [str(executable), "--control-panel", "--serve-only", "--agent-home", str(isolated / "user"),
+             "--test-shutdown-file", str(shutdown_file)],
             env=environment, cwd=executable.parent,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
@@ -196,13 +200,20 @@ def verify(executable: Path) -> None:
                         archive.read("distribution/support.png")).hexdigest()
             assert database.is_file()
         finally:
-            # The onefile bootstrap owns the child app: terminate that owned tree.
-            if os.name == "nt":
-                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                               capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            else:
-                process.terminate()
-            process.wait(timeout=15)
+            if process.poll() is None:
+                shutdown_file.touch()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    if os.name == "nt":
+                        subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                                       capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                    else:
+                        process.kill()
+                    process.wait(timeout=5)
+                    raise RuntimeError("Isolated panel did not shut down normally")
+            if list(temp.glob("_MEI*")):
+                raise RuntimeError("Isolated panel left PyInstaller runtime files after shutdown")
     print("Frozen assets, auth, care, Agent export/capabilities, animated skin import/playback and public sponsor export: OK")
 
 

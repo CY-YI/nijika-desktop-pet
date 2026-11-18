@@ -8,7 +8,6 @@ import argparse
 import json
 import os
 import re
-import signal
 import subprocess
 import tempfile
 import time
@@ -25,13 +24,17 @@ def verify(executable: Path) -> dict:
         isolated = Path(temporary)
         database = isolated / "state/notifications.sqlite3"
         user = isolated / "user"
-        environment = {**os.environ, "NIJIKA_PET_DB_PATH": str(database)}
+        shutdown_file = isolated / "shutdown.signal"
+        temp = isolated / "temp"
+        temp.mkdir()
+        environment = {**os.environ, "NIJIKA_PET_DB_PATH": str(database),
+                       "TEMP": str(temp), "TMP": str(temp)}
         process = subprocess.Popen(
-            [str(executable), "--control-panel", "--serve-only", "--agent-home", str(user)],
+            [str(executable), "--control-panel", "--serve-only", "--agent-home", str(user),
+             "--test-shutdown-file", str(shutdown_file)],
             env=environment, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-        panel_pid = None
         try:
             status = database.parent / "panel-status.json"
             deadline = time.monotonic() + 25
@@ -42,7 +45,6 @@ def verify(executable: Path) -> dict:
                     raise TimeoutError("Frozen panel did not start within 25 seconds")
                 time.sleep(0.1)
             panel = json.loads(status.read_text(encoding="utf-8"))
-            panel_pid = panel["pid"]
             origin = panel["url"]
             assert origin.startswith("http://127.0.0.1:")
             with urlopen(origin, timeout=5) as response:
@@ -112,19 +114,20 @@ def verify(executable: Path) -> dict:
                     "api_only": True, "external_client_calls_tested": False,
                     "interaction_preview_included": 'id="page-interaction"' in html}
         finally:
-            if panel_pid is not None and panel_pid != process.pid:
-                try:
-                    os.kill(panel_pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
             if process.poll() is None:
-                if panel_pid == process.pid:
-                    process.terminate()
+                shutdown_file.touch()
                 try:
                     process.wait(timeout=10)
                 except subprocess.TimeoutExpired:
-                    process.kill()
+                    if os.name == "nt":
+                        subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                                       capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                    else:
+                        process.kill()
                     process.wait(timeout=5)
+                    raise RuntimeError("Isolated panel did not shut down normally")
+            if list(temp.glob("_MEI*")):
+                raise RuntimeError("Isolated panel left PyInstaller runtime files after shutdown")
 
 
 if __name__ == "__main__":

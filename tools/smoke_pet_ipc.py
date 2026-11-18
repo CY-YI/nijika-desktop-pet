@@ -83,6 +83,9 @@ async def main(source: bool) -> None:
         path = Path(directory) / "notifications.sqlite3"
         environment = os.environ.copy()
         environment["NIJIKA_PET_DB_PATH"] = str(path)
+        temp = Path(directory) / "temp"
+        temp.mkdir()
+        environment["TEMP"] = environment["TMP"] = str(temp)
         process = subprocess.Popen(pet_command, env=environment)
         try:
             await until_window(WINDOW_CLASS)

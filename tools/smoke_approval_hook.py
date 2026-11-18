@@ -26,6 +26,9 @@ def main() -> None:
         executable = root / "space ' 中文" / "虹夏审批提醒.exe"
         executable.parent.mkdir()
         shutil.copy2(source, executable)
+        support = source.parent / "_nijika_hook_runtime"
+        if support.is_dir():
+            shutil.copytree(support, executable.parent / support.name)
         home = root / "codex"
         home.mkdir()
         unrelated = {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo preserved"}]}
@@ -61,6 +64,7 @@ def main() -> None:
         store = NotificationStore(root / "queue.sqlite3")
         environment = os.environ.copy()
         environment["NIJIKA_PET_DB_PATH"] = str(store.path)
+        environment["TEMP"] = environment["TMP"] = str(root)
         event = {"hook_event_name": "PermissionRequest", "session_id": "smoke-session",
                  "turn_id": "smoke-turn", "tool_name": "Bash", "cwd": "C:/isolated-test",
                  "tool_input": {"command": "TEST_PRIVATE_COMMAND", "description": "reason"}}

@@ -379,9 +379,12 @@ def run_panel(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="虹夏桌宠 · 设置与 Agent 接入")
     parser.add_argument("--browser", action="store_true", help="在浏览器打开面板")
     parser.add_argument("--serve-only", action="store_true", help="仅启动本机服务，供开发和隔离验证")
+    parser.add_argument("--test-shutdown-file", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--agent-home", type=Path, help="隔离测试用的客户端用户目录")
     args = parser.parse_args(argv)
+    if args.test_shutdown_file and not args.serve_only:
+        parser.error("--test-shutdown-file requires --serve-only")
     app = ControlApplication(home=args.agent_home)
     server = ControlServer(app, args.port)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -395,7 +398,11 @@ def run_panel(argv: list[str] | None = None) -> None:
         pass
     try:
         if args.serve_only:
-            thread.join()
+            if args.test_shutdown_file:
+                while thread.is_alive() and not args.test_shutdown_file.is_file():
+                    thread.join(timeout=0.1)
+            else:
+                thread.join()
         elif args.browser:
             webbrowser.open(server.origin)
             thread.join()

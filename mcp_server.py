@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import os
 import sqlite3
+import stat
+import sys
 import time
 
 from mcp.server import MCPServer
@@ -146,5 +149,34 @@ async def wait_for_reply(request_id: str, timeout_seconds: int = 20) -> ReplyRes
         await asyncio.sleep(0.25)
 
 
+def run_stdio() -> None:
+    try:
+        windows_pipe = os.name == "nt" and stat.S_ISFIFO(os.fstat(sys.stdout.fileno()).st_mode)
+    except (OSError, ValueError, AttributeError):
+        windows_pipe = False
+
+    def peer_closed_stdout(error: BaseException) -> bool:
+        if not isinstance(error, OSError):
+            return False
+        if error.errno != errno.EPIPE and not (windows_pipe and error.errno == errno.EINVAL):
+            return False
+        # Windows can report EINVAL when the SDK flushes its output after the
+        # peer has closed the pipe. Keep failures from other code visible.
+        frame = error.__traceback__
+        while frame is not None:
+            if (frame.tb_frame.f_globals.get("__name__") == "mcp.server.stdio"
+                    and frame.tb_frame.f_code.co_name == "stdout_writer"):
+                return True
+            frame = frame.tb_next
+        return False
+
+    try:
+        mcp.run()
+    except* OSError as errors:
+        _, unexpected = errors.split(peer_closed_stdout)
+        if unexpected is not None:
+            raise unexpected
+
+
 if __name__ == "__main__":
-    mcp.run()
+    run_stdio()

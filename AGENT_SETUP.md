@@ -374,6 +374,12 @@ agent_name="Codex"，software="VS Code"。使用你实际看到的工具前缀�
 
 当前仅扫描已知 Windows 用户级 stable/Insiders 目录；远程 SSH、WSL、容器、便携或自定义扩展目录不在自动检测范围。安装清单不代表连接成功。
 
+## 在 MAGPIE 为新 Agent 复用虹夏
+
+同一台电脑上的新 Agent 若支持由 MAGPIE 写入本机 stdio MCP，在「Library → MCP」找到现有 `nijika-pet`，勾选目标 Agent，然后重启该客户端或新建会话。保留已经生效的正式安装路径，并在新会话调用一次 `show_completion`，核对桌面气泡和来源。已由 MAGPIE 管理的目标沿用这个入口，避免在虹夏设置中心再次注册同名服务。
+
+想让新客户端在日常任务结束时主动调用虹夏，还需为它分配适用的 Instructions 或 Skill，并实际测试自然任务。原生审批通知与结束事件兜底按宿主分别验证。若只是更换原客户端使用的模型，且它继续读取同一份客户端配置，已接入的虹夏可直接沿用。MAGPIE 的分配规则见 [Library 文档](https://usemagpie.ai/docs/library#mcp-servers)。
+
 # 三客户端实际验收（2026-11-18）
 
 本机 MAGPIE 同时管理 Codex、DSH 与 DS Bot，三个客户端最终都启动了安装目录中的同一 onedir `虹夏MCP-v2.exe`。实际自然短问答分别产生了独立的 SQLite 请求，正文没有串用：

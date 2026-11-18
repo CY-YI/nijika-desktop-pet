@@ -11,7 +11,7 @@ import sys
 import tempfile
 import time
 import winreg
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -96,51 +96,99 @@ def require_disposable_session(confirmed: bool) -> dict[str, Path]:
     return folders
 
 
-def verify(setup: Path, work: Path, *, disposable_session: bool = False) -> dict:
+def verify_shortcuts(shortcuts: dict[Path, str], pet: Path) -> None:
+    from win32com.client import Dispatch
+
+    shell = Dispatch("WScript.Shell")
+    for path, arguments in shortcuts.items():
+        assert path.is_file(), path
+        shortcut = shell.CreateShortcut(str(path))
+        assert Path(shortcut.TargetPath).resolve() == pet.resolve(), path
+        assert shortcut.Arguments == arguments, path
+
+
+def verify(setup: Path, work: Path, *, disposable_session: bool = False,
+           upgrade_from: Path | None = None) -> dict:
     folders = require_disposable_session(disposable_session)
+    setup = setup.resolve(strict=True)
+    if upgrade_from:
+        upgrade_from = upgrade_from.resolve(strict=True)
+        with setup.open("rb") as candidate, upgrade_from.open("rb") as previous:
+            if hashlib.file_digest(candidate, "sha256").digest() == hashlib.file_digest(previous, "sha256").digest():
+                raise ValueError("An old-to-new upgrade requires two distinct Setup binaries")
+    user_data = Path.home() / ".nijika-desktop-pet"
+    if user_data.exists():
+        raise RuntimeError("Existing Nijika user data detected; refusing installer test")
     desktop = folders["desktop"]
     start_menu = folders["start_menu"]
     startup = folders["startup"]
     for directory in (desktop, start_menu, startup):
         directory.mkdir(parents=True, exist_ok=True)
     install = work / "收件人 AppData/Nijika Desktop Pet/app"
-    home = work / "收件人 User"
-    user_data = home / ".nijika-desktop-pet"
-    user_data.mkdir(parents=True)
-    protected = user_data / "notifications.sqlite3"
-    protected.write_bytes(b"test data that an upgrade and uninstall must preserve")
-    log = work / "install.log"
+    hook = install / "dist/虹夏审批提醒.exe"
     common = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER",
-              "/TASKS=desktopicon,autostart", f"/DIR={install}", f"/LOG={log}"]
+              "/TASKS=desktopicon,autostart", f"/DIR={install}"]
     # Use real shell folders only inside a disposable Windows session. Never
     # redirect the user's known folders through registry edits.
-    run([str(setup), *common])
-    expected = {*package_release.release_file_names(), "SHA256SUMS.json"}
-    for name in expected:
-        assert (install / name).is_file(), name
+    previous_hook = None
+    if upgrade_from:
+        run([str(upgrade_from), *common, f"/LOG={work / 'install-previous.log'}"])
+        assert not (hook.parent / package_release.APPROVAL_RUNTIME_DIRECTORY).exists()
+        previous_hook = hashlib.sha256(hook.read_bytes()).hexdigest()
+    user_data.mkdir()
+    protected = user_data / "installer-smoke-sentinel.txt"
+    sentinel = b"test data that an upgrade and uninstall must preserve"
+    protected.write_bytes(sentinel)
+    run([str(setup), *common, f"/LOG={work / 'install-candidate.log'}"])
+    assert protected.read_bytes() == sentinel
+    if previous_hook:
+        assert hashlib.sha256(hook.read_bytes()).hexdigest() != previous_hook
+    expected_hashes = json.loads((install / "SHA256SUMS.json").read_text(encoding="utf-8"))
+    runtime_roots = (package_release.MCP_DIRECTORY, f"dist/{package_release.PET_RUNTIME_DIRECTORY}",
+                     f"dist/{package_release.APPROVAL_RUNTIME_DIRECTORY}")
+    fixed_files = set(package_release.FILES) - set(runtime_roots)
+    optional_files = {"distribution/support.json", "distribution/support.png"}
+    assert fixed_files <= expected_hashes.keys()
+    for root in runtime_roots:
+        assert any(name.startswith(root + "/") for name in expected_hashes), root
+    for name, digest in expected_hashes.items():
+        path = PurePosixPath(name)
+        assert not path.is_absolute() and ".." not in path.parts and not {"\\", ":"}.intersection(name), name
+        assert name in fixed_files | optional_files or name.startswith(tuple(root + "/" for root in runtime_roots)), name
+        if name != "plugins/nijika-work-local/mcp.json":
+            assert hashlib.sha256((install / name).read_bytes()).hexdigest() == digest, name
+    assert (install / package_release.MCP_EXECUTABLE).is_file()
+    for root in runtime_roots[1:]:
+        for filename in ("base_library.zip", "python312.dll"):
+            assert f"{root}/{filename}" in expected_hashes
     manifest = json.loads((install / "plugins/nijika-work-local/mcp.json").read_text(encoding="utf-8"))
     executable = manifest["mcpServers"]["nijika-work-pet"]["args"][-1]
     assert Path(executable) == install / "dist/虹夏MCP-v2/虹夏MCP-v2.exe", executable
     assert "AUTO_LOCAL_MCP" not in executable
     source_digests = {
-        name: hashlib.sha256((install / name).read_bytes()).hexdigest()
-        for name in package_release.release_file_names()
+        name: digest for name, digest in expected_hashes.items()
         if name != "plugins/nijika-work-local/mcp.json"
     }
     uninstallers = list(install.glob("unins*.exe"))
     assert len(uninstallers) == 1
     uninstaller = uninstallers[0]
     assert (install / "unins000.dat").is_file()
-    assert (desktop / "虹夏桌宠.lnk").is_file(), list(work.rglob("*.lnk"))
-    assert (start_menu / "虹夏桌宠/虹夏桌宠设置.lnk").is_file(), list(work.rglob("*.lnk"))
-    assert (startup / "虹夏桌宠.lnk").is_file(), list(work.rglob("*.lnk"))
+    shortcuts = {
+        desktop / "虹夏桌宠.lnk": "",
+        desktop / "虹夏桌宠设置.lnk": "--control-panel",
+        start_menu / "虹夏桌宠/虹夏桌宠.lnk": "",
+        start_menu / "虹夏桌宠/虹夏桌宠设置.lnk": "--control-panel",
+        startup / "虹夏桌宠.lnk": "",
+    }
+    verify_shortcuts(shortcuts, install / "dist/虹夏桌宠.exe")
 
-    # An in-place upgrade must retain both program integrity and user-owned data.
+    # A repeat install must retain both program integrity and user-owned data.
     (install / "dist/nijika-notice.log").write_text("generated diagnostic", encoding="utf-8")
-    run([str(setup), *common])
-    assert protected.read_bytes() == b"test data that an upgrade and uninstall must preserve"
+    run([str(setup), *common, f"/LOG={work / 'reinstall.log'}"])
+    assert protected.read_bytes() == sentinel
     for name, digest in source_digests.items():
         assert hashlib.sha256((install / name).read_bytes()).hexdigest() == digest, name
+    verify_shortcuts(shortcuts, install / "dist/虹夏桌宠.exe")
 
     process = subprocess.Popen([str(uninstaller), "/VERYSILENT", "/SUPPRESSMSGBOXES",
                                 "/NORESTART", f"/LOG={work / 'uninstall.log'}"])
@@ -156,17 +204,21 @@ def verify(setup: Path, work: Path, *, disposable_session: bool = False) -> dict
         raise RuntimeError(f"Uninstaller failed: {process.returncode}")
     wait_for_uninstall_log(work / "uninstall.log")
     assert not (install / "dist/虹夏桌宠.exe").exists()
-    assert protected.read_bytes() == b"test data that an upgrade and uninstall must preserve"
-    assert not (desktop / "虹夏桌宠.lnk").exists()
-    assert not (startup / "虹夏桌宠.lnk").exists()
+    for name in expected_hashes:
+        assert not (install / name).exists(), name
+    assert protected.read_bytes() == sentinel
+    assert not any(path.exists() for path in shortcuts)
     return {
         "status": "passed",
         "custom_chinese_spaced_install_root": True,
-        "files": len(expected),
+        "files": len(expected_hashes) + 1,
         "work_mcp_path_rewritten": True,
-        "in_place_upgrade": True,
-        "user_data_preserved": True,
+        "fresh_install": upgrade_from is None,
+        "legacy_onefile_upgrade": upgrade_from is not None,
+        "repeat_install": True,
+        "default_user_data_sentinel_preserved": True,
         "silent_uninstall": True,
+        "shortcut_targets_verified": True,
         "shortcuts_removed": True,
         "disposable_windows_session": True,
         "known_folder_registry_not_modified": True,
@@ -176,6 +228,8 @@ def verify(setup: Path, work: Path, *, disposable_session: bool = False) -> dict
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("setup", type=Path)
+    parser.add_argument("--upgrade-from", type=Path,
+                        help="Install the real legacy Setup first, then upgrade it to the candidate")
     parser.add_argument("--output", type=Path)
     parser.add_argument(
         "--disposable-windows-session", action="store_true",
@@ -187,7 +241,7 @@ def main() -> None:
     try:
         result = verify(
             args.setup.resolve(), Path(temporary.name),
-            disposable_session=args.disposable_windows_session,
+            disposable_session=args.disposable_windows_session, upgrade_from=args.upgrade_from,
         )
     finally:
         deadline = time.monotonic() + 30
