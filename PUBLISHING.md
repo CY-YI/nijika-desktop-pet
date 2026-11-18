@@ -1,5 +1,14 @@
 # 本机候选与发布检查单
 
+## 2026-11-18 Magpie 与 DS Bot 原生 UI 验收
+
+- 候选分支 `codex/magpie-dsbot-20261117` 的独立 WebView2 设置窗口已完成真实交互验收，使用隔离用户目录与 SQLite，不读取或改写日常安装、真实 Agent 配置或消息库。
+- “扫描本机”识别 8 个入口：Codex、ChatGPT Work、DeepSeek Harness、Claude Code、Gemini CLI、Copilot CLI、VS Code 和 DS Bot 独立版。
+- DS Bot 专用向导完成“检测并继续 → 生成并保存”，界面显示 `DS Bot 接入资料已生成`、`Agent · DS Bot` 预期来源、设置→能力步骤、逐 Bot 验证和“不直接改写 Bot 状态文件”。生成目录包含 5 份文件：MCP 配置、主动提醒规则、自动配置提示词、能力清单和 `SKILL.md`；完整 MCP 与 `_internal` 路径已写入配置。
+- 验收前后 DS Bot profile SHA-256 均为 `37C985CA700465C2814C20023B6AE54819B44BE905A07BA6C65A6C1F2712A573`；Magpie 库 SHA-256 均为 `3DD2910E400D7538E5803EEED9581C315ABC5B9D2B6937228C798BB30F94F0E1`。
+- “预览虹夏直连”在隔离模式只生成预览，界面明确显示 `直连预览完成，尚未修改 MAGPIE` 和 `隔离预览禁止调用真实 MAGPIE`；预览范围为 `codex`、`dsh`，Magpie 库哈希未变化。
+- 仍有接收方边界：真实 DS Bot 能力启用、目标 Bot 主动调用与结束事件、真实 Magpie 直连保存、各客户端重连后的来源显示和权限事件必须在实际宿主的全新消息中分别验证。候选版不标记 `ALL_FINISH`。
+
 ## 2026-11-05 公开开源审计与整改
 
 - 只读审计报告：`diagnostics/public-open-source-audit-20261105/report.json`。当前源码、标准暂存区和 v0.1.10 源码包均未发现 SQLite 数据库、日志、私钥、令牌或用户 Agent 配置；Python 196 项通过、1 项可选 PyYAML 跳过，JavaScript 20 项通过。

@@ -10,9 +10,10 @@
 - 验证：Python 213 项（212 通过、1 项可选依赖跳过）；前端表单 7 项、互动 13 项、DSH 生命周期 5 项全部通过；`node --check control-ui/app.js` 与 `git diff --check` 通过。
 - 冻结包验证：解压后的标准试用目录通过资源、鉴权、Agent 导出、养成、动画、皮肤导入与赞助导出冒烟；MCP onedir 完成 stdio 握手、四工具、并发回执，19 种来源识别及 4 个并发客户端共库通过；DSH 真实 `SessionStore` 到冻结子进程事件链通过。
 - DS Bot 隔离验证：扫描发现独立版数据目录，向导生成“复制 DS Bot 接入说明”，完整 MCP 路径、设置→能力、逐 Bot 验证和“不直接改写 Bot 状态文件”均可见；只生成虹夏档案，测试目录中的 Bot profile 未改变。证据见 `diagnostics/magpie-frozen-review-20261118/dsbot-wizard-result.json`。
+- 原生 WebView2 UI 实机验收通过：在隔离候选设置窗口完成“扫描本机 → DS Bot 生成接入指引 → 检测并继续 → 生成并保存”，界面显示 8 个本机入口、`Agent · DS Bot` 来源、设置→能力和逐 Bot 验证步骤。生成目录包含 MCP 配置、主动提醒规则、自动配置提示词、能力清单与技能副本；验收前后两份基线文件 SHA-256 均未变化。证据见 `diagnostics/experience-ui-20261118-run2/ui-acceptance.json`。
 - Magpie 只读验证：真实 CLI 唯一定位为 `D:\Magpie\magpie-windows-amd64.exe`；当前虹夏仍为共享路由，涉及 8 个客户端。预览成功后资源库摘要保持不变。没有执行真实直连切换，因为 Magpie 保存会同步整个资源库；需由用户按预览范围决定。
 - 候选产物：`dist-next\虹夏桌宠-Magpie与DSBot-候选版.zip`；程序与验收文档位于 `dist-next\magpie-candidate-20261118`。真实 DS Bot 能力启用、真实 Magpie 直连切换、各客户端重连后的来源显示与自动结束事件仍保留为接收方验收项。
-- 收尾边界：只提交独立的 `codex/magpie-dsbot-20261117` 候选分支；不推送、不合并 `main`，不替换正式安装目录或用户现有 Agent 配置。
+- 收尾边界：推送独立的 `codex/magpie-dsbot-20261117` 候选分支；不合并 `main`，不替换正式安装目录或用户现有 Agent 配置。
 
 ## 当前任务：公开开源审计整改（2026-11-05）
 

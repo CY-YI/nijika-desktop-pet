@@ -1,0 +1,65 @@
+{
+  "generated_at": "2026-11-18T14:33:33.0990874+08:00",
+  "branch": "codex/magpie-dsbot-20261117",
+  "candidate_commit": "ceb09fd",
+  "method": "Windows Computer Use on embedded WebView2",
+  "runtime": {
+    "pid": 52800,
+    "url": "http://127.0.0.1:55295/#agents",
+    "isolated_user_dir": "build\\magpie-dsbot-20261117\\diagnostics\\experience-ui-20261118-run2\\user",
+    "isolated_state_dir": "build\\magpie-dsbot-20261117\\diagnostics\\experience-ui-20261118-run2\\state"
+  },
+  "scan": {
+    "completed": true,
+    "evidence_entries": 8,
+    "clients": [
+      "Codex",
+      "ChatGPT Work",
+      "DeepSeek Harness",
+      "Claude Code",
+      "Gemini CLI",
+      "Copilot CLI",
+      "VS Code",
+      "DS Bot 独立版"
+    ]
+  },
+  "ds_bot_wizard": {
+    "completed": true,
+    "success_title": "DS Bot 接入资料已生成",
+    "profile_id": "8263a3dcb1554d47979df0e42b608d11",
+    "expected_bubble_source": "Agent · DS Bot",
+    "settings_capability_guidance_visible": true,
+    "per_bot_validation_visible": true,
+    "does_not_modify_bot_state_visible": true,
+    "output_directory": "build\\magpie-dsbot-20261117\\diagnostics\\experience-ui-20261118-run2\\state\\integrations\\agents\\8263a3dcb1554d47979df0e42b608d11",
+    "generated_files": [
+      "nijika-mcp.json",
+      "nijika-agent-instructions.txt",
+      "nijika-setup-prompt.txt",
+      "nijika-notification-capabilities.json",
+      "SKILL.md"
+    ],
+    "bot_state_sha256_before": "37C985CA700465C2814C20023B6AE54819B44BE905A07BA6C65A6C1F2712A573",
+    "bot_state_sha256_after": "37C985CA700465C2814C20023B6AE54819B44BE905A07BA6C65A6C1F2712A573",
+    "bot_state_unchanged": true
+  },
+  "magpie_direct_preview": {
+    "completed": true,
+    "status_text": "直连预览完成，尚未修改 MAGPIE；请先核对受影响的客户端。",
+    "targets": [
+      "codex",
+      "dsh"
+    ],
+    "isolate_note_visible": true,
+    "can_apply": false,
+    "real_magpie_invoked": false,
+    "library_sha256_before": "3DD2910E400D7538E5803EEED9581C315ABC5B9D2B6937228C798BB30F94F0E1",
+    "library_sha256_after": "3DD2910E400D7538E5803EEED9581C315ABC5B9D2B6937228C798BB30F94F0E1",
+    "library_unchanged": true
+  },
+  "remaining_boundaries": [
+    "真实 DS Bot 能力启用和目标 Bot 主动调用需接收方在实际宿主验证。",
+    "真实 Magpie 直连保存会同步资源库，未在隔离验收中执行。",
+    "各客户端重连后的来源、自动结束提醒和权限事件需分别实测。"
+  ]
+}
