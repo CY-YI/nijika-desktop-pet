@@ -4,12 +4,14 @@
     [switch]$CodexHooks,
     [switch]$ClaudeHooks,
     [switch]$Dsh,
+    [switch]$DsBot,
     [switch]$AutoStart,
     [switch]$NoLaunch,
     [switch]$NoShortcuts,
     [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'NijikaDesktopPet\app'),
     [string]$CodexHome = (Join-Path $env:USERPROFILE '.codex'),
-    [string]$DshRoot = (Join-Path $env:USERPROFILE '.dsh')
+    [string]$DshRoot = (Join-Path $env:USERPROFILE '.dsh'),
+    [string]$DsBotRoot = (Join-Path $env:USERPROFILE '.ds-bot')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,6 +19,7 @@ $sourceRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path.Tr
 $targetRoot = [IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
 $CodexHome = [IO.Path]::GetFullPath($CodexHome).TrimEnd('\')
 $DshRoot = [IO.Path]::GetFullPath($DshRoot).TrimEnd('\')
+$DsBotRoot = [IO.Path]::GetFullPath($DsBotRoot).TrimEnd('\')
 if ($targetRoot.Equals($sourceRoot, [StringComparison]::OrdinalIgnoreCase) -or
     $targetRoot.StartsWith($sourceRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
     throw 'InstallRoot must be outside the extracted package.'
@@ -27,6 +30,7 @@ foreach ($relative in @('dist\虹夏桌宠.exe', 'dist\虹夏MCP-v2\虹夏MCP-v2
         'assets\icons\nijika-shortcut.ico', 'skills\nijika-desktop-dialog\SKILL.md',
         'plugins\nijika-work-local\mcp.json', 'integrations\claude-code\install-hooks.ps1',
         'integrations\dsh\install.ps1', 'integrations\dsh\lifecycle-bridge.mjs',
+        'integrations\dsbot\install.ps1', 'integrations\dsbot\nijika-mcp\cordis.patch.yml',
         'AGENT_SETUP.md', 'NOTIFICATION_PROTOCOL.md')) {
     if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot $relative) -PathType Leaf)) {
         throw "Incomplete package: $relative"
@@ -46,6 +50,12 @@ if ($Work -and -not (Get-Command python.exe -ErrorAction SilentlyContinue)) {
 }
 if ($Dsh -and -not (Test-Path -LiteralPath $DshRoot -PathType Container)) {
     throw "DSH home does not exist: $DshRoot"
+}
+if ($DsBot -and -not (Test-Path -LiteralPath $DsBotRoot -PathType Container)) {
+    throw "DS Bot home does not exist: $DsBotRoot"
+}
+if ($DsBot -and -not (Get-Command pnpm.cmd -ErrorAction SilentlyContinue)) {
+    throw 'pnpm.cmd is required to refresh the DS Bot profile link.'
 }
 
 New-Item -ItemType Directory -Path $targetRoot -Force | Out-Null
@@ -150,6 +160,11 @@ if ($ClaudeHooks) {
 if ($Dsh) {
     & (Join-Path $targetRoot 'integrations\dsh\install.ps1') -DshRoot $DshRoot
     Write-Output 'DSH integration installed. Restart DSH and use a new conversation.'
+}
+
+if ($DsBot) {
+    & (Join-Path $targetRoot 'integrations\dsbot\install.ps1') -DsBotRoot $DsBotRoot -McpExe $mcpExe
+    Write-Output 'DS Bot integration installed. Restart DS Bot and use a new conversation.'
 }
 
 if (-not $NoLaunch) { Start-Process -FilePath $petExe -WorkingDirectory (Split-Path -Parent $petExe) }

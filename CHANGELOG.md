@@ -1,5 +1,13 @@
 # 变更记录
 
+## Unreleased - 2026-11-18 DS Bot 与 MAGPIE 三客户端验证
+
+- 在 MAGPIE 同时连接 Codex、DSH 与 DS Bot 后，实际验证三个客户端均启动同一个 onedir MCP；气泡来源分别显示 `ChatGPT · Codex`、`Agent · DSH`、`Agent · DS Bot`，独立正文与点击回写没有串用。
+- 新增 DS Bot 可移植安装器：将 bundle 稳定安装到 `%USERPROFILE%\.ds-bot\integrations\nijika-dsbot-mcp`，仅在收件人本地副本写入真实 MCP 路径，备份 profile 与 `AGENTS.md`，并保证技能和全局规则幂等。
+- 修复 DS Bot 首次接入时 PowerShell 无法向动态对象新增虹夏依赖、也无法写回缺失 bundle 列表的问题；重启 DS Bot 后以唯一正文 `5+5=10` 复验，气泡来源和 `answered` 回写正确。
+- 安装包白名单与安装入口加入 DS Bot 文件及 `-DsBot` 开关；新增隔离安装回归，覆盖占位路径替换、稳定 junction、单份规则和重复执行。
+- 最终验证通过：项目 Python 198 项（197 通过、1 项可选依赖跳过）、JavaScript 20/20、DSH 生命周期 4 通过/1 可选跳过、目标 DS Bot/安装器套件 12/12；PowerShell 语法、接入审计、工作区差异和敏感信息扫描均通过。
+
 ## Unreleased - 2026-11-05 公开默认分支收敛
 
 - 将最终审计源码树发布为无父 `public-snapshot-20261105` 提交，并让公开默认分支 `main` 指向同一干净历史；开发分支继续保留用于追溯。

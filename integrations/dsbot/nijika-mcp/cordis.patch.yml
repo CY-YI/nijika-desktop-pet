@@ -1,0 +1,17 @@
+- insert:
+    - id: nijika-dsbot-mcp
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        serverName: "nijika-pet"
+        transport: "stdio"
+        command: '__NIJIKA_MCP_EXE__'
+        args: []
+        env:
+          NIJIKA_AGENT_NAME: "Agent"
+          NIJIKA_HOST_NAME: "DS Bot"
+        toolCallTimeoutMs: 60000
+        reconnect:
+          enabled: true
+          initialDelayMs: 500
+          maxDelayMs: 30000
+          maxAttempts: 10

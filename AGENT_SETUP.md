@@ -198,9 +198,12 @@ powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1 -Work -NoLau
 
 # DeepSeek Harness：配置 desktop/web、安装技能与触发规则
 powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1 -Dsh -NoLaunch
+
+# DS Bot：安装稳定 MCP bundle、技能与结束提醒规则
+powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1 -DsBot -NoLaunch
 ```
 
-`-Codex` 和 `-Work` 要求 PowerShell 能找到 `codex` 命令；`-Work` 还要求能找到 `python.exe`。`-Dsh` 要求该用户已经初始化 `%USERPROFILE%\.dsh`。安装脚本默认将程序放到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，因此解压目录搬走后配置仍有效。想开机启动桌宠，可在首次安装命令后加 `-AutoStart`。
+`-Codex` 和 `-Work` 要求 PowerShell 能找到 `codex` 命令；`-Work` 还要求能找到 `python.exe`。`-Dsh` 要求该用户已经初始化 `%USERPROFILE%\.dsh`。`-DsBot` 要求已经初始化 `%USERPROFILE%\.ds-bot`，且 `pnpm.cmd` 在 PATH 中。安装脚本默认将程序放到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，因此解压目录搬走后配置仍有效。想开机启动桌宠，可在首次安装命令后加 `-AutoStart`。
 
 ## 从 Git 源码构建
 
@@ -296,6 +299,16 @@ powershell -ExecutionPolicy Bypass -File .\integrations\dsh\install.ps1
 
 安装脚本将 desktop/web 两个 profile 指向本机 MCP EXE，并复制 `nijika-dsh-dialog` 技能、写入全局触发规则。若只需要一个 profile，可传 `-Profiles desktop` 或 `-Profiles web`。重启 DSH 并新开会话；配置细节见 [DSH 接入说明](integrations/dsh/README.md)。
 
+### DS Bot
+
+DS Bot 已初始化 `%USERPROFILE%\.ds-bot`，且 PowerShell 能找到 `pnpm.cmd` 后，在解压包或已安装目录运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\integrations\dsbot\install.ps1
+```
+
+也可以从源码或发布包入口一次完成：`.\distribution\install.ps1 -DsBot`。安装器把客户端包复制到 `%USERPROFILE%\.ds-bot\integrations\nijika-dsbot-mcp`，只在该本地副本写入当前电脑的完整 MCP 路径；随后刷新 profile 的 `@cy/nijika-dsbot-mcp` 链接、安装 `nijika-dsbot-dialog` 技能，并合并一组带标记的结束提醒规则。配置写入前会备份 profile 与 `AGENTS.md`，重复执行不会叠加服务或规则。重启 DS Bot 后必须新建任务；气泡来源应为 `Agent · DS Bot`。详细说明见 [DS Bot 接入说明](integrations/dsbot/nijika-mcp/README.md)。
+
 ## 其他支持 stdio MCP 的本机 Agent
 
 其配置格式由客户端决定。核心字段是以**绝对路径**启动 `虹夏MCP-v2.exe`，不传命令行参数；可设置 `NIJIKA_AGENT_NAME`，让桌面气泡标明来源。例如采用 `mcpServers` 格式的客户端可参考：
@@ -316,13 +329,13 @@ powershell -ExecutionPolicy Bypass -File .\integrations\dsh\install.ps1
 
 ## 验证与当前边界
 
-三个本机入口默认共用 `%USERPROFILE%\.nijika-desktop-pet\notifications.sqlite3`。更新桌宠与 MCP 后重新启动桌宠；已有旧 MCP 进程的待处理消息由兼容桥接保留原 ID，点击仍会回传。新配置不要继续指定旧 AppData 路径；隔离测试可显式设置 `NIJIKA_PET_DB_PATH`。
+Codex、ChatGPT Work、DSH 与 DS Bot 默认共用 `%USERPROFILE%\.nijika-desktop-pet\notifications.sqlite3`。更新桌宠与 MCP 后重新启动桌宠；已有旧 MCP 进程的待处理消息由兼容桥接保留原 ID，点击仍会回传。新配置不要继续指定旧 AppData 路径；隔离测试可显式设置 `NIJIKA_PET_DB_PATH`。
 
 1. 确认桌面能看到虹夏；在 Agent **新任务**里提出一个确实需要你二选一的简短问题。
 2. Agent 应调用 `request_decision`，气泡显示来源、问题、各选项的一句影响说明；点击后 Agent 应通过 `wait_for_reply`/`get_reply` 读回，并在**原聊天**写明所选项。
 3. 任务完成但内容太长时，Agent 可调用 `show_completion` 提醒你回聊天查看。`pending` 只表示本机排队，不代表气泡已显示或你已批准。
 
-晚到的点击保存在本机消息库，但 Agent 任务若已经结束，当前 stdio MCP **不会自动唤醒该任务**；在原聊天发送“继续”，技能要求先读取旧请求。Codex、Work 和 DSH 的长期等待与晚到回复仍需各自在新任务中现场验收。
+晚到的点击保存在本机消息库，但 Agent 任务若已经结束，当前 stdio MCP **不会自动唤醒该任务**；在原聊天发送“继续”，技能要求先读取旧请求。Codex、Work、DSH 和 DS Bot 的长期等待与晚到回复仍需各自在新任务中现场验收。
 # 2026-10-26 分享前接入差异与冲突检查
 
 接入方式继续沿用设置中心向导；程序路径和接入提示词在收件人电脑上生成，不需要沿用开发机的路径。不要把本机生成的整份接入目录发给别人当作通用配置。
@@ -354,3 +367,15 @@ agent_name="Codex"，software="VS Code"。使用你实际看到的工具前缀�
 其他扩展把 agent_name 换成 Claude Code、DSH 或 CodeBuddy。来源参数只描述本次调用，气泡显示 `VS Code · Codex` 等。不要将 VS Code 固定来源覆盖到共用的全局配置。扩展是否提供 MCP、是否已启用、是否信任/已加载，仍需在真实宿主确认；CodeBuddy 的具体版本若不提供 MCP，应报告不支持，不能靠写一个 JSON 冒充连通。
 
 当前仅扫描已知 Windows 用户级 stable/Insiders 目录；远程 SSH、WSL、容器、便携或自定义扩展目录不在自动检测范围。安装清单不代表连接成功。
+
+# 三客户端实际验收（2026-11-18）
+
+本机 MAGPIE 同时管理 Codex、DSH 与 DS Bot，三个客户端最终都启动了安装目录中的同一 onedir `虹夏MCP-v2.exe`。实际自然短问答分别产生了独立的 SQLite 请求，正文没有串用：
+
+| 客户端 | 唯一正文 | 气泡来源 | 回写状态 |
+| --- | --- | --- | --- |
+| Codex | `Codex Magpie 验收 C-1118-07...` | `ChatGPT · Codex` | `answered` |
+| DSH | DSH 结果，包含 `2+2=4` | `Agent · DSH` | `answered` |
+| DS Bot | `3+3=6`、`4+4=8`、`5+5=10` | `Agent · DS Bot` | 均经桌面点击后为 `answered` |
+
+DS Bot 的 `5+5=10` 是在重启客户端、加载 `%USERPROFILE%\.ds-bot\integrations\nijika-dsbot-mcp` 稳定 bundle 后再次验证；请求 ID 为 `5474440dbce44c3e887561fe797b5d99`。`tests/test_dsbot_installer.py` 另外覆盖首次安装、占位路径改写、稳定 junction、单份技能/全局规则和幂等重跑。MAGPIE 页脚仍可能显示与虹夏无关的旧 Claude Desktop 路径错误；该提示没有阻止三客户端路由或本机气泡显示，未作跨产品无关配置修改。

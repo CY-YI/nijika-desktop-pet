@@ -1,0 +1,21 @@
+# BEGIN NIJIKA-DSBOT-DIALOG
+
+Nijika desktop notification has a required end-of-turn check. Before every
+final DS Bot response, load `nijika-dsbot-dialog` and use
+`mcp__nijika_pet__show_completion` once with a concrete outcome, including a
+short factual answer or a user-requested JSON answer. Internal title
+generation, confirmed system-generated background work, explicit subagent
+events, and missing valid turn state may remain quiet.
+
+For any concrete decision, call `mcp__nijika_pet__request_decision` before
+asking in chat. Put the needed facts in the bubble, use meaningful option
+labels and descriptions, and mark at most one option recommended when there
+is a concrete reason. A pending notice is queued, not visible or approved.
+Wait with the same request ID. After a click is answered, state the choice in
+the DS Bot chat and continue without asking for the same confirmation again.
+
+The installed DS Bot environment supplies `Agent` / `DS Bot`, so omit optional
+`agent_name` and `software`. If the tools are unavailable, continue in chat
+without blocking the task.
+
+# END NIJIKA-DSBOT-DIALOG

@@ -1,5 +1,18 @@
 # 当前待办
 
+## 当前任务：DS Bot 与 MAGPIE 三客户端验收（2026-11-18）
+
+- 用户要求实际操作 MAGPIE，把 Codex、DSH、DS Bot 接入虹夏，并以自然短问答验证气泡、内容隔离和来源标签。
+- [x] MAGPIE 页面确认三个客户端已连接；进程树确认三者最终都启动 `%LOCALAPPDATA%\NijikaDesktopPet\app\dist\虹夏MCP-v2\虹夏MCP-v2.exe`。
+- [x] Codex 气泡显示 `ChatGPT · Codex`，唯一正文 `C-1118-07`；DSH 显示 `Agent · DSH`，唯一结果包含 `2+2=4`；两者点击后均为 `answered`。
+- [x] DS Bot 先验证 `3+3=6`、`4+4=8`，再重启客户端加载 `%USERPROFILE%\.ds-bot\integrations\nijika-dsbot-mcp` 稳定 bundle，新任务 `5+5=10` 仍显示 `Agent · DS Bot`，点击后请求 `5474440dbce44c3e887561fe797b5d99` 为 `answered`。
+- [x] 新增 `integrations/dsbot/install.ps1` 与本地 bundle；修复首次安装时动态依赖及 bundle 列表无法写回的问题。
+- [x] 新增 `tests/test_dsbot_installer.py`，覆盖首次安装、路径占位符、稳定 junction、单份技能/规则和幂等重跑；目标测试通过。
+- [x] 安装包白名单和 `distribution/install.ps1 -DsBot` 增加 DS Bot 接入文件，避免只有源码目录才能配置。
+- [x] 完成最终回归：项目 Python 198 项（197 通过、1 项可选依赖跳过）、JavaScript 20/20、DSH 生命周期 4 通过/1 可选跳过、目标 DS Bot/安装器套件 12/12；PowerShell 语法、`git diff --check`、接入审计和敏感信息扫描通过。
+- 工作区保留无关文件 `challenge-cup-notice.pdf` 与 `ppt-build-20261101/`；MAGPIE 中与虹夏无关的旧 Claude Desktop 路径错误不修改。
+- 本轮一次错误 shell 调用在根目录生成了 81 字节的 `$null` 文本；已确认它不是项目文件。单文件清理命令被自动审批策略拒绝，按要求没有换方法绕过，保留为未跟踪文件且不纳入提交。
+
 ## 当前任务：公开开源审计整改（2026-11-05）
 
 - [x] 用户确认角色、图标和配套截图均为本人创作，并允许公开分发；素材授权阻塞已解除。微信收款码按用户决定继续公开。

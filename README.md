@@ -19,6 +19,12 @@
 
 重启后的补充验收再次安全回收 37,785,966 字节旧残留，随后只读复查为 0 个可清理项。当前 5 个活动 MCP 进程全部从 onedir 目录启动，且没有任何 MCP 进程引用 `%TEMP%\_MEI*`。DSH 桌面客户端的自然短问答在没有额外提醒工具时仍自动产生具体气泡，来源显示为 `Agent · DSH`；其他外部宿主与干净 Windows 安装流程仍分别作为发布前验收项。
 
+## DS Bot 与 MAGPIE 三客户端验收（2026-11-18）
+
+MAGPIE 已在本机同时管理 Codex、DSH 与 DS Bot，三个客户端都实际启动了安装目录中的同一 `虹夏MCP-v2.exe`。自然短问答分别显示为 `ChatGPT · Codex`、`Agent · DSH` 与 `Agent · DS Bot`；唯一正文不是同一模板、独立请求 ID 和点击回写均核对通过，没有观察到消息串用或重复气泡。
+
+DS Bot 使用 `integrations/dsbot/install.ps1` 安装到用户目录的稳定 bundle `%USERPROFILE%\.ds-bot\integrations\nijika-dsbot-mcp`，不在共享模板里写死开发机路径。安装器会备份 profile 与 `AGENTS.md`，首次安装、重复执行、路径改写、单份技能与结束提醒规则由 `tests/test_dsbot_installer.py` 覆盖。重启后的新任务再次显示 `Agent · DS Bot` 与唯一正文 `5+5=10`，点击后消息状态为 `answered`。完整客户端步骤见 [AGENT_SETUP.md](AGENT_SETUP.md)。
+
 ## 统一提醒核心（2026-10-31）
 
 各客户端共用同一生命周期协议、安全摘要、来源解析和通知去重；详见 [NOTIFICATION_PROTOCOL.md](NOTIFICATION_PROTOCOL.md)。Codex 原生事件与 DSH 实时会话模块只负责转交事件。DSH 已核对 `0.2.1-rc.2 / 0.2.1-rc.3` 的接口；Work 等其他客户端目前仍只支持主动 MCP 调用，不承诺漏调时自动补发。
