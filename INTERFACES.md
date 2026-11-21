@@ -134,14 +134,25 @@ Agent 配置预览具有有效期；文件在预览后发生变化时拒绝覆�
 
 原本只有本地演示按钮；2026-10-07 新增以下真实 MCP 接口。仍无 HTTP、WebSocket 或第三方账号。
 
+## MAGPIE 接入 API（2026-11-21，取代旧设置中心接入接口）
+
+`/api/agents/plan` 一律返回 MAGPIE 指引，或对已有分发返回可登记的 `plan_id`。`/api/agents/apply` 只登记该计划；分发变更时要求重新检查。`/api/agents/prepare` 用当前归属返回更新指引，不创建外部配置或旧副本。旧 `batch-plan`、`batch-apply` 与配置导出接口返回 400。授权、通知和回执接口不变。
+
 ## Codex MCP 接口（2026-10-07 已接入）
 
 | 工具 | 输入 | 结果 |
 | --- | --- | --- |
-| `show_completion` | 任务标题、简短结果 | 生成单按钮“知道了”的完成提醒；仅表示收到，不表示批准，返回 `request_id` |
-| `request_decision` | 任务标题、最多 80 字且最多三段的问题、2–3 个 `label` + `description` 选项 | 生成可在桌宠直接完成的选择，短成果可连正文一同呈现；返回 `request_id`，输入无效时返回 `status=invalid` 与修正提示 |
-| `get_reply` | `request_id` | 返回 `pending` / `answered` / `dismissed` / `expired` / `not_found` 与所选名称、简介 |
-| `wait_for_reply` | `request_id`、最长 60 秒 | 等待桌面点击；超时仍返回 `pending`，可再次调用 |
+| `show_completion` | 任务标题、简短结果 | 生成“知道了”和“输入回复”按钮，返回 `request_id`。知道了记为回执，文字按 `reply_text` 读取 |
+| `request_decision` | 任务标题、最多 80 字且最多三段的问题、2–3 个 `label` + `description` 选项 | 预设选项下方提供“输入回复”，两种答案使用同一个 `request_id`。输入无效时返回 `status=invalid` 与修正提示 |
+| `request_text_reply` | 任务标题、最多 80 字且最多三段的问题，可选 `agent_name` 和 `software` | 直接在气泡显示输入区，返回原 `request_id`。可发送 1–500 字的多行文本 |
+| `get_reply` | `request_id` | 返回 `pending` / `answered` / `dismissed` / `expired` / `not_found`。选择答案返回选项字段，文字答案返回 `reply_text` |
+| `wait_for_reply` | `request_id`、最长 60 秒 | 等待桌面回复。超时返回 `pending`，可沿用同一 ID |
+
+文字回复正文按现有回执保留期存入本地通知库，设置中心的提醒状态接口仅展示状态。客户端调用成功表示已入队，实际显示由桌宠处理。未决请求在会话恢复后可用原 ID 续读。
+
+较早加载的 MCP 进程发出的完成与选择提醒仍能使用文字回复。旧版 `get_reply` 在 `choice_description` 为 `虹夏文字回复` 时通过 `choice` 返回正文，新版优先读 `reply_text`。
+
+设置中心本机演示由 `POST /api/notices/demo-text` 排队，重复点击复用仍待答的演示。`POST /api/skins/remove` 接收导入皮肤的 `id`，返回 `removed` 与 `reset_to_default`；同一通知服务的本机访问令牌仍适用。
 
 本阶段在同一用户机器上通过 stdio 和 SQLite 交换，不提供 HTTP/WebSocket、账户或第三方传输。Agent 来源名称由 MCP 服务启动环境决定，输入内容限制长度并作为纯文本绘制。`request_decision` 不接受只有 A/B 名称的字符串列表；每个选项名称最多占 20 个显示列，且必须有 6–48 字的一句话简介。短结果能放入问题正文时，Agent 应调用 `request_decision`、等候选择并在同一任务中继续，不重复要求聊天确认；复杂审阅才调用 `show_completion`。`show_completion` 与 `request_decision` 的输入无效时返回 `status=invalid`、空 `request_id` 和可修正的错误说明。示例按钮仍只影响本地演示；带 `request_id` 的真实提醒才写回队列。MCP 客户端是否继续等待取决于该客户端的调用流程；桌宠不会独立唤醒已经结束的 Agent 会话。
 
@@ -150,14 +161,14 @@ Agent 配置预览具有有效期；文件在预览后发生变化时拒绝覆�
 - 默认数据库：`%USERPROFILE%\.nijika-desktop-pet\notifications.sqlite3`。`NIJIKA_PET_DB_PATH` 仍可显式覆盖；覆盖时禁用旧库桥接。
 - `LegacyQueueBridge.sync()`：旧库待处理请求复制到新库并保留 ID；新库的点击或关闭结果写回对应旧库。桥接记录单独存在 `legacy_origins` 表，不改变原通知的九列表结构。
 - `renderer-status.json`：桌宠每约三秒原子更新进程 ID、时间、实际数据库路径/文件标识、当前通知 ID、气泡可见性和矩形。供本机诊断使用，不是 MCP 显示回执或用户确认。
-- 审批程序 stdin：Codex JSON 事件，最多 1 MiB；`PermissionRequest` 创建 `kind=approval` 的优先通知，`PostToolUse` 收起匹配的未处理通知并标记 `resolved`。`notice_tags` 保存事件摘要哈希、种类和优先级，不存储原始命令。
+- 审批程序 stdin 接收最多 1 MiB 的 Codex JSON。审批预告需有 `transcript_path`，并匹配同一会话与轮次的有效活动 `UserPromptSubmit`。程序仅验证字段是否存在，不读取会话正文。明确不询问用户的模式保持安静。`PostToolUse` 收起匹配的待处理通知。Codex `Stop` 收起该轮剩余的待处理审批气泡。`notice_tags` 保存事件摘要哈希、种类和优先级。
 - 审批程序 stdout：PermissionRequest / PostToolUse 始终为空，退出码 0，不输出授权决定。审批输入格式错误只在 stderr 写固定错误提示，不阻断 Codex 原审批流程。“知道了”只产生通知回执。
 
 2026-10-17 Codex 完成事件扩展（同一 `虹夏审批提醒.exe`，不变更 MCP 四工具）：
 
 | 事件 | 必要输入 | 效果与输出 |
 | --- | --- | --- |
-| `UserPromptSubmit` | 非空且不超过 512 字的 `session_id` / `turn_id`，`prompt` | 在内存分类，保存哈希轮次状态；stdout 空 |
+| `UserPromptSubmit` | 非空且不超过 512 字的 `session_id` / `turn_id`，`prompt` | 在内存分类并保存哈希轮次状态。有原会话的未交付回复时，stdout 通过 `hookSpecificOutput.additionalContext` 传递请求 ID，否则为空 |
 | `PostToolUse` | 同轮标识，`tool_name`、`tool_response` | 累加工作工具计数；只有成功创建虹夏通知的响应才标记已通知；保留审批收起行为；stdout 空 |
 | `Stop` | 同轮标识，非空 `last_assistant_message` | 通过分类与去重后写一条固定文案完成提醒；无论写入/跳过/异常均输出 `{}`、退出 0 |
 

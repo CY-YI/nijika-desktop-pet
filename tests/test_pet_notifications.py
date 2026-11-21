@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from notification_store import NotificationStore
-from pet import BubbleNotice, BubbleOverlay, PetWindow, user32, SWP_SHOWWINDOW
+from pet import BubbleNotice, BubbleOverlay, PetWindow, render_bubble, user32, SWP_SHOWWINDOW
 
 
 class PetNotificationTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class PetNotificationTests(unittest.TestCase):
             ])
             bubble = SimpleNamespace(
                 notice=BubbleNotice("Codex · 下一步", "先做哪项？", request_id=pending.id),
-                hwnd=123, show=Mock(), hide=Mock(), ensure_display=Mock(return_value=False),
+                hwnd=123, show=Mock(), hide=Mock(), ensure_display=Mock(return_value=False), reply_drafts={},
             )
             window = object.__new__(PetWindow)
             window.notifications = store
@@ -63,6 +63,27 @@ class PetNotificationTests(unittest.TestCase):
             self.assertTrue(bubble.ensure_display((10, 10, 320, 480)))
         self.assertTrue(move.call_args.args[-1] & SWP_SHOWWINDOW)
 
+    def test_repeated_polls_keep_a_single_inline_reply_bubble(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = NotificationStore(Path(directory) / "notifications.sqlite3")
+            pending = store.create_text_demo()
+            bubble = SimpleNamespace(notice=None, hwnd=123, reply_drafts={},
+                                     ensure_display=Mock(return_value=True))
+            bubble.show = Mock(side_effect=lambda notice, anchor: setattr(bubble, "notice", notice))
+            window = object.__new__(PetWindow)
+            window.notifications, window.bubble = store, bubble
+            window.x = window.y = window.next_notice_poll = window.defer_next_notice_until = 0
+            window.width, window.height = 320, 480
+            window.last_logged_notice_id = None
+            window.set_state = window.stop_interaction = Mock()
+            with patch.object(user32, "IsWindowVisible", return_value=True), patch("pet.log_notice_event"):
+                for now in range(1, 9):
+                    window._poll_notifications(now)
+            bubble.show.assert_called_once()
+            self.assertEqual(bubble.ensure_display.call_count, 7)
+            self.assertEqual(bubble.notice.request_id, pending.id)
+            self.assertTrue(bubble.notice.composing)
+
     def test_poll_exception_does_not_skip_health_or_later_poll(self):
         window = object.__new__(PetWindow)
         window.last_notice_error_at = 0
@@ -74,13 +95,35 @@ class PetNotificationTests(unittest.TestCase):
         self.assertEqual(window._poll_notifications.call_count, 2)
         self.assertEqual(window._write_notification_health.call_count, 2)
 
+    def test_typed_action_is_below_all_presets_and_opens_inline_editor(self):
+        notice = BubbleNotice("测试", "请选择一项或自行输入。", actions=("方案甲", "方案乙", "方案丙"),
+                              action_descriptions=("说明文字"*10,)*3, action_recommended=(True, False, False),
+                              kind="agent", request_id="same-id", source="ChatGPT · Codex", accepts_text=True)
+        for compact in (False, True):
+            image, actions, _, edit = render_bubble(notice, compact=compact)
+            self.assertEqual(len(actions), 4)
+            self.assertLess(actions[-2][3], actions[-1][1])
+            self.assertLess(actions[-1][3], image.height)
+            self.assertIsNone(edit)
+        window = object.__new__(PetWindow)
+        window.bubble = SimpleNamespace(show=Mock())
+        window.x = window.y = 0
+        window.width, window.height = 320, 480
+        window._bubble_action(notice, 3)
+        composer = window.bubble.show.call_args.args[0]
+        self.assertEqual(composer.request_id, notice.request_id)
+        self.assertTrue(composer.composing)
+        _, actions, _, edit = render_bubble(composer)
+        self.assertEqual(len(actions), 2)
+        self.assertIsNotNone(edit)
+
     def test_approval_ack_only_records_receipt(self):
         with tempfile.TemporaryDirectory() as directory:
             store = NotificationStore(Path(directory) / "notifications.sqlite3")
             pending = store.create("Codex", "命令需要授权", "请在 Codex 授权", ["知道了"], kind="approval")
             window = object.__new__(PetWindow)
             window.notifications = store
-            window.bubble = SimpleNamespace(show=Mock())
+            window.bubble = SimpleNamespace(show=Mock(), reply_drafts={})
             window.set_state = Mock()
             window.x = window.y = 0
             window.width, window.height = 320, 480

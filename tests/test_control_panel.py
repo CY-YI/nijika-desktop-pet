@@ -24,6 +24,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PanelEntryTests(unittest.TestCase):
+    def test_ordinary_launch_and_settings_shortcut_use_desktop_coordinator(self):
+        import pet
+        for arguments in ([], ["--control-panel"]):
+            with patch("sys.argv", ["虹夏桌宠.exe", *arguments]), \
+                    patch("pet.sprite_metrics"), patch("desktop_app.run_desktop") as launch:
+                pet.main()
+            self.assertEqual(launch.call_args.kwargs, {"open_settings": bool(arguments)})
+
     def test_desktop_entry_forwards_panel_arguments_without_starting_a_pet(self):
         import pet
         arguments = ["--serve-only", "--agent-home", str(ROOT / "diagnostics/isolated-user"), "--port", "0"]
@@ -92,6 +100,24 @@ class ControlStoreTests(unittest.TestCase):
     def test_real_antialiased_asset_without_fully_opaque_pixel_is_valid(self):
         skin = self.store.import_skin((ROOT / "assets/sprites/curious.png").read_bytes(), "默认角色副本.png")
         self.assertEqual(skin["kind"], "static")
+
+    def test_remove_preserves_default_and_resets_only_the_active_skin(self):
+        first = self.store.import_skin(transparent_png(), "第一套.png")["id"]
+        second = self.store.import_skin(transparent_png(), "第二套.png")["id"]
+        before = self.store.update_settings({"skin": first, "width": 260})
+        self.assertFalse(self.store.remove_skin(second)["reset_to_default"])
+        self.assertEqual(self.store.settings(), before)
+        self.assertTrue(self.store.remove_skin(first)["reset_to_default"])
+        self.assertEqual(self.store.settings(), {**before, "skin": "default", "revision": before["revision"]+1})
+        self.assertEqual([item["id"] for item in self.store.skins()], ["default"])
+        self.assertTrue((self.store.root / "removed-skins" / first / "manifest.json").is_file())
+        self.assertFalse(self.store.remove_skin(first)["reset_to_default"])
+        for invalid in ("default", "../outside", first):
+            with self.assertRaises(ValueError):
+                if invalid == first:
+                    self.store.update_settings({"skin": first})
+                else:
+                    self.store.remove_skin(invalid)
 
     def test_skin_rejects_traversal_missing_frames_and_opaque_image(self):
         for filename in ("../curious.png", "skin/code.py", "curious.png"):
@@ -248,6 +274,12 @@ class AgentSetupTests(unittest.TestCase):
                 self.assertTrue(prompt.endswith(INSTALL_RULES))
                 self.assertIn("待新会话验证", prompt)
                 self.assertIn("可选项缺失不阻断 MCP", prompt)
+                self.assertLess(prompt.index("【先核对 MAGPIE 与目标客户端】"), prompt.index("【请自动执行】"))
+                self.assertIn("使用 MAGPIE 后跳过下方直连配置和规则写入", prompt)
+                self.assertIn("NIJIKA_AGENT_NAME=auto", prompt)
+                self.assertIn("Skills 中将上方列出的统一提醒技能 nijika-agent-dialog", prompt)
+                self.assertIn("在 Instructions 中加入", prompt)
+                self.assertIn(str(ROOT / "skills/nijika-agent-dialog/SKILL.md"), prompt)
                 if client == "codex":
                     optional = {item["path"]: item for item in info["needed_files"] if not item["required"]}
                     for path in (self.home / ".codex/hooks.json", ROOT / "integrations/codex/install-hooks.ps1",
@@ -342,7 +374,7 @@ class LocalAPITests(unittest.TestCase):
             self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
             self.assertNotIn(b"NIJIKA_SESSION_TOKEN",response.read())
 
-    def test_discovery_and_batch_use_existing_auth_and_preserve_verification_boundaries(self):
+    def test_discovery_is_read_only_and_old_batch_routes_cannot_write(self):
         for route in ("/api/agents/scan", "/api/agents/batch-plan", "/api/agents/batch-apply"):
             with self.subTest(route=route):
                 with self.assertRaises(HTTPError) as error:
@@ -350,13 +382,12 @@ class LocalAPITests(unittest.TestCase):
                 self.assertEqual(error.exception.code, 403)
         result = self.call("/api/agents/scan", {})
         self.assertIn("gemini", [item["id"] for item in result["clients"]])
-        plan = self.call("/api/agents/batch-plan", {"clients":["gemini","copilot"]})
-        result = self.call("/api/agents/batch-apply", {"batch_id":plan["batch_id"]})
-        self.assertEqual([item["status"] for item in result["results"]], ["configured","configured"])
-        for agent in self.call("/api/state")["agents"]:
-            self.assertFalse(agent["host_activity"]["called"])
-            self.call("/api/agents/test", {"id":agent["id"]})
-        self.assertTrue(all(not item["host_activity"]["called"] for item in self.call("/api/state")["agents"]))
+        for route in ("/api/agents/batch-plan", "/api/agents/batch-apply"):
+            with self.assertRaises(HTTPError) as refused:
+                self.call(route, {"clients":["gemini","copilot"], "batch_id":"retired"})
+            self.assertEqual(refused.exception.code, 400)
+        self.assertEqual(self.call("/api/state")["agents"], [])
+        self.assertFalse(self.app.setup.home.exists())
 
     def test_rejected_post_bodies_return_403_without_configuring_anything(self):
         original = self.app.store.settings()
@@ -403,11 +434,15 @@ class LocalAPITests(unittest.TestCase):
             self.assertEqual(response.read(), (ROOT / "control-ui/form-state.js").read_bytes())
 
     def test_same_pending_test_reused_click_readback_is_not_external_agent_verification(self):
+        library = self.app.setup.home / ".config/magpie/library.json"
+        library.parent.mkdir(parents=True)
+        library.write_text(json.dumps({"mcp":[{"name":"nijika-pet", "command":str(self.app.setup.mcp),
+                                               "agents":["obsidian"]}]}), encoding="utf-8")
         plan = self.call("/api/agents/plan", {"client":"custom","name":"本机测试",
                                             "agent_identity":"ChatGPT","software":"Obsidian"})
         result = self.call("/api/agents/apply", {"plan_id":plan["plan_id"]})
-        self.assertEqual(result["agent"]["guide"]["title"], "复制给 AI，自动完成配置")
-        self.assertIn("nijika-pet", result["agent"]["guide"]["prompt"])
+        self.assertEqual(result["agent"]["guide"]["title"], "核对已分发的 MAGPIE 连接")
+        self.assertIn("不授权修改客户端配置", result["agent"]["guide"]["prompt"])
         files = result["agent"]["needed_files"]
         self.assertTrue(any(
             str(ROOT / "dist/虹夏MCP-v2/虹夏MCP-v2.exe") == item["path"] for item in files))
@@ -417,37 +452,96 @@ class LocalAPITests(unittest.TestCase):
         self.assertEqual(first["request_id"],second["request_id"])
         notice = self.app.notifications.get(first["request_id"])
         self.assertEqual((notice.agent, notice.software), ("ChatGPT", "Obsidian"))
-        exported = self.call("/api/agents/export/" + result["agent"]["id"])
-        self.assertEqual(exported["config"], plan["export"])
+        self.assertNotIn("export", result["agent"])
         self.assertFalse(first["visible"])
         self.app.notifications.answer(first["request_id"],0)
         reply = self.call("/api/notices/" + first["request_id"])
         self.assertEqual(reply["choice"],"收到测试")
         agent = self.call("/api/state")["agents"][0]
-        self.assertEqual(agent["guide"]["title"], "复制给 AI，自动完成配置")
+        self.assertEqual(agent["guide"]["title"], "核对已分发的 MAGPIE 连接")
         self.assertEqual(len(agent["guide"]["steps"]), 3)
         self.assertTrue(len(agent["needed_files"]) >= 3)
         self.assertEqual(reply["status"],"answered")
-        self.assertEqual(self.call("/api/state")["agents"][0]["status"],"exported")
+        self.assertEqual(self.call("/api/state")["agents"][0]["status"],"managed")
 
-    def test_old_agent_preparation_saves_real_paths_without_writes_on_state_read(self):
+    def test_old_profile_prepare_creates_no_direct_bundle(self):
         agent = {"id": "a" * 32, "client": "custom", "name": "旧伙伴", "source_name": "旧伙伴",
                  "location": str(self.app.setup.home), "status": "exported", "test_request_id": None}
         self.app.store.save_agent(agent)
         state = self.call("/api/state")
         old = state["agents"][0]
-        self.assertFalse(old["bundle_ready"])
-        self.assertFalse(Path(old["bundle_directory"]).exists())
+        bundle = self.app.setup.bundle_directory(agent["id"])
+        self.assertNotIn("export", old)
+        self.assertFalse(bundle.exists())
         with self.assertRaises(HTTPError) as denied:
             self.call("/api/agents/prepare", {"id": agent["id"]}, token=False)
         self.assertEqual(denied.exception.code, 403)
         ready = self.call("/api/agents/prepare", {"id": agent["id"]})["agent"]
-        self.assertTrue(ready["bundle_ready"])
+        self.assertIn("通过 MAGPIE", ready["guide"]["title"])
         self.assertTrue(all(item["exists"] for item in ready["needed_files"]))
-        self.assertTrue(self.call("/api/state")["agents"][0]["bundle_ready"])
+        self.assertFalse(bundle.exists())
         with self.assertRaises(HTTPError) as missing:
             self.call("/api/agents/prepare", {"id": "unknown"})
         self.assertEqual(missing.exception.code, 400)
+
+    def test_magpie_handoff_without_dsh_profiles_then_register_existing_distribution(self):
+        setup = self.app.setup
+        payload = {"client": "dsh", "name": "DSH", "via_magpie": False}
+        guide = self.call("/api/agents/plan", payload)
+        self.assertTrue(guide["handoff"])
+        self.assertNotIn("plan_id", guide)
+        self.assertFalse(guide["files"])
+        self.assertNotIn("export", guide)
+        self.assertFalse(self.app.store.agents())
+        self.assertTrue(guide["guide"]["prompt"].startswith("本次请通过本机 MAGPIE"))
+        self.assertIn(str(setup.mcp), guide["guide"]["prompt"])
+        self.assertIn("统一提醒技能 nijika-agent-dialog", guide["guide"]["prompt"])
+        self.assertIn("在 Instructions 中加入", guide["guide"]["prompt"])
+        self.assertNotIn("【完整 MCP 配置", guide["guide"]["prompt"])
+        library = setup.home / ".config/magpie/library.json"
+        library.parent.mkdir(parents=True)
+        contents = json.dumps({"mcp": [{"name": "nijika-pet", "command": str(setup.mcp), "agents": ["dsh"]}]})
+        library.write_text(contents, encoding="utf-8")
+        managed = self.call("/api/agents/plan", payload)
+        self.assertEqual(managed["manager"], "magpie")
+        self.assertFalse(managed["files"])
+        saved = self.call("/api/agents/apply", {"plan_id": managed["plan_id"]})["agent"]
+        self.assertEqual(saved["status"], "managed")
+        self.assertIn("本次不授权修改", saved["guide"]["prompt"])
+        self.assertFalse(setup.bundle_directory(saved["id"]).exists())
+        self.assertFalse((setup.home / ".dsh").exists())
+        self.assertEqual(library.read_text(encoding="utf-8"), contents)
+
+    def test_configured_guide_is_verification_and_rechecks_magpie_ownership(self):
+        setup = self.app.setup
+        plan = setup.plan("gemini", "Gemini")
+        with self.assertRaises(HTTPError) as legacy:
+            self.call("/api/agents/apply", {"plan_id": plan["plan_id"]})
+        self.assertEqual(legacy.exception.code, 400)
+        config = setup.home / ".gemini/settings.json"
+        self.assertFalse(config.exists())
+        # Create an isolated old installation to exercise the migration UI.
+        agent = setup.apply(plan["plan_id"])["agent"]
+        migration = self.call("/api/agents/prepare", {"id": agent["id"]})["agent"]
+        self.assertIn("通过 MAGPIE", migration["guide"]["title"])
+        self.assertNotIn("【请自动执行】", migration["guide"]["prompt"])
+        previous = config.read_bytes()
+        library = setup.home / ".config/magpie/library.json"
+        library.parent.mkdir(parents=True)
+        library.write_text(json.dumps({"mcp": [{"name": "nijika-pet", "command": str(setup.mcp),
+                                                "agents": ["gemini"]}]}), encoding="utf-8")
+        reread = self.call("/api/agents/prepare", {"id": agent["id"]})["agent"]
+        self.assertEqual(reread["manager"], "magpie")
+        self.assertNotIn("export", reread)
+        self.assertNotIn("【请自动执行】", reread["guide"]["prompt"])
+        self.assertEqual(config.read_bytes(), previous)
+        current = self.call("/api/state")["agents"][0]
+        self.assertEqual((current["manager"], current["status"]), ("magpie", "managed"))
+        self.assertEqual(self.app.store.agent(agent["id"])["status"], "configured")
+        self.assertFalse(any(item["path"].endswith("nijika-mcp.json") for item in reread["needed_files"]))
+        with self.assertRaises(HTTPError) as denied:
+            self.call("/api/agents/export/" + agent["id"])
+        self.assertEqual(denied.exception.code, 400)
 
     def test_focus_reminder_and_note_endpoints_drive_the_companion_snapshot(self):
         started = self.call("/api/focus",{"action":"start"})

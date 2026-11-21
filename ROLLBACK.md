@@ -1,5 +1,57 @@
 # 版本回退与本机备份
 
+## 2026-11-21 Codex 审批气泡过滤
+
+- `%LOCALAPPDATA%\NijikaDesktopPet\local-upgrade-approval-event-scope-20261121-212756` 保存 `before.exe` 和部署校验清单。确认审批程序未运行后，可按清单把该副本恢复到正式安装目录的 `dist\虹夏审批提醒.exe`。
+
+## 2026-11-21 所有 Agent 气泡的文字回复
+
+- `%LOCALAPPDATA%\NijikaDesktopPet\local-upgrade-agent-replies-20261121-211552` 保存更新前的桌宠、MCP、审批程序和技能。按 `deployment.json` 中的路径及校验值恢复对应文件。保留现有通知库中的回复、原快捷方式及 Codex Hook 定义和信任状态。
+- 选择题自填回复的上一个快照为 `%LOCALAPPDATA%\NijikaDesktopPet\local-upgrade-decision-text-20261121-145612`。
+
+## 2026-11-21 活动 MCP 连接的文字回复兼容
+
+- `%LOCALAPPDATA%\NijikaDesktopPet\local-upgrade-reply-compat-20261121-144735` 保存原桌宠、原 MCP 及技能副本。按 `deployment.json` 对单个组件回退。已提交的兼容回复留在原通知 ID 下，本机消息库继续沿用。
+
+## 2026-11-21 气泡内回复与衣橱删除
+
+- 正式更新备份在 `%LOCALAPPDATA%\NijikaDesktopPet\local-upgrade-inline-reply-20261121-143558`，`deployment.json` 列出桌宠、MCP、三个设置资源与技能的路径和校验值。退出桌宠并让使用虹夏的客户端重连前，按需恢复对应组件。正式目录继续使用同一份用户数据与快捷方式。
+- 衣橱删除将导入目录移到用户数据目录的 `removed-skins/`，并在必要时切到默认皮肤。需要手工恢复某套皮肤时，将对应编号目录移回 `skins/`，刷新衣橱后重新应用。
+
+## 2026-11-21 设置中心白屏修复
+
+- `%LOCALAPPDATA%\NijikaDesktopPet\local-upgrade-webview-20261121-141625` 保存修复前的桌宠程序与 `deployment.json` 摘要。需要回退时退出桌宠，从该目录将 `虹夏桌宠-before.exe` 恢复至正式安装的 `dist/虹夏桌宠.exe`。运行资源、桌面快捷方式和启动项沿用既有路径。
+
+## 2026-11-21 单一入口及文字回复本机升级
+
+- 回退目录为 `%LOCALAPPDATA%\NijikaDesktopPet\local-upgrade-desktop-reply-20261121-140302`。`deployment.json` 记录桌宠、MCP、审批程序、接入指引与技能的原路径及摘要。`before/shortcuts/` 保存旧设置快捷方式。`notifications-before.sqlite3` 是升级前一致性快照。
+- 需要回退时，退出虹夏并让当前 Agent 断开虹夏 MCP，按清单恢复对应文件。日常回退继续使用现有消息与设置库。只有需要恢复桌面独立设置入口时才取回旧快捷方式。
+- 旧程序已移出正式运行目录。仍在内存中的旧 MCP 会话随宿主断开退出，下一次启动使用正式路径上的新程序。运行时标准库 ZIP 的成员内容逐个一致，保留原容器。
+- 桌面主快捷方式在同一归档中另存为“虹夏桌宠-打开设置前.lnk”。现用桌面图标在原快捷方式上增加 `--control-panel`，Windows 启动项沿用无参数入口。
+
+## 2026-11-21 停用旧配置归档
+
+- 本机归档位于 `%USERPROFILE%\.nijika-desktop-pet\backups\legacy-retirement-20261121`。`app-exports-complete.json` 列出从正式目录和旧导出目录移出的 15 项及原路径，回退时只恢复确有需要的单项，不恢复旧配置到已由 MAGPIE 管理的活动客户端。
+- 重复程序副本已清理：归档原 `app/` 的 161 个文件已逐个与 `%LOCALAPPDATA%\NijikaDesktopPet\local-upgrade-agent-guide-20261119-191524\app` 的相对路径和 SHA-256 核对一致，随后删除约 62.53 MiB。需要恢复清单中的 `app/` 项时，从上述完整快照取对应副本；`redundant-app-purge.json` 记录实际删除及保留路径。
+- `dsbot/` 保留移除前的三份依赖清单、旧 bundle 与引用它的 junction；`magpie/` 保留两项旧技能的退役记录与清理前库快照。DS Bot 日常仍使用 MAGPIE 生成的单一 MCP；如确需恢复旧 bundle，先按下节取消该单项分发，再恢复旧 bundle、junction 和对应的三份清单。库快照用于核对，不整份覆盖当前配置。
+
+## 2026-11-21 MAGPIE 单一接入回退点
+
+- 程序、指引和 Work 技能的原件在 `%LOCALAPPDATA%\NijikaDesktopPet\local-upgrade-magpie-only-20261121`，`deployment.json` 列出更新项及摘要。若只回退设置中心，先关闭虹夏窗口，再按清单恢复程序和相应运行库；保留当前数据库、快捷方式和 MCP 服务。
+- DS Bot 的切换前快照在 `%USERPROFILE%\.nijika-desktop-pet\backups\magpie-only-20261121`。仅在确需回退时退出 DS Bot，在 MAGPIE 取消 DS Bot 对虹夏 MCP 的单项分发，核对生成的条目已退，再从备份的 `package.json` 恢复旧 bundle 加载项。不要覆盖完整 MAGPIE 库或其他 Agent 的后来改动，避免重新启用两条虹夏连接。
+
+## 2026-11-19 本机统一提醒升级回退点
+
+- `%LOCALAPPDATA%\NijikaDesktopPet\local-upgrade-unified-20261119-223856` 保存本轮回退。`deployment.json` 列出更新的桌宠 EXE、`dist/_nijika_pet_runtime/base_library.zip` 与 `AGENT_SETUP.md` 及新摘要，`app/` 保存原文件，`verification.json` 保存原摘要、配置摘要和清理核对清单。
+- 如需回退，先正常关闭虹夏桌宠与设置中心，再按清单恢复这三个文件并使用原桌面快捷方式启动。SQLite 快照用于核对升级前的设置和档案，日常回退程序时继续使用当前消息库。
+- 2026-11-21 复查确认 10 个 `.running-*` 旧副本和 1 个升级暂存文件已从正式目录移除。10 个旧副本在上一个完整旧安装快照中逐个校验一致。旧平铺 MCP 仍有历史导出引用，继续保留。技能迁移前的备份位于 `%USERPROFILE%\.nijika-desktop-pet\backups\unified-skill-20261119-215815`。
+
+## 2026-11-19 本机 MAGPIE 向导升级回退点
+
+- 旧安装和数据快照保存在 `%LOCALAPPDATA%\NijikaDesktopPet\local-upgrade-agent-guide-20261119-191524`。`app/` 是完整旧安装，`state/` 包含 SQLite 一致性快照、皮肤和支持素材，`deployment.json` 记录正式安装的改动文件。
+- 如需回退，先退出桌宠与设置中心，并让受影响的 Agent 断开 MCP。按 `deployment.json` 从备份的 `app/` 恢复升级改动。当前数据和客户端配置应继续沿用。`retired/` 保存切换时移出的文件，既有 MCP 连接可能仍在使用旧映像。
+- 新程序启动时按现有七天保留规则清理了超期的已答通知。需要查看旧记录时使用只读快照，避免覆盖当前数据库中的新通知和设置。
+
 ## 2026-11-18 本机 0.1.11 升级回退点
 
 - 旧安装完整文件备份位于 `backups/local-upgrade-0.1.11-20261118/app/`。`before-sha256.json` 保存 343 个文件的摘要，`deployment.json` 列出本次写入的文件，`config-digests.json` 只保存 6 项接入配置的校验值。

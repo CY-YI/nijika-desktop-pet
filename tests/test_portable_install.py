@@ -31,8 +31,8 @@ class PortableInstallTests(unittest.TestCase):
             "dist/_nijika_hook_runtime/base_library.zip",
             "dist/_nijika_hook_runtime/python312.dll",
             "assets/icons/nijika-shortcut.ico",
-            "skills/nijika-desktop-dialog/SKILL.md",
-            "distribution/codex-global-instructions.txt",
+            "skills/nijika-agent-dialog/SKILL.md",
+            "skills/nijika-magpie-setup/SKILL.md",
             "integrations/claude-code/install-hooks.ps1",
             "integrations/dsh/install.ps1",
             "integrations/dsh/lifecycle-bridge.mjs",
@@ -92,7 +92,7 @@ class PortableInstallTests(unittest.TestCase):
             self.assertEqual(Path(mcp_path), install / "dist/虹夏MCP-v2/虹夏MCP-v2.exe")
             self.assertNotIn(str(package), json.dumps(installed, ensure_ascii=False))
 
-    def test_custom_codex_home_is_exported_to_cli(self):
+    def test_retired_codex_switch_never_registers_or_writes(self):
         with tempfile.TemporaryDirectory(prefix="虹夏 codex home test ") as directory:
             base = Path(directory)
             package = self.package(base)
@@ -129,12 +129,11 @@ class PortableInstallTests(unittest.TestCase):
                 env=environment,
             )
 
-            self.assertEqual(result.returncode, 0, result.stderr)
-            calls = log.read_text(encoding="utf-8")
-            self.assertIn(f"home={codex_home}", calls)
-            self.assertIn("args=mcp add nijika-pet --", calls)
-            self.assertIn(str(install / "dist/虹夏MCP-v2/虹夏MCP-v2.exe"), calls)
-            self.assertTrue((codex_home / "skills/nijika-desktop-dialog/SKILL.md").is_file())
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("MAGPIE", result.stderr)
+            self.assertFalse(log.exists())
+            self.assertFalse(codex_home.exists())
+            self.assertFalse(install.exists())
 
 
 if __name__ == "__main__":

@@ -1,5 +1,11 @@
 # 架构
 
+## 单进程桌面应用与文字回复（2026-11-21）
+
+- `desktop_app.py` 以规范化的本地数据库路径区分应用实例。设置快捷方式用 Windows 命名事件唤醒现有实例。桌宠的 Win32 消息循环在独立线程运行，主线程按需启动设置中心的 WebView2，避免窗口切换阻塞气泡。
+- 设置中心继续使用现有的回环服务及鉴权。退出桌宠时关闭设置视图和服务。WebView2 自身的渲染进程以及供各 Agent 使用的 MCP 进程各自管理。
+- `notification_store.py` 用 `notice_text_replies` 关联原通知 ID，首次发送在同一 SQLite 事务中保存回复与状态。审批回执和文字回复复用队列，分别按请求类型处理。详见 [接口说明](INTERFACES.md)。
+
 ## Grok 来源握手（2026-11-18）
 
 - Grok 1.0.88 的 MCP `initialize` 请求会以 `grok-shell-<配置服务名>` 作为 `clientInfo.name`，而不是稳定的 `grok` 或 `grok-build`。`notice_source._caller_defaults()` 先匹配全部精确来源，再仅对 `grok-shell-` 前缀映射为 Agent `Grok`、软件 `Grok Build`。
@@ -52,6 +58,10 @@ DSH 模块仅接受 `firstLiveSeq` 后的根会话，真实 `source.kind=user` �
 - 具体扩展入口复用自定义向导，预填扩展名、编辑器名和已知后端路径。已核实后端可备份合并带条件的持久来源规则；共享 MCP 的环境变量/权限不改。MAGPIE 管理的后端仍只登记并验证，不写规则。
 - `host_process.py` 在 MCP 启动时读取一次 Windows 进程名/父进程快照，沿最多 16 层识别 Code.exe；遇 shell 即停止，避免把集成终端 CLI 当作扩展。只对独立 Codex/Claude Code 来源提供编辑器提示，DSH 共用后端不采用此推断。
 - 本次调用的 software 参数优先于进程提示；共享后端由条件规则传 agent_name/software。显示标签是呈现元数据，不是身份鉴权。VS Code 专用头部顺序改为软件在前，其他宿主顺序不变。
+
+## MAGPIE 单一接入（2026-11-21）
+
+设置中心只读取磁盘上的客户端归属摘要，生成统一 Library 配置或验证提示词。仅对检测到分发的客户端写入虹夏自己的档案；不复制每客户端提醒正文，也不写入客户端或 Library。原生事件与通知 MCP 分开。打包时 Work 插件保留已注册名称，正文由同一份 `nijika-agent-dialog` 生成。
 
 ## 自动发现与接入（2026-10-29，候选实现）
 

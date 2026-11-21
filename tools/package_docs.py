@@ -25,10 +25,10 @@ FILES = (
     "art/motion-preview.gif",
     "art/control-panel-preview.jpg",
     "art/wardrobe-creator-preview.png",
-    "skills/nijika-desktop-dialog/SKILL.md",
+    "skills/nijika-agent-dialog/SKILL.md",
+    "skills/nijika-magpie-setup/SKILL.md",
     "plugins/nijika-work-local/skills/nijika-work-dialog/SKILL.md",
     "integrations/dsh/README.md",
-    "integrations/dsh/nijika-dsh-dialog/SKILL.md",
     "distribution/README.md",
     "AGENT_SETUP.md",
 )

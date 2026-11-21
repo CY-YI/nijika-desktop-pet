@@ -1,5 +1,11 @@
 # 虹夏桌宠 · 2D 坐姿版
 
+设为开机自启后，登录 Windows 即可看到虹夏。双击桌面“虹夏桌宠”打开设置中心，也可从角色右键菜单打开。关闭设置后虹夏继续在桌面陪伴。Agent 需要开放式回答时，气泡提供“输入回复”，发送的内容可由原对话读取。
+
+完成提醒、选择题和审批提醒都可以在气泡内点“输入回复”。选择题的入口位于选项下方。命令授权仍在原客户端审批卡上完成。设置中心“Agent 接入”页提供本机试用。导入外观可在“角色衣橱”删除，删除当前外观会切回经典制服。
+
+新接入统一走 MAGPIE Library：选择目标、分发共享 MCP 与唯一提醒 Skill、在目标的新任务验收。当前步骤见 [接入手册](AGENT_SETUP.md)，下方旧的直连说明仅属历史。
+
 准备学习或修改源码，请先读 [源码开发指南](DEVELOPMENT.md)：包含环境搭建、隔离运行、模块地图、测试与构建步骤。完整工程包额外附带已验证程序和 `SOURCE_MANIFEST.json`，不包含个人配置或运行数据。
 
 源码按 [MIT License](LICENSE) 发布；依赖和安装器翻译的声明见
@@ -10,6 +16,8 @@
 2026-11-05：作者确认仓库中的角色、图标和配套截图均由本人创作，并允许随项目公开分发；
 此确认解决了本项目素材授权的待办。微信收款码继续按作者决定保留。干净 Windows 验收方案见
 [CLEAN_WINDOWS_INSTALL_PLAN.md](CLEAN_WINDOWS_INSTALL_PLAN.md)，实际执行仍待独立环境。
+
+2026-11-21 本机版本的验证和回退见 [本机收尾记录](PUBLISHING.md#2026-11-21-本机版本收尾)。以下带日期的章节保留各阶段结果，当前安装和接入以 [安装指南](INSTALL.md) 与 [MAGPIE 接入手册](AGENT_SETUP.md) 的开头为准。
 
 ## MCP onedir 与临时目录治理（2026-11-03）
 
@@ -117,7 +125,7 @@ Agent 接入区区分管理昵称、Agent 和所在软件，通用客户端必�
 
 Windows 桌面上的 Q 版坐姿虹夏：完整双腿、透明背景、八种表情、自然眨眼。默认“活泼明显”动态：连续的待机呼吸、轻摆与偶尔弹跳；单击换表情并弹起，双击连续回应；按住角色拖动时倾斜，松手自然回正。右键可以选表情、大小、动态强度、手动说话、演示提醒或退出。Codex 可经本机 MCP 工具发送真实的完成提醒和选择题；简单选择及短成果审阅在气泡中显示完整决策信息和逐项简介，点击结果由当前 Agent 读取并继续任务，无需再回聊天确认。Agent 每个有效轮次的结束提醒由客户端规则和 Codex Stop 兜底共同保证。菜单里的“演示”仍只在本地生效。
 
-本机成品可双击 `dist/虹夏桌宠.exe` 启动；`dist/虹夏MCP-v2/虹夏MCP-v2.exe` 是 Codex 自动启动的 stdio 服务，不需手动双击，且不能脱离同级 `_internal/` 单独复制。当前电脑已注册 `nijika-pet` MCP 并安装 `skills/nijika-desktop-dialog/` 的全局副本；项目 `AGENTS.md` 规定何时主动发送提醒。独立 Codex CLI 会话已在普通审阅和选择任务中自主调用桌宠；Codex 桌面应用的新任务也已自动发出完成提醒并在桌面显示。Git 仓库只保存源码、素材、测试和文档，`dist/` 生成文件不入库；克隆后按 `INSTALL.md` 构建和注册。动画预览见 `art/motion-preview.gif`，气泡外观见 `art/bubble-preview.png`，角色帧在 `assets/sprites/`。
+本机成品可双击 `dist/虹夏桌宠.exe` 启动。`dist/虹夏MCP-v2/虹夏MCP-v2.exe` 由接入后的宿主启动，须保留同级 `_internal/`。本机使用共享 `nijika-pet` 服务和 `nijika-agent-dialog` 统一技能，`AGENTS.md` 规定提醒时机。Git 仓库保存源码、素材、测试和文档。克隆后按 `INSTALL.md` 构建。动画预览见 `art/motion-preview.gif`，气泡外观见 `art/bubble-preview.png`，角色帧在 `assets/sprites/`。
 
 对外分享文档可运行 `.\.venv\Scripts\python.exe tools\package_docs.py` 从当前源码生成压缩包；旧压缩包不作为最新工程状态的依据。
 
@@ -125,7 +133,7 @@ Windows 桌面上的 Q 版坐姿虹夏：完整双腿、透明背景、八种表
 
 给朋友测试时可直接使用 `python tools\package_friend_trial.py` 生成小型私下试用 ZIP；当前脚本位于 `tools/package_friend_trial.py`，默认输出到 `dist-release/friend-trial-0.1.10/`。包内包含带公开投喂资料的 `v0.1.10` Setup、校验清单、最新 `AGENT_SETUP.md`、快速说明 `FRIEND_TRIAL_GUIDE.md` 和简明文本说明。旧 `dist-next` 候选和构建缓存属于可再生历史产物，清理前仍保留诊断与回退证据。
 
-**Agent 接入配置集中见 [AGENT_SETUP.md](AGENT_SETUP.md)**：分别说明私下试用包、Codex、桌面客户端 Work、DSH、Claude Code，以及其他支持 stdio MCP 的本机客户端如何配置和验证。设置中心的“接入步骤”可直接复制自动配置提示词，内含本机 MCP 程序路径、完整 JSON 和提醒规则；发给有本机文件操作能力的 AI，由它配置与验证。接入文件自动保存至用户数据目录下 `integrations/agents/<档案ID>/`，界面显示准确路径，无需手动下载。客户端重载或本人权限确认仍按实际要求完成。
+**Agent 接入见 [MAGPIE 接入手册](AGENT_SETUP.md)**。设置中心的“接入步骤”可复制含本机 MCP 路径和统一技能路径的配置提示词。已分发的客户端可登记档案，并复制验证提示词到该客户端的新任务。客户端重载和原生审批信任按各客户端的实际要求处理。
 
 互动功能开发前的稳定存档为 `stable/pre-interactions-20261016`（`a876e18`）；源码与本机运行备份的恢复步骤见 [ROLLBACK.md](ROLLBACK.md)。本机私人备份不随源码或试用包分发。
 

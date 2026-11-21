@@ -35,6 +35,10 @@ def materialize_release_source(source: Path) -> None:
             target.mkdir(parents=True)
             for file in ("base_library.zip", "python312.dll"):
                 (target / file).write_bytes(b"onedir runtime")
+        elif name.endswith("/SKILL.md"):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(f"---\nname: {target.parent.name}\n---\n\n{target.parent.name} fixture\n",
+                              encoding="utf-8")
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(name.encode("utf-8"))
@@ -133,7 +137,7 @@ class InstallerPackagingTests(unittest.TestCase):
             source = base / "source"
             materialize_release_source(source)
             for path in source.rglob("*"):
-                if path.is_file() and "mcp" not in path.relative_to(source).as_posix().casefold():
+                if path.is_file() and path.name != "SKILL.md" and "mcp" not in path.relative_to(source).as_posix().casefold():
                     path.write_bytes(b"old packaged fixture")
             (source / "plugins/nijika-work-local/mcp.json").write_text(
                 json.dumps({"mcpServers": {"nijika-work-pet": {"args": ["AUTO_LOCAL_MCP"]}}}),
@@ -151,6 +155,11 @@ class InstallerPackagingTests(unittest.TestCase):
             with patch.object(package_release, "ROOT", source):
                 package_release.stage(base / "stage", *candidates[:2], approval_exe=candidates[2])
                 package_release.build(base / "trial.zip", *candidates[:2], approval_exe=candidates[2])
+            skill = base / "stage/plugins/nijika-work-local/skills/nijika-work-dialog/SKILL.md"
+            self.assertIn("name: nijika-work-dialog", skill.read_text(encoding="utf-8"))
+            self.assertIn("nijika-agent-dialog fixture", skill.read_text(encoding="utf-8"))
+            self.assertFalse((base / "stage/skills/nijika-desktop-dialog").exists())
+            self.assertFalse((base / "stage/integrations/dsbot/install.ps1").exists())
             with ZipFile(base / "trial.zip") as archive:
                 sums = json.loads(archive.read(f"{package_release.PREFIX}/SHA256SUMS.json"))
                 for name, candidate in (

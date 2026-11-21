@@ -190,3 +190,13 @@ button:disabled{cursor:default}
 .discovery-heading input { width:20px; height:20px; flex:none; }
 .discovery-item .file-path, .discovery-results .file-path { display:block; white-space:normal; overflow-wrap:anywhere; }
 .discovery-results { margin-top:16px; }
+.setup-method{border:0;padding:0;margin:18px 0 0;min-inline-size:0}
+.setup-method .client-choices{margin-bottom:0}
+.setup-method .client-option small,#wizard-step-two .review-banner p{font-size:11px;color:#575963}
+#wizard-step-two .review-banner strong{font-size:14px;color:var(--ink)}
+.skin-card-actions{display:flex;flex-wrap:wrap;gap:6px}
+.skin-card .skin-card-actions .button{width:auto;flex:1}
+.button.danger{background:#fff5f4;border-color:#ebc5c2;color:#943a33}
+.button.danger:hover{background:#fce8e5}
+#skin-remove-dialog{width:440px}
+#skin-remove-message{margin-top:10px}

@@ -10,13 +10,18 @@ from notification_store import NotificationStore
 
 
 class ApprovalHookTests(unittest.TestCase):
+    def codex_request(self, store, **fields):
+        event = {"session_id": "test-session", "turn_id": "test-turn",
+                 "transcript_path": "C:/test-project/conversation.jsonl", **fields}
+        handle_event({**event, "hook_event_name": "UserPromptSubmit", "prompt": "检查工程"}, store)
+        return {**event, "hook_event_name": "PermissionRequest"}
+
     def test_approval_priority_dedup_and_resolution(self):
         with tempfile.TemporaryDirectory() as directory:
             store = NotificationStore(Path(directory) / "queue.sqlite3")
             normal = store.create("Codex", "成果", "查看结果", ["知道了"])
-            event = {"hook_event_name": "PermissionRequest", "session_id": "test-session",
-                     "turn_id": "test-turn", "tool_name": "Bash", "cwd": "C:/test-project",
-                     "tool_input": {"command": "command with TEST_SECRET", "description": "reason"}}
+            event = self.codex_request(store, tool_name="Bash", cwd="C:/test-project",
+                                       tool_input={"command": "command with TEST_SECRET", "description": "reason"})
             request = handle_event(event, store)
             self.assertEqual(handle_event(event, store), request)
             self.assertEqual(store.next_pending().id, request)
@@ -33,7 +38,7 @@ class ApprovalHookTests(unittest.TestCase):
     def test_ack_is_not_permission_decision(self):
         with tempfile.TemporaryDirectory() as directory:
             store = NotificationStore(Path(directory) / "queue.sqlite3")
-            request = handle_event({"hook_event_name": "PermissionRequest"}, store)
+            request = handle_event(self.codex_request(store), store)
             self.assertEqual(store.answer(request, 0).result()["choice"], "知道了")
             self.assertEqual(store.get(request).status, "answered")
             self.assertEqual(store.get(request).kind, "approval")
@@ -43,8 +48,9 @@ class ApprovalHookTests(unittest.TestCase):
             store = NotificationStore(Path(directory) / "queue.sqlite3")
             for caller, expected in (("codex", ("ChatGPT", "Codex")),
                                      ("claude-code", ("Claude", "Claude Code"))):
-                request = handle_event({"hook_event_name": "PermissionRequest",
-                                        "session_id": caller}, store, caller)
+                event = (self.codex_request(store) if caller == "codex" else
+                         {"hook_event_name": "PermissionRequest", "session_id": caller})
+                request = handle_event(event, store, caller)
                 notice = store.get(request)
                 self.assertEqual((notice.agent, notice.software), expected)
 

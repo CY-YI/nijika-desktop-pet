@@ -29,7 +29,8 @@ FILES = (
     "integrations/codex/install-hooks.ps1",
     "integrations/claude-code/install-hooks.ps1",
     "assets/icons/nijika-shortcut.ico",
-    "skills/nijika-desktop-dialog/SKILL.md",
+    "skills/nijika-agent-dialog/SKILL.md",
+    "skills/nijika-magpie-setup/SKILL.md",
     "plugins/nijika-work-local/plugin.json",
     "plugins/nijika-work-local/mcp.json",
     "plugins/nijika-work-local/scripts/run_mcp.py",
@@ -38,18 +39,7 @@ FILES = (
     "integrations/dsh/install.ps1",
     "integrations/dsh/README.md",
     "integrations/dsh/lifecycle-bridge.mjs",
-    "integrations/dsh/global-instructions.txt",
-    "integrations/dsh/nijika-dsh-dialog/SKILL.md",
-    "integrations/dsbot/install.ps1",
-    "integrations/dsbot/nijika-mcp/cordis.patch.yml",
-    "integrations/dsbot/nijika-mcp/global-instructions.txt",
-    "integrations/dsbot/nijika-mcp/locale/en.json",
-    "integrations/dsbot/nijika-mcp/locale/zh.json",
-    "integrations/dsbot/nijika-mcp/package.json",
-    "integrations/dsbot/nijika-mcp/README.md",
-    "integrations/dsbot/nijika-mcp/skill/SKILL.md",
     "distribution/install.ps1",
-    "distribution/codex-global-instructions.txt",
     "distribution/README.md",
     "AGENT_SETUP.md",
     "NOTIFICATION_PROTOCOL.md",
@@ -131,6 +121,19 @@ def _public_support(support_bundle: Path | None) -> dict[str, bytes]:
     return read_public_bundle(ROOT)
 
 
+def _release_content(name: str, source: Path) -> bytes:
+    if name == "plugins/nijika-work-local/mcp.json":
+        plugin = json.loads(source.read_bytes())
+        plugin["mcpServers"]["nijika-work-pet"]["args"][-1] = "AUTO_LOCAL_MCP"
+        return (json.dumps(plugin, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    if name == "plugins/nijika-work-local/skills/nijika-work-dialog/SKILL.md":
+        # Work requires its registered skill name. The behavior comes only from the shared skill.
+        _, header, _ = source.read_text(encoding="utf-8-sig").split("---\n", 2)
+        _, _, body = (ROOT / "skills/nijika-agent-dialog/SKILL.md").read_text(encoding="utf-8-sig").split("---\n", 2)
+        return ("---\n" + header + "---\n" + body).encode("utf-8")
+    return source.read_bytes()
+
+
 def build(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None,
           support_bundle: Path | None = None, approval_exe: Path | None = None) -> None:
     sources = _release_sources(mcp_exe, app_exe, approval_exe)
@@ -140,11 +143,7 @@ def build(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None
     output.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=6) as archive:
         for name, source in entries:
-            data = source.read_bytes()
-            if name == "plugins/nijika-work-local/mcp.json":
-                plugin = json.loads(data)
-                plugin["mcpServers"]["nijika-work-pet"]["args"][-1] = "AUTO_LOCAL_MCP"
-                data = (json.dumps(plugin, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+            data = _release_content(name, source)
             manifest[name] = hashlib.sha256(data).hexdigest()
             archive.writestr(f"{PREFIX}/{name}", data)
         for name, data in public.items():
@@ -166,11 +165,7 @@ def stage(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None
     public = _public_support(support_bundle)
     manifest: dict[str, str] = {}
     for name, source in entries:
-        data = source.read_bytes()
-        if name == "plugins/nijika-work-local/mcp.json":
-            plugin = json.loads(data)
-            plugin["mcpServers"]["nijika-work-pet"]["args"][-1] = "AUTO_LOCAL_MCP"
-            data = (json.dumps(plugin, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+        data = _release_content(name, source)
         manifest[name] = hashlib.sha256(data).hexdigest()
         target = output / Path(name)
         target.parent.mkdir(parents=True, exist_ok=True)

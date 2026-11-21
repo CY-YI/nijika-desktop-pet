@@ -174,10 +174,8 @@ def verify(setup: Path, work: Path, *, disposable_session: bool = False,
     uninstaller = uninstallers[0]
     assert (install / "unins000.dat").is_file()
     shortcuts = {
-        desktop / "虹夏桌宠.lnk": "",
-        desktop / "虹夏桌宠设置.lnk": "--control-panel",
-        start_menu / "虹夏桌宠/虹夏桌宠.lnk": "",
-        start_menu / "虹夏桌宠/虹夏桌宠设置.lnk": "--control-panel",
+        desktop / "虹夏桌宠.lnk": "--control-panel",
+        start_menu / "虹夏桌宠/虹夏桌宠.lnk": "--control-panel",
         startup / "虹夏桌宠.lnk": "",
     }
     verify_shortcuts(shortcuts, install / "dist/虹夏桌宠.exe")

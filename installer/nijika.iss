@@ -58,10 +58,8 @@ Name: "autostart"; Description: "登录 Windows 时启动虹夏桌宠"; GroupDes
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\虹夏桌宠"; Filename: "{app}\dist\虹夏桌宠.exe"; WorkingDir: "{app}\dist"; IconFilename: "{app}\assets\icons\nijika-shortcut.ico"
-Name: "{group}\虹夏桌宠设置"; Filename: "{app}\dist\虹夏桌宠.exe"; Parameters: "--control-panel"; WorkingDir: "{app}\dist"; IconFilename: "{app}\assets\icons\nijika-shortcut.ico"
-Name: "{userdesktop}\虹夏桌宠"; Filename: "{app}\dist\虹夏桌宠.exe"; WorkingDir: "{app}\dist"; IconFilename: "{app}\assets\icons\nijika-shortcut.ico"; Tasks: desktopicon
-Name: "{userdesktop}\虹夏桌宠设置"; Filename: "{app}\dist\虹夏桌宠.exe"; Parameters: "--control-panel"; WorkingDir: "{app}\dist"; IconFilename: "{app}\assets\icons\nijika-shortcut.ico"; Tasks: desktopicon
+Name: "{group}\虹夏桌宠"; Filename: "{app}\dist\虹夏桌宠.exe"; Parameters: "--control-panel"; WorkingDir: "{app}\dist"; IconFilename: "{app}\assets\icons\nijika-shortcut.ico"
+Name: "{userdesktop}\虹夏桌宠"; Filename: "{app}\dist\虹夏桌宠.exe"; Parameters: "--control-panel"; WorkingDir: "{app}\dist"; IconFilename: "{app}\assets\icons\nijika-shortcut.ico"; Tasks: desktopicon
 Name: "{userstartup}\虹夏桌宠"; Filename: "{app}\dist\虹夏桌宠.exe"; WorkingDir: "{app}\dist"; IconFilename: "{app}\assets\icons\nijika-shortcut.ico"; Tasks: autostart
 
 [Run]

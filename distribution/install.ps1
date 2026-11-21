@@ -15,6 +15,9 @@
 )
 
 $ErrorActionPreference = 'Stop'
+if ($Codex -or $Work -or $Dsh -or $DsBot) {
+    throw 'Direct Agent installation was retired. Open Nijika settings > Agent setup and distribute through MAGPIE Library.'
+}
 $sourceRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path.TrimEnd('\')
 $targetRoot = [IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
 $CodexHome = [IO.Path]::GetFullPath($CodexHome).TrimEnd('\')
@@ -30,37 +33,15 @@ foreach ($relative in @('dist\虹夏桌宠.exe', 'dist\虹夏MCP-v2\虹夏MCP-v2
         'dist\_nijika_pet_runtime\base_library.zip', 'dist\_nijika_pet_runtime\python312.dll',
         'dist\_nijika_hook_runtime\base_library.zip', 'dist\_nijika_hook_runtime\python312.dll',
         'dist\虹夏MCP-v2\_internal\python312.dll',
-        'assets\icons\nijika-shortcut.ico', 'skills\nijika-desktop-dialog\SKILL.md',
+        'assets\icons\nijika-shortcut.ico', 'skills\nijika-agent-dialog\SKILL.md',
+        'skills\nijika-magpie-setup\SKILL.md',
         'plugins\nijika-work-local\mcp.json', 'integrations\claude-code\install-hooks.ps1',
         'integrations\dsh\install.ps1', 'integrations\dsh\lifecycle-bridge.mjs',
-        'integrations\dsbot\install.ps1', 'integrations\dsbot\nijika-mcp\cordis.patch.yml',
         'AGENT_SETUP.md', 'NOTIFICATION_PROTOCOL.md')) {
     if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot $relative) -PathType Leaf)) {
         throw "Incomplete package: $relative"
     }
 }
-if (($Codex -or $Work) -and -not (Get-Command codex -ErrorAction SilentlyContinue)) {
-    throw 'Codex CLI is not on PATH. Run without -Codex/-Work to install the pet, then connect an Agent later.'
-}
-if ($Codex -or $Work) {
-    New-Item -ItemType Directory -Path $CodexHome -Force | Out-Null
-    # codex.exe/codex.cmd resolves its MCP, plugin and hook state from
-    # CODEX_HOME. Keep a recipient-supplied -CodexHome authoritative.
-    $env:CODEX_HOME = $CodexHome
-}
-if ($Work -and -not (Get-Command python.exe -ErrorAction SilentlyContinue)) {
-    throw 'The current Work plugin launcher requires python.exe on PATH. Install Python, or run without -Work.'
-}
-if ($Dsh -and -not (Test-Path -LiteralPath $DshRoot -PathType Container)) {
-    throw "DSH home does not exist: $DshRoot"
-}
-if ($DsBot -and -not (Test-Path -LiteralPath $DsBotRoot -PathType Container)) {
-    throw "DS Bot home does not exist: $DsBotRoot"
-}
-if ($DsBot -and -not (Get-Command pnpm.cmd -ErrorAction SilentlyContinue)) {
-    throw 'pnpm.cmd is required to refresh the DS Bot profile link.'
-}
-
 New-Item -ItemType Directory -Path $targetRoot -Force | Out-Null
 Get-ChildItem -LiteralPath $sourceRoot -File -Recurse | ForEach-Object {
     $relative = $_.FullName.Substring($sourceRoot.Length).TrimStart('\')
@@ -82,71 +63,19 @@ if (-not $NoShortcuts) {
     $desktop = [Environment]::GetFolderPath('DesktopDirectory')
     $shortcut = $shell.CreateShortcut((Join-Path $desktop '虹夏桌宠.lnk'))
     $shortcut.TargetPath = $petExe
+    $shortcut.Arguments = '--control-panel'
     $shortcut.WorkingDirectory = Split-Path -Parent $petExe
     $shortcut.IconLocation = $icon
     $shortcut.Save()
-    $controlShortcut = $shell.CreateShortcut((Join-Path $desktop '虹夏桌宠设置.lnk'))
-    $controlShortcut.TargetPath = $petExe
-    $controlShortcut.Arguments = '--control-panel'
-    $controlShortcut.WorkingDirectory = Split-Path -Parent $petExe
-    $controlShortcut.IconLocation = $icon
-    $controlShortcut.Save()
     if ($AutoStart) {
         $startup = [Environment]::GetFolderPath('Startup')
         $shortcut = $shell.CreateShortcut((Join-Path $startup '虹夏桌宠.lnk'))
         $shortcut.TargetPath = $petExe
+        $shortcut.Arguments = ''
         $shortcut.WorkingDirectory = Split-Path -Parent $petExe
         $shortcut.IconLocation = $icon
         $shortcut.Save()
     }
-}
-
-function Update-MarkedBlock {
-    param([string]$Path, [string]$Block)
-    $start = '# BEGIN NIJIKA-CODEX-DIALOG'
-    $end = '# END NIJIKA-CODEX-DIALOG'
-    $current = if (Test-Path -LiteralPath $Path) { [IO.File]::ReadAllText($Path) } else { '' }
-    $startAt = $current.IndexOf($start, [StringComparison]::Ordinal)
-    $endAt = $current.IndexOf($end, [StringComparison]::Ordinal)
-    if (($startAt -ge 0) -ne ($endAt -ge 0)) { throw "Incomplete Nijika block in $Path" }
-    if ($startAt -ge 0) {
-        if ($endAt -lt $startAt) { throw "Invalid Nijika block in $Path" }
-        $updated = $current.Substring(0, $startAt) + $Block.TrimEnd() +
-            $current.Substring($endAt + $end.Length)
-    } else {
-        $updated = $current.TrimEnd("`r", "`n") + "`n`n" + $Block.TrimEnd() + "`n"
-    }
-    if ($updated -eq $current) { return }
-    if (Test-Path -LiteralPath $Path) {
-        Copy-Item -LiteralPath $Path -Destination "$Path.bak-nijika-$(Get-Date -Format 'yyyyMMdd-HHmmss-fff')"
-    }
-    [IO.File]::WriteAllText($Path, $updated, [Text.UTF8Encoding]::new($false))
-}
-
-if ($Codex) {
-    $skillTarget = Join-Path $CodexHome 'skills\nijika-desktop-dialog\SKILL.md'
-    New-Item -ItemType Directory -Path (Split-Path -Parent $skillTarget) -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $targetRoot 'skills\nijika-desktop-dialog\SKILL.md') `
-        -Destination $skillTarget -Force
-    $block = [IO.File]::ReadAllText((Join-Path $targetRoot 'distribution\codex-global-instructions.txt'))
-    New-Item -ItemType Directory -Path $CodexHome -Force | Out-Null
-    Update-MarkedBlock -Path (Join-Path $CodexHome 'AGENTS.md') -Block $block
-    & codex mcp get nijika-pet *> $null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Warning 'nijika-pet already exists in Codex. Check its executable path; this installer did not overwrite it.'
-    } else {
-        & codex mcp add nijika-pet -- $mcpExe
-        if ($LASTEXITCODE -ne 0) { throw 'Codex MCP registration failed.' }
-    }
-    Write-Output 'Codex skill and global trigger rule installed.'
-}
-
-if ($Work) {
-    & codex plugin marketplace add $targetRoot --json
-    if ($LASTEXITCODE -ne 0) { throw 'Work plugin marketplace registration failed.' }
-    & codex plugin add nijika-work-local@nijika-local --json
-    if ($LASTEXITCODE -ne 0) { throw 'Work plugin installation failed.' }
-    Write-Output 'Work plugin installed. Restart the ChatGPT desktop app and use a new local Work task.'
 }
 
 if ($CodexHooks) {
@@ -160,15 +89,6 @@ if ($ClaudeHooks) {
     Write-Output 'Claude Code approval hooks installed. Restart or reload Claude Code settings to apply.'
 }
 
-if ($Dsh) {
-    & (Join-Path $targetRoot 'integrations\dsh\install.ps1') -DshRoot $DshRoot
-    Write-Output 'DSH integration installed. Restart DSH and use a new conversation.'
-}
-
-if ($DsBot) {
-    & (Join-Path $targetRoot 'integrations\dsbot\install.ps1') -DsBotRoot $DsBotRoot -McpExe $mcpExe
-    Write-Output 'DS Bot integration installed. Restart DS Bot and use a new conversation.'
-}
-
 if (-not $NoLaunch) { Start-Process -FilePath $petExe -WorkingDirectory (Split-Path -Parent $petExe) }
 Write-Output "Nijika installed at: $targetRoot"
+Write-Output "Connect Agents through the MAGPIE guide in Nijika settings."

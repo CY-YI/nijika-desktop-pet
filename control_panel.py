@@ -102,17 +102,19 @@ class ControlApplication:
         if not item:
             return {"request_id": request_id, "status": "not_found", "visible": False}
         renderer = self.renderer()
-        return {**item.result(), "visible": bool(renderer["online"] and renderer["window_visible"] and
-                                                 renderer.get("active_notice_id") == request_id)}
+        result = item.result()
+        result.pop("reply_text", None)
+        return {**result, "visible": bool(renderer["online"] and renderer["window_visible"] and
+                                          renderer.get("active_notice_id") == request_id)}
 
     def state(self) -> dict:
         renderer = self.renderer()
-        agents = self.store.agents()
+        agents = self.setup.current_profiles()
         for agent in agents:
             request_id = agent.get("test_request_id")
             agent["test"] = self.notice(request_id) if request_id else None
             agent["host_activity"] = self.activity.snapshot(agent["id"])
-            agent.update(self.setup.describe(agent))
+            agent.update(self.setup.magpie_guide(agent))
             # Backups are local recovery artifacts, not useful to every state poll.
             agent.pop("backups", None)
         return {"renderer": renderer, "settings": self.store.settings(), "agents": agents,
@@ -124,20 +126,19 @@ class ControlApplication:
     def post(self, route: str, data: dict) -> dict:
         if route == "/api/agents/scan":
             return self.setup.discover()
-        if route == "/api/agents/batch-plan":
-            return self.setup.batch_plan(data.get("clients"))
-        if route == "/api/agents/batch-apply":
-            return self.setup.batch_apply(data.get("batch_id", ""))
+        if route in ("/api/agents/batch-plan", "/api/agents/batch-apply"):
+            raise ValueError("请在 MAGPIE Library 批量分发；设置中心只登记现有连接。")
         if route == "/api/agents/plan":
             return self.setup.plan(data.get("client"), data.get("name"), data.get("location", ""),
-                                   data.get("agent_identity"), data.get("software", ""))
+                                   data.get("agent_identity"), data.get("software", ""),
+                                   via_magpie=True)
         if route == "/api/agents/apply":
-            return self.setup.apply(data.get("plan_id", ""))
+            return self.setup.apply(data.get("plan_id", ""), magpie_only=True)
         if route == "/api/agents/prepare":
             agent = self.store.agent(data.get("id", ""))
             if not agent:
                 raise ValueError("请先添加这个 Agent。")
-            return {"agent": {**agent, **self.setup.prepare_files(agent)}}
+            return {"agent": self.setup.prepare_magpie_guide(agent)}
         if route == "/api/agents/remove":
             self.store.remove_agent(data.get("id", ""))
             return {"removed": True, "message": "已移除面板档案，客户端配置保持不变。"}
@@ -157,6 +158,10 @@ class ControlApplication:
             return self.notice(notice.id)
         if route == "/api/settings":
             return self.store.update_settings(data)
+        if route == "/api/skins/remove":
+            return self.store.remove_skin(data.get("id", ""))
+        if route == "/api/notices/demo-text":
+            return self.notice(self.notifications.create_text_demo().id)
         if route == "/api/interaction":
             if "action" in data:
                 if set(data) != {"action"} or not isinstance(data["action"], str):
@@ -290,11 +295,7 @@ class ControlHandler(BaseHTTPRequestHandler):
             elif route.startswith("/api/notices/"):
                 self.send_json(self.server.app.notice(route.rsplit("/", 1)[1]))
             elif route.startswith("/api/agents/export/"):
-                agent = self.server.app.store.agent(route.rsplit("/", 1)[1])
-                if not agent:
-                    raise ValueError("找不到 Agent 档案。")
-                self.send_json({"config": self.server.app.setup.export_agent(agent),
-                                "instructions": (self.server.app.root / "distribution/codex-global-instructions.txt").read_text(encoding="utf-8-sig")})
+                raise ValueError("虹夏通过 MAGPIE 统一分发，请打开接入步骤。")
             elif route in ("/", "/app.js", "/form-state.js", "/interaction.js", "/styles.css"):
                 filename = "index.html" if route == "/" else route[1:]
                 data = (resource_root() / "control-ui" / filename).read_bytes()
@@ -370,11 +371,11 @@ class ControlHandler(BaseHTTPRequestHandler):
             self.send_json({"error": "本机文件或数据暂时不可用，请检查目录权限与客户端状态后重试。"}, 503)
 
 
-def run_panel(argv: list[str] | None = None) -> None:
+def run_panel(argv: list[str] | None = None, *, watch_window=None) -> None:
     """Start the local management service and its WebView2 window.
 
-    Called both by this module's ``main`` and by ``pet.py --control-panel`` so the
-    desktop companion and its settings live in a single executable.
+    The desktop application starts the native view on demand. Standalone
+    arguments remain available for browser development and isolated testing.
     """
     parser = argparse.ArgumentParser(description="虹夏桌宠 · 设置与 Agent 接入")
     parser.add_argument("--browser", action="store_true", help="在浏览器打开面板")
@@ -390,13 +391,33 @@ def run_panel(argv: list[str] | None = None) -> None:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     status = app.store.root / "panel-status.json"
-    status.write_text(json.dumps({"pid": os.getpid(), "url": server.origin}, ensure_ascii=False), encoding="utf-8")
+    status_lock = threading.Lock()
+    publishing_status = True
+
+    def write_status(view_ready=False):
+        with status_lock:
+            if publishing_status:
+                temporary = status.with_name(f".panel-status-{os.getpid()}.tmp")
+                payload = {"pid": os.getpid(), "url": server.origin, "view_ready": view_ready}
+                temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+                temporary.replace(status)
+
+    def mark_view_ready(window):
+        try:
+            ready = window.evaluate_js("Boolean(document.getElementById('scan-agents'))")
+            if ready:
+                write_status(view_ready=True)
+        except Exception:
+            # A navigation or window close may interrupt the readiness check.
+            pass
+
     try:
-        if sys.stdout:
-            print(server.origin, flush=True)
-    except (OSError, ValueError):
-        pass
-    try:
+        write_status()
+        try:
+            if sys.stdout:
+                print(server.origin, flush=True)
+        except (OSError, ValueError):
+            pass
         if args.serve_only:
             if args.test_shutdown_file:
                 while thread.is_alive() and not args.test_shutdown_file.is_file():
@@ -408,11 +429,16 @@ def run_panel(argv: list[str] | None = None) -> None:
             thread.join()
         else:
             import webview
-            webview.create_window(WINDOW_TITLE, server.origin, width=1220, height=820, min_size=(950, 680))
-            webview.start(gui="edgechromium", debug=False, private_mode=True)
+            window = webview.create_window(WINDOW_TITLE, server.origin, width=1220, height=820, min_size=(950, 680))
+            if watch_window is not None:
+                window.events.before_show += hide_settings_taskbar_button
+            window.events.loaded += mark_view_ready
+            webview.start(func=watch_window, args=(window,), gui="edgechromium", debug=False, private_mode=True)
     except KeyboardInterrupt:
         pass
     finally:
+        with status_lock:
+            publishing_status = False
         server.shutdown()
         server.server_close()
         try:
@@ -420,6 +446,30 @@ def run_panel(argv: list[str] | None = None) -> None:
                 status.unlink()
         except (OSError, ValueError):
             pass
+
+
+def hide_settings_taskbar_button(window) -> None:
+    from ctypes import WinDLL, c_ssize_t, wintypes
+    from System.Windows.Forms import Form
+
+    native = window.native
+    # Changing ShowInTaskbar on this form recreates its HWND after WebView2
+    # initialization has started. An invisible owner keeps the existing handle.
+    owner = Form()
+    owner.ShowInTaskbar = False
+    native.Owner = owner
+    native.Disposed += lambda *_: owner.Dispose()
+
+    user32 = WinDLL("user32", use_last_error=True)
+    user32.GetWindowLongPtrW.argtypes = [wintypes.HWND, wintypes.INT]
+    user32.GetWindowLongPtrW.restype = c_ssize_t
+    user32.SetWindowLongPtrW.argtypes = [wintypes.HWND, wintypes.INT, c_ssize_t]
+    user32.SetWindowLongPtrW.restype = c_ssize_t
+    hwnd = native.Handle.ToInt64()
+    exstyle_index = -20  # GWL_EXSTYLE
+    app_window = 0x00040000  # WS_EX_APPWINDOW overrides window ownership
+    exstyle = user32.GetWindowLongPtrW(hwnd, exstyle_index)
+    user32.SetWindowLongPtrW(hwnd, exstyle_index, exstyle & ~app_window)
 
 
 def main():

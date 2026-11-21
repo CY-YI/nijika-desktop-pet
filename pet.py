@@ -9,20 +9,21 @@ import math
 import os
 import random
 import sqlite3
-import subprocess
 import sys
 import time
 from ctypes import wintypes
 from pathlib import Path
+from typing import Callable
 
 from PIL import Image, ImageDraw
 
-from notification_store import Notification, NotificationStore
+from notification_store import Notification, NotificationStore, TEXT_REPLY_LIMIT
 from legacy_queue import LegacyQueueBridge, legacy_database_paths
 from control_store import ControlStore, DEFAULTS
 from companion_store import CompanionStore
 from interaction_store import InteractionStore
 from interaction_motion import ACTIONS as INTERACTION_ACTIONS, hit_region, motion_at
+from inline_reply import EDIT_RGB, InlineReply, copy_reply_reference
 
 
 EXPRESSIONS = (
@@ -110,6 +111,27 @@ class BITMAPINFOHEADER(ctypes.Structure):
     ]
 
 
+class PAINTSTRUCT(ctypes.Structure):
+    _fields_ = [("hdc", wintypes.HDC), ("erase", wintypes.BOOL), ("rect", wintypes.RECT),
+                ("restore", wintypes.BOOL), ("update", wintypes.BOOL), ("reserved", ctypes.c_byte * 32)]
+
+
+user32.BeginPaint.argtypes = [wintypes.HWND, ctypes.POINTER(PAINTSTRUCT)]
+user32.BeginPaint.restype = wintypes.HDC
+user32.EndPaint.argtypes = [wintypes.HWND, ctypes.POINTER(PAINTSTRUCT)]
+user32.InvalidateRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT), wintypes.BOOL]
+user32.SetWindowRgn.argtypes = [wintypes.HWND, wintypes.HRGN, wintypes.BOOL]
+user32.SetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_ssize_t]
+user32.SetWindowLongPtrW.restype = ctypes.c_ssize_t
+gdi32.BitBlt.argtypes = [wintypes.HDC, *([ctypes.c_int] * 4), wintypes.HDC,
+                        ctypes.c_int, ctypes.c_int, wintypes.DWORD]
+gdi32.CreateRoundRectRgn.argtypes = [ctypes.c_int] * 6
+gdi32.CreateRoundRectRgn.restype = wintypes.HRGN
+gdi32.CreatePolygonRgn.argtypes = [ctypes.POINTER(wintypes.POINT), ctypes.c_int, ctypes.c_int]
+gdi32.CreatePolygonRgn.restype = wintypes.HRGN
+gdi32.CombineRgn.argtypes = [wintypes.HRGN, wintypes.HRGN, wintypes.HRGN, ctypes.c_int]
+
+
 user32.RegisterClassW.argtypes = [ctypes.POINTER(WNDCLASSW)]
 user32.RegisterClassW.restype = wintypes.ATOM
 user32.CreateWindowExW.argtypes = [
@@ -165,6 +187,7 @@ user32.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(MONITORINFO)]
 user32.GetMonitorInfoW.restype = wintypes.BOOL
 user32.DestroyWindow.argtypes = [wintypes.HWND]
 user32.DestroyWindow.restype = wintypes.BOOL
+user32.MessageBoxW.argtypes = [wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.UINT]
 user32.SystemParametersInfoW.argtypes = [
     wintypes.UINT, wintypes.UINT, ctypes.c_void_p, wintypes.UINT
 ]
@@ -406,7 +429,7 @@ class SpriteSet:
         ctypes.memmove(self.bits, raw, len(raw))
 
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from notice_source import notification_source, task_heading
 from PIL import ImageFont
 
@@ -422,6 +445,11 @@ class BubbleNotice:
     duration: float | None = 6.0
     request_id: str | None = None
     source: str = ""
+    accepts_text: bool = False
+    composing: bool = False
+    reply_error: str = ""
+    reply_delivery: str = ""
+    reply_reference: str = ""
 
 
 def bubble_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
@@ -468,33 +496,49 @@ def fit_bubble_text(text: str, font: ImageFont.FreeTypeFont, width: int) -> str:
     return text + "…"
 
 
-def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, list[tuple[int, int, int, int]], tuple[int, int, int, int]]:
+def render_bubble(notice: BubbleNotice, width: int = 430, *, compact: bool = False):
     title_font = bubble_font(21, bold=True)
-    body_font = bubble_font(24)
-    small_font = bubble_font(17)
-    button_font = bubble_font(21, bold=True)
-    description_font = bubble_font(16)
-    described = (len(notice.action_descriptions) == len(notice.actions)
+    body_font = bubble_font(20 if compact else 24)
+    small_font = bubble_font(15 if compact else 17)
+    button_font = bubble_font(19 if compact else 21, bold=True)
+    description_font = bubble_font(14 if compact else 16)
+    line_height = 27 if compact else 33
+    description_line_height = 17 if compact else 19
+    description_offset = 30 if compact else 36
+    actions = (("返回选项" if any(notice.action_descriptions) else "收起", "发送回复")
+               if notice.composing else notice.actions)
+    described = (not notice.composing and len(notice.action_descriptions) == len(notice.actions)
                  and any(notice.action_descriptions))
+    separate_reply = described and notice.accepts_text
+    if notice.accepts_text and not notice.composing and not described:
+        actions += ("输入回复",)
     lines = wrap_bubble_text(notice.text, body_font, width - 58,
                              limit=None if notice.request_id and described else
                              6 if notice.request_id else 3)
-    text_y = 96 if notice.source else 62
-    content_bottom = text_y + len(lines) * 33
+    text_y = (82 if compact else 96) if notice.source else 62
+    content_bottom = text_y + len(lines) * line_height
+    input_box = edit_rect = None
+    if notice.composing:
+        input_top = content_bottom + 5
+        input_box = (27, input_top, width - 27, input_top + 87)
+        edit_rect = (37, input_top + 10, width - 37, input_top + 77)
+        content_bottom = input_box[3]
     footer_y = None
-    if notice.kind in ("agent", "approval"):
+    if notice.kind in ("agent", "approval", "text_demo"):
         footer_y = content_bottom + 7
         content_bottom = footer_y + 25
-    button_y = content_bottom + 9 if notice.actions else None
+    button_y = content_bottom + 9 if actions else None
     option_lines = (
         [wrap_bubble_text(description, description_font, width - 90, limit=3)
          for description in notice.action_descriptions[:3]]
         if described else []
     )
-    option_heights = [max(76, 57 + 19 * (len(lines) - 1))
+    option_heights = [max(62 if compact else 76, description_offset + 21 + description_line_height * (len(lines) - 1))
                       for lines in option_lines]
     if button_y is not None and described:
         card_bottom = button_y + sum(option_heights) + (len(option_heights) - 1) * 8 + 17
+        if separate_reply:
+            card_bottom += 46
     elif button_y is not None:
         card_bottom = button_y + 45 + 18
     else:
@@ -504,6 +548,8 @@ def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, 
     draw = ImageDraw.Draw(canvas, "RGBA")
     outline = (111, 81, 66, 255) if notice.kind == "agent" else (119, 89, 76, 255)
     fill = (255, 249, 232, 250) if notice.kind == "agent" else (255, 253, 247, 250)
+    if notice.composing:
+        fill = (*fill[:3], 255)
     draw.rounded_rectangle((9, 9, width - 4, card_bottom + 3), radius=24, fill=(67, 49, 39, 55))
     draw.rounded_rectangle((5, 5, width - 9, card_bottom), radius=24, fill=fill, outline=outline, width=3)
     pointer_x = width // 2
@@ -519,16 +565,37 @@ def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, 
                   font=small_font, fill=(123, 108, 98, 255))
     draw.text((width - 40, 17), "×", font=title_font, fill=(130, 117, 110, 255))
     for index, line in enumerate(lines):
-        draw.text((27, text_y + index * 33), line, font=body_font, fill=(65, 56, 55, 255))
+        draw.text((27, text_y + index * line_height), line, font=body_font, fill=(65, 56, 55, 255))
+    if input_box:
+        draw.rounded_rectangle(input_box, radius=12, fill=(*EDIT_RGB, 255),
+                               outline=(195, 125, 103, 255) if notice.reply_error else (207, 166, 105, 255), width=2)
     if footer_y is not None:
-        footer = ("审批提醒 · 气泡点击不会授权命令" if notice.kind == "approval"
+        footer = (notice.reply_error or ("审批留言 · Ctrl+Enter 发送" if notice.kind == "approval"
+                                        else "Enter 换行 · Ctrl+Enter 发送") if notice.composing
+                  else "本机演示 · 输入一句话试试" if notice.kind == "text_demo"
+                  else "可留言 · 授权仍在原客户端" if notice.kind == "approval" and notice.accepts_text
+                  else "审批提醒 · 气泡点击不会授权命令" if notice.kind == "approval"
+                  else "选择一项，或输入自己的回答" if separate_reply
+                  else "可输入文字回复，也可确认已读" if notice.accepts_text and notice.actions
+                  else "点击下方按钮，输入文字回复" if notice.accepts_text
                   else "点击选项后，Agent 会按你的决定继续" if notice.request_id and described
                   else "完成提醒 · 点击仅确认收到" if notice.request_id
                   else "本地演示 · 未连接 Agent")
-        draw.text((27, footer_y), footer, font=small_font, fill=(123, 108, 98, 255))
+        draw.text((27, footer_y), fit_bubble_text(footer, small_font, width - 54), font=small_font,
+                  fill=(149, 63, 53, 255) if notice.reply_error else (123, 108, 98, 255))
     action_rects: list[tuple[int, int, int, int]] = []
+
+    def draw_button(rect, label: str, *, secondary: bool = False) -> None:
+        left, top, right, bottom = rect
+        draw.rounded_rectangle(rect, radius=13, fill=(255, 249, 232, 255) if secondary else (255, 222, 153, 255),
+                               outline=(192, 155, 120, 255) if secondary else (143, 97, 76, 255), width=2)
+        box = draw.textbbox((0, 0), label, font=button_font)
+        x = (left + right - box[0] - box[2]) / 2
+        y = (top + bottom - box[1] - box[3]) / 2
+        draw.text((x, y), label, font=button_font, fill=(88, 62, 54, 255))
+        action_rects.append(rect)
+
     if button_y is not None:
-        actions = notice.actions[:3]
         if described:
             top = button_y
             for index, label in enumerate(actions):
@@ -545,22 +612,20 @@ def render_bubble(notice: BubbleNotice, width: int = 430) -> tuple[Image.Image, 
                           width - (170 if recommended else 95)),
                           font=button_font, fill=(88, 62, 54, 255))
                 for line_index, line in enumerate(option_lines[index]):
-                    draw.text((43, top + 36 + line_index * 19), line,
+                    draw.text((43, top + description_offset + line_index * description_line_height), line,
                               font=description_font, fill=(105, 82, 72, 255))
                 action_rects.append(rect)
                 top += option_heights[index] + 8
+            if separate_reply:
+                draw_button((27, top, width - 27, top + 38), "输入回复", secondary=True)
         else:
             gap = 11
             button_width = (width - 54 - gap * (len(actions) - 1)) // len(actions)
             for index, label in enumerate(actions):
                 left = 27 + index * (button_width + gap)
                 rect = (left, button_y, left + button_width, button_y + 44)
-                draw.rounded_rectangle(rect, radius=13, fill=(255, 222, 153, 255), outline=(143, 97, 76, 255), width=2)
-                bbox = draw.textbbox((0, 0), label, font=button_font)
-                text_width = bbox[2] - bbox[0]
-                draw.text((left + (button_width - text_width) / 2, button_y + 7), label, font=button_font, fill=(88, 62, 54, 255))
-                action_rects.append(rect)
-    return canvas, action_rects, (width - 52, 10, width - 13, 50)
+                draw_button(rect, label, secondary=notice.composing and index == 0)
+    return canvas, action_rects, (width - 52, 10, width - 13, 50), edit_rect
 
 
 class BubbleOverlay:
@@ -579,6 +644,9 @@ class BubbleOverlay:
         self.anchor = (0, 0, 0, 0)
         self.memory_dc = self.bitmap = self.old_bitmap = None
         self.bits = ctypes.c_void_p()
+        self.reply = InlineReply()
+        self.reply_drafts: dict[str, str] = {}
+        self.composer_surface = False
         self._callback = WNDPROC(self._wnd_proc)
 
     def _ensure_window(self) -> None:
@@ -598,11 +666,12 @@ class BubbleOverlay:
                 raise ctypes.WinError(error)
         self.hwnd = user32.CreateWindowExW(
             WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-            self.CLASS_NAME, "虹夏消息气泡", WS_POPUP,
+            self.CLASS_NAME, "虹夏消息气泡", WS_POPUP | 0x02000000,  # WS_CLIPCHILDREN
             0, 0, 1, 1, self.owner, None, module, None,
         )
         if not self.hwnd:
             raise ctypes.WinError(ctypes.get_last_error())
+        self.composer_surface = False
 
     def _release_surface(self) -> None:
         if self.memory_dc:
@@ -657,14 +726,56 @@ class BubbleOverlay:
         y = max(work.top + 8, min(y, work.bottom - self.height - 8))
         return x, y
 
-    def show(self, notice: BubbleNotice, anchor: tuple[int, int, int, int]) -> None:
+    def _stash_reply(self) -> None:
+        if self.reply.hwnd and self.notice and self.notice.request_id:
+            self.reply_drafts[self.notice.request_id] = self.reply.text()
+        self.reply.hide()
+
+    def _set_surface_mode(self, composing: bool) -> None:
+        if composing != self.composer_surface:
+            self.composer_surface = composing
+            style = WS_EX_TOOLWINDOW | WS_EX_TOPMOST
+            if not composing:
+                style |= WS_EX_LAYERED | WS_EX_NOACTIVATE
+                user32.SetWindowRgn(self.hwnd, None, False)
+            user32.SetWindowLongPtrW(self.hwnd, -20, style)  # GWL_EXSTYLE
+        if composing:
+            bottom = self.height - 20
+            card = gdi32.CreateRoundRectRgn(5, 5, self.width - 8, bottom + 1, 48, 48)
+            middle = self.width // 2
+            points = (wintypes.POINT * 3)((middle - 16, bottom - 2), (middle + 18, bottom - 2),
+                                         (middle + 1, self.height - 4))
+            pointer = gdi32.CreatePolygonRgn(points, 3, 1)
+            if pointer:
+                if card:
+                    gdi32.CombineRgn(card, card, pointer, 2)  # RGN_OR
+                gdi32.DeleteObject(pointer)
+            if card and not user32.SetWindowRgn(self.hwnd, card, True):
+                gdi32.DeleteObject(card)
+
+    def show(self, notice: BubbleNotice, anchor: tuple[int, int, int, int], *, focus_reply: bool = False) -> None:
         self._ensure_window()
-        image, self.action_rects, self.close_rect = render_bubble(notice)
+        current_id = self.notice.request_id if self.notice else None
+        if not notice.composing or current_id != notice.request_id:
+            self._stash_reply()
+        image, self.action_rects, self.close_rect, edit_rect = render_bubble(notice)
+        work = monitor_work_area(anchor)
+        if notice.accepts_text and image.height > work.bottom - work.top - 16:
+            image, self.action_rects, self.close_rect, edit_rect = render_bubble(notice, compact=True)
         self._load_surface(image)
         self.notice = notice
         self.expires_at = time.monotonic() + notice.duration if notice.duration is not None else None
         self.anchor = anchor
         x, y = self._position()
+        self._set_surface_mode(edit_rect is not None)
+        if edit_rect:
+            self.reply.place(self.hwnd, edit_rect, self.reply_drafts.get(notice.request_id, ""))
+            user32.SetWindowPos(self.hwnd, ctypes.c_void_p(-1), x, y, self.width, self.height,
+                                SWP_NOACTIVATE | SWP_SHOWWINDOW)
+            user32.InvalidateRect(self.hwnd, None, False)
+            if focus_reply:
+                self.reply.focus(self.hwnd)
+            return
         screen_dc = user32.GetDC(None)
         destination = wintypes.POINT(x, y)
         source = wintypes.POINT(0, 0)
@@ -710,6 +821,7 @@ class BubbleOverlay:
             )
 
     def hide(self) -> None:
+        self._stash_reply()
         self.notice = None
         self.expires_at = None
         if self.hwnd:
@@ -720,12 +832,25 @@ class BubbleOverlay:
             self.hide()
 
     def close(self) -> None:
+        self.reply.close()
         if self.hwnd:
             user32.DestroyWindow(self.hwnd)
             self.hwnd = None
         self._release_surface()
 
     def _wnd_proc(self, hwnd: int, message: int, wparam: int, lparam: int) -> int:
+        if self.composer_surface:
+            if message == 0x0133 and self.reply.hwnd == lparam:  # WM_CTLCOLOREDIT
+                return self.reply.paint(wparam)
+            if message == 0x0014:  # WM_ERASEBKGND
+                return 1
+            if message == 0x000F:  # WM_PAINT
+                paint = PAINTSTRUCT()
+                dc = user32.BeginPaint(hwnd, ctypes.byref(paint))
+                if dc and self.memory_dc:
+                    gdi32.BitBlt(dc, 0, 0, self.width, self.height, self.memory_dc, 0, 0, 0x00CC0020)
+                user32.EndPaint(hwnd, ctypes.byref(paint))
+                return 0
         if message == WM_LBUTTONUP:
             x = ctypes.c_short(lparam & 0xFFFF).value
             y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
@@ -785,7 +910,8 @@ FOCUS_DONE_LINES = ("专注完成啦", "这一轮做得很棒，休息几分钟�
 BREAK_DONE_LINES = ("休息结束", "准备好了的话，我们再开始下一轮。")
 
 class PetWindow:
-    def __init__(self, width: int | None = None, demo_seconds: int = 0):
+    def __init__(self, open_settings: Callable[[], None], width: int | None = None, demo_seconds: int = 0):
+        self.open_settings = open_settings
         try:
             self.controls: ControlStore | None = ControlStore()
             preferences = self.controls.settings()
@@ -822,6 +948,7 @@ class PetWindow:
         self.next_health_write = 0.0
         self.last_logged_notice_id: str | None = None
         self.defer_next_notice_until = 0.0
+        self.last_reply_reference = ""
         self.chat_enabled = preferences["chat_enabled"]
         self.next_chat = time.monotonic() + random.uniform(7.0, 11.0)
 
@@ -889,7 +1016,7 @@ class PetWindow:
     def say(self, phrase: str | None = None) -> None:
         if not self.hwnd:
             return
-        if self.bubble.notice and self.bubble.notice.kind in ("agent", "approval"):
+        if self.bubble.notice and self.bubble.notice.kind in ("agent", "approval", "text_demo"):
             return
         self.bubble.show(
             BubbleNotice("虹夏 · 日常", phrase or random.choice(DAILY_LINES)),
@@ -897,25 +1024,20 @@ class PetWindow:
         )
 
     def show_demo_notice(self, request_choice: bool = False) -> None:
-        if request_choice:
-            notice = BubbleNotice(
-                "演示选择 · DeepSeek",
-                "希望后续提醒怎样展示？",
-                actions=("简洁气泡", "详细卡片"),
-                action_descriptions=(
-                    "只显示关键结论，尽量不打断当前工作。",
-                    "同时展示背景与可选步骤，便于判断。",
-                ),
-                kind="agent", duration=None,
-            )
-        else:
-            notice = BubbleNotice(
-                "演示提醒 · Codex",
-                "任务已完成，等待你查看结果。",
-                actions=("已查看", "稍后"),
-                kind="agent", duration=None,
-            )
-        self.bubble.show(notice, self._bubble_anchor())
+        if self.notifications is None:
+            return
+        try:
+            if request_choice:
+                self.notifications.create("虹夏", "演示选择", "希望后续提醒怎样展示？", [
+                    {"label": "简洁气泡", "description": "只显示关键结论，减少打扰。"},
+                    {"label": "详细卡片", "description": "展示背景与可选步骤，便于判断。"},
+                ], software="本机演示", kind="text_demo", event_key="decision-demo", accepts_text=True)
+            else:
+                self.notifications.create("虹夏", "演示完成提醒", "可以确认收到，也可以写一句话。", ("知道了",),
+                                          software="本机演示", kind="text_demo", event_key="completion-demo", accepts_text=True)
+            self.next_notice_poll = 0.0
+        except (OSError, sqlite3.Error) as error:
+            log_notice_event("demo_failed", repr(error))
 
     def _poll_notifications(self, now: float) -> None:
         if now < self.next_notice_poll:
@@ -952,6 +1074,7 @@ class PetWindow:
         if pending is None:
             if self.bubble.notice and self.bubble.notice.request_id:
                 self.bubble.hide()
+            self.bubble.reply_drafts.clear()
             self.active_notice_id = None
             return
         if (self.bubble.notice and self.bubble.notice.request_id == pending.id
@@ -967,7 +1090,9 @@ class PetWindow:
                              action_descriptions=pending.choice_descriptions,
                              action_recommended=pending.choice_recommended,
                              kind=pending.kind, duration=None,
-                             request_id=pending.id, source=source.heading),
+                             request_id=pending.id, source=source.heading, accepts_text=pending.accepts_text,
+                             reply_delivery=pending.reply_delivery,
+                             composing=pending.accepts_text and (not pending.choices or pending.id in self.bubble.reply_drafts)),
                 self._bubble_anchor(),
             )
         except Exception as error:
@@ -1183,11 +1308,33 @@ class PetWindow:
             self.notifications.dismiss(notice.request_id)
         except sqlite3.Error:
             pass
+        else:
+            self.bubble.reply_drafts.pop(notice.request_id, None)
         self.active_notice_id = None
         self.next_notice_poll = 0.0
 
     def _bubble_action(self, notice: BubbleNotice, index: int) -> None:
-        if notice.kind not in ("agent", "approval") or index >= len(notice.actions):
+        if notice.kind == "reply_receipt" and notice.reply_reference and index == 0:
+            self._copy_reply_reference(notice.reply_reference)
+            return
+        if notice.composing and notice.request_id:
+            if index == 0:
+                self.bubble.show(replace(notice, composing=False, reply_error=""), self._bubble_anchor())
+            else:
+                error = self._send_text_reply(notice.request_id, self.bubble.reply.text())
+                if error:
+                    self.bubble.show(replace(notice, reply_error=error), self._bubble_anchor(), focus_reply=True)
+            return
+        if notice.kind not in ("agent", "approval", "text_demo"):
+            return
+        if notice.accepts_text and notice.request_id and index == len(notice.actions):
+            try:
+                self.bubble.show(replace(notice, composing=True), self._bubble_anchor(), focus_reply=True)
+            except OSError as error:
+                log_notice_event("inline_reply_failed", repr(error))
+                self.bubble.show(notice, self._bubble_anchor())
+            return
+        if not 0 <= index < len(notice.actions):
             return
         selected = notice.actions[index]
         if notice.request_id:
@@ -1199,6 +1346,7 @@ class PetWindow:
                 return
             if result is None or result.status != "answered":
                 return
+            self.bubble.reply_drafts.pop(notice.request_id, None)
             self.active_notice_id = None
             self.defer_next_notice_until = time.monotonic() + 2.5
             self.bubble.show(
@@ -1206,6 +1354,7 @@ class PetWindow:
                              ("已收到审批提醒，请在 Claude Code 的权限提示中授权。"
                               if result.software == "Claude Code" or result.agent == "Claude code"
                               else "已收到审批提醒，请在 Codex 审批卡授权。") if notice.kind == "approval"
+                             else f"已收到「{selected}」。这是本机演示。" if notice.kind == "text_demo"
                              else f"已选择「{selected}」，Agent 会按此继续。" if any(notice.action_descriptions)
                              else "已收到完成提醒。",
                              duration=2.5),
@@ -1222,6 +1371,44 @@ class PetWindow:
             self._bubble_anchor(),
         )
         self.set_state("happy")
+
+    def _send_text_reply(self, request_id: str, text: str) -> str | None:
+        if self.notifications is None:
+            return "暂时无法访问通知，请稍后重试。"
+        try:
+            sent = self.notifications.answer_text(request_id, text)
+        except ValueError:
+            return f"请输入 1–{TEXT_REPLY_LIMIT} 字，可使用换行。"
+        except sqlite3.Error:
+            return "暂时无法保存，已保留输入内容，请重试。"
+        if not sent:
+            return "这条提醒已经处理或失效。你仍可以复制这段文字。"
+        if self.bubble.notice and self.bubble.notice.request_id == request_id:
+            self.active_notice_id = None
+            self.defer_next_notice_until = time.monotonic() + 2.5
+            try:
+                notice = self.bubble.notice
+                if notice.reply_delivery:
+                    self.last_reply_reference = request_id
+                    message = ("已保存。原 Codex 会话下次发消息时可读取。" if notice.reply_delivery == "codex"
+                               else "已保存。复制编号发到原会话，Agent 就能读取。")
+                    feedback = BubbleNotice("虹夏 · 已回复", message, actions=("复制回复编号",),
+                                            kind="reply_receipt", duration=18.0, reply_reference=request_id)
+                else:
+                    message = ("已收到。这是本机文字回复演示。" if notice.kind == "text_demo"
+                               else "已保存回复，原 Agent 可以读取。")
+                    feedback = BubbleNotice("虹夏 · 已回复", message, duration=2.5)
+                self.bubble.show(feedback, self._bubble_anchor())
+                self.set_state("happy")
+            except OSError as error:
+                log_notice_event("text_reply_receipt_failed", repr(error))
+        self.bubble.reply_drafts.pop(request_id, None)
+        return None
+
+    def _copy_reply_reference(self, request_id: str) -> None:
+        if copy_reply_reference(self.hwnd, request_id):
+            self.bubble.show(BubbleNotice("虹夏 · 已复制", "把回复编号粘贴到原会话。", duration=4.0),
+                             self._bubble_anchor())
 
     def show_pose(self, name: str, *, badge: tuple[str, str] | None = None, **pose: float) -> None:
         if not self.hwnd:
@@ -1428,12 +1615,14 @@ class PetWindow:
                 (701, timer_title),
                 (702, "结束这一轮专注"),
                 (501, "让虹夏说句话"), (502, "演示：完成提醒"),
-                (503, "演示：请求选择"),
+                (503, "演示：请求选择"), (505, "演示：文字回复"),
                 (504, "日常闲聊：开启" if self.chat_enabled else "日常闲聊：关闭"),
                 (801, "互动：摇头"), (802, "互动：坐姿小舞"), (803, "互动：提起晃晃"),
                 (804, "停止当前动作"),
                 (301, "退出桌宠"),
             ]
+            if self.last_reply_reference:
+                options.insert(-1, (506, "复制最近回复编号"))
             for command, title in options:
                 if command in (201, 401, 501, 301):
                     user32.AppendMenuW(menu, MF_SEPARATOR, 0, None)
@@ -1470,6 +1659,14 @@ class PetWindow:
             self.show_demo_notice()
         elif command == 503:
             self.show_demo_notice(request_choice=True)
+        elif command == 505 and self.notifications is not None:
+            try:
+                self.notifications.create_text_demo()
+                self.next_notice_poll = 0.0
+            except (OSError, sqlite3.Error) as error:
+                log_notice_event("text_demo_failed", repr(error))
+        elif command == 506 and self.last_reply_reference:
+            self._copy_reply_reference(self.last_reply_reference)
         elif command == 504:
             self.chat_enabled = not self.chat_enabled
             self.save_control_preferences({"chat_enabled": self.chat_enabled})
@@ -1487,22 +1684,7 @@ class PetWindow:
             user32.DestroyWindow(self.hwnd)
 
     def open_control_panel(self) -> None:
-        user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
-        user32.FindWindowW.restype = wintypes.HWND
-        window = user32.FindWindowW(None, "虹夏桌宠 · 设置中心")
-        if window:
-            user32.ShowWindow(window, 9)
-            user32.SetForegroundWindow(window)
-            return
-        if getattr(sys, "frozen", False):
-            command = [str(Path(sys.executable)), "--control-panel"]
-        else:
-            command = [sys.executable, str(Path(__file__).resolve()), "--control-panel"]
-        try:
-            subprocess.Popen(command, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        except OSError as error:
-            log_notice_event("control_panel_start_failed", repr(error))
-            self.say("控制中心未能启动，请检查是否已安装完整程序。")
+        self.open_settings()
 
     def save_control_preferences(self, patch: dict) -> None:
         if self.controls is None:
@@ -1640,15 +1822,18 @@ class PetWindow:
                 break
             if result == -1:
                 raise ctypes.WinError(ctypes.get_last_error())
-            user32.TranslateMessage(ctypes.byref(message))
-            user32.DispatchMessageW(ctypes.byref(message))
+            key_action = self.bubble.reply.key_action(message)
+            if key_action and self.bubble.notice:
+                self._bubble_action(self.bubble.notice, 0 if key_action == "collapse" else 1)
+            else:
+                user32.TranslateMessage(ctypes.byref(message))
+                user32.DispatchMessageW(ctypes.byref(message))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="虹夏桌宠")
     parser.add_argument("--self-test", action="store_true", help="check bundled sprite assets")
-    parser.add_argument("--control-panel", action="store_true",
-                        help="run the settings window instead of the desktop companion")
+    parser.add_argument("--control-panel", action="store_true", help="open the desktop pet's settings")
     parser.add_argument("--demo-seconds", type=int, default=0, help=argparse.SUPPRESS)
     args, panel_args = parser.parse_known_args()
     if panel_args and not args.control_panel:
@@ -1656,7 +1841,7 @@ def main() -> None:
     if args.self_test:
         print(sprite_metrics())
         return
-    if args.control_panel:
+    if args.control_panel and panel_args:
         from control_panel import run_panel
         run_panel(panel_args)
         return
@@ -1668,7 +1853,9 @@ def main() -> None:
     except AttributeError:
         user32.SetProcessDPIAware()
     sprite_metrics()
-    PetWindow(demo_seconds=max(0, args.demo_seconds)).run()
+    from desktop_app import run_desktop
+    run_desktop(lambda open_settings: PetWindow(open_settings, demo_seconds=max(0, args.demo_seconds)),
+                open_settings=args.control_panel)
 
 
 if __name__ == "__main__":

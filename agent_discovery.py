@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import tomllib
 from pathlib import Path
@@ -106,16 +107,19 @@ def preferred_config(paths: list[Path]) -> Path:
     return existing[0] if existing else paths[0]
 
 
-def magpie_state(home: Path, client: str) -> dict:
+def magpie_states(home: Path, clients: set[str]) -> dict[str, dict]:
     """Inspect only Nijika routing; never return configuration or credential values."""
     path = home / ".config/magpie/library.json"
-    result = {"managed": False, "path": str(path), "digest": "absent", "error": False}
-    if not path.is_file():
-        return result
+    states = {client: {"managed": False, "path": str(path), "digest": "absent", "error": False}
+              for client in clients}
+    if not states or not path.is_file():
+        return states
     try:
         raw = bounded_bytes(path)
         data = parse_json(raw)
-        result["digest"] = hashlib.sha256(raw).hexdigest()
+        checksum = hashlib.sha256(raw).hexdigest()
+        for state in states.values():
+            state["digest"] = checksum
         entries = data.get("mcp", [])
         if not isinstance(entries, list):
             raise ValueError("Invalid library")
@@ -125,13 +129,143 @@ def magpie_state(home: Path, client: str) -> dict:
             targets = item.get("agents", [])
             if not isinstance(targets, list) or any(not isinstance(t, str) for t in targets):
                 raise ValueError("Invalid targets")
-            if client in targets and (nijika_candidate(item) or item.get("name") in ("nijika-pet", "nijika_pet")):
-                if not nijika_candidate(item):
-                    raise ValueError("Unknown managed service")
-                result["managed"] = True
+            selected = clients.intersection("dsbot" if target == "ds-bot" else target for target in targets)
+            if not selected:
+                continue
+            known = nijika_candidate(item)
+            if known or item.get("name") in ("nijika-pet", "nijika_pet"):
+                for client in selected:
+                    state = states[client]
+                    if not known or state["managed"]:
+                        state["error"] = True
+                    state["managed"] = state["managed"] or known
     except (OSError, ValueError, TypeError):
-        result["error"] = True
-    return result
+        for state in states.values():
+            state["error"] = True
+    return states
+
+
+def magpie_state(home: Path, client: str) -> dict:
+    return magpie_states(home, {client})[client]
+
+
+def _yaml_scalar_values(text: str, key: str) -> list[str]:
+    """Read only simple YAML scalar keys used by the generated DS Bot bundle."""
+    values = []
+    pattern = re.compile(rf"^\s*{re.escape(key)}\s*:\s*(.*?)\s*$", re.MULTILINE)
+    for match in pattern.finditer(text):
+        raw = match.group(1)
+        if raw.startswith("'") and raw.endswith("'"):
+            values.append(raw[1:-1].replace("''", "'"))
+        elif raw.startswith('"') and raw.endswith('"'):
+            try:
+                value = json.loads(raw)
+            except json.JSONDecodeError:
+                value = raw[1:-1]
+            values.append(value)
+        else:
+            values.append(raw.split(" #", 1)[0].strip())
+    return values
+
+
+def dsbot_state(home: Path, executable: Path) -> dict:
+    """Inspect the dedicated DS Bot stable bundle without reading credentials."""
+    root = home / ".ds-bot"
+    profile = root / "profiles/ds-bot/package.json"
+    bundle_root = root / "integrations/nijika-dsbot-mcp"
+    config = bundle_root / "cordis.patch.yml"
+    skill = root / "skills/nijika-dsbot-dialog/SKILL.md"
+    rules = root / "AGENTS.md"
+    evidence, issues = [], []
+
+    if root.is_dir():
+        evidence.append("找到 DS Bot 用户目录")
+    if profile.is_file():
+        evidence.append("找到 DS Bot profile")
+    if bundle_root.is_dir():
+        evidence.append("找到虹夏稳定 bundle")
+    if skill.is_file():
+        evidence.append("找到主动提醒技能")
+
+    profile_ok = False
+    if profile.is_file():
+        try:
+            package = parse_json(bounded_bytes(profile))
+            dependencies = package.get("dependencies", {})
+            dsh = package.get("dsh", {})
+            profile_data = dsh.get("profile", {}) if isinstance(dsh, dict) else {}
+            if not isinstance(dependencies, dict) or not isinstance(profile_data, dict):
+                raise ValueError("Invalid DS Bot profile")
+            dependency = dependencies.get("@cy/nijika-dsbot-mcp")
+            bundles = profile_data.get("bundles", [])
+            dependency_path = None
+            if isinstance(dependency, str) and dependency.startswith("link:"):
+                dependency_path = Path(dependency[5:].replace("/", os.sep))
+            profile_ok = (dependency_path is not None and
+                          dependency_path.resolve() == bundle_root.resolve() and
+                          isinstance(bundles, list) and
+                          "@cy/nijika-dsbot-mcp" in bundles)
+            if not profile_ok:
+                issues.append("profile 尚未加载虹夏稳定 bundle，需重新运行 DS Bot 安装器。")
+        except (OSError, ValueError, TypeError):
+            issues.append("DS Bot profile 无法安全核对，请检查 package.json。")
+
+    config_ok = False
+    if config.is_file():
+        try:
+            text = bounded_bytes(config).decode("utf-8-sig")
+            ids = re.findall(r"(?m)^\s*-\s*id\s*:\s*['\"]?nijika-dsbot-mcp['\"]?\s*$", text)
+            servers = _yaml_scalar_values(text, "serverName")
+            commands = _yaml_scalar_values(text, "command")
+            agents = _yaml_scalar_values(text, "NIJIKA_AGENT_NAME")
+            hosts = _yaml_scalar_values(text, "NIJIKA_HOST_NAME")
+            if len(ids) != 1 or servers.count("nijika-pet") != 1:
+                issues.append("虹夏 DS Bot 服务数量不唯一，接入前需预览去重。")
+            elif len(commands) != 1:
+                issues.append("稳定 bundle 中未找到唯一虹夏程序路径，需重新运行 DS Bot 安装器。")
+            else:
+                try:
+                    command_ok = (Path(commands[0]).is_absolute() and
+                                  Path(commands[0]).resolve() == executable.resolve())
+                except (OSError, ValueError):
+                    command_ok = False
+                source_ok = agents == ["Agent"] and hosts == ["DS Bot"]
+                config_ok = command_ok and source_ok and len(ids) == 1
+                if not command_ok:
+                    issues.append("稳定 bundle 中的虹夏程序路径需核对。")
+                if not source_ok:
+                    issues.append("虹夏来源应为 Agent · DS Bot，需重新运行 DS Bot 安装器。")
+        except (OSError, UnicodeError, ValueError, TypeError):
+            issues.append("DS Bot 稳定 bundle 无法安全核对，请检查 cordis.patch.yml。")
+
+    rules_ok = False
+    if rules.is_file():
+        try:
+            text = bounded_bytes(rules).decode("utf-8-sig")
+            start = "# BEGIN NIJIKA-DSBOT-DIALOG"
+            end = "# END NIJIKA-DSBOT-DIALOG"
+            rules_ok = text.count(start) == 1 and text.count(end) == 1
+            if rules_ok:
+                evidence.append("找到结束提醒规则")
+        except (OSError, UnicodeError, ValueError):
+            pass
+    skill_ok = skill.is_file()
+    if skill_ok and rules_ok and not config.is_file():
+        issues.append("主动提醒技能已存在，但虹夏 MCP bundle 尚未安装。")
+    elif not skill_ok or not rules_ok:
+        issues.append("主动提醒技能或结束规则不完整，需重新运行 DS Bot 安装器。")
+
+    found = bool(evidence)
+    if not found:
+        issues = []
+    configured = profile_ok and config_ok and skill_ok and rules_ok and not issues
+    return {
+        "root": root, "profile": profile, "bundle_root": bundle_root,
+        "config": config, "skill": skill, "rules": rules,
+        "bundle_registered": profile_ok,
+        "evidence": evidence, "issue": "；".join(dict.fromkeys(issues)),
+        "found": found, "configured": configured,
+    }
 
 
 def scan(home: Path, executable: Path, *, use_environment: bool = False,
@@ -259,6 +393,32 @@ def scan(home: Path, executable: Path, *, use_environment: bool = False,
             "verification": "尚未验证宿主调用" if exact else
                             "具体格式或作用域仍需在真实宿主核对",
         })
+    dsbot = dsbot_state(home, executable)
+    manager = magpie_state(home, "dsbot")
+    issue = dsbot["issue"]
+    if manager["error"]:
+        issue = "MAGPIE 库无法安全读取，不能确定管理归属。"
+    elif manager["managed"]:
+        issue = ("已分发 MAGPIE MCP，但仍找到旧虹夏 bundle 入口；在 DS Bot 核对是否重复加载。"
+                 if dsbot["bundle_registered"] else "")
+    else:
+        issue = issue.replace("重新运行 DS Bot 安装器", "在 MAGPIE 核对 MCP 和统一提醒规则")
+    result.append({
+        "id": "dsbot", "label": "DS Bot", "detected": dsbot["found"],
+        "mode": "guided", "location": str(dsbot["root"]),
+        "config_path": str(dsbot["config"]),
+        "evidence": dsbot["evidence"],
+        "manager": "magpie" if manager["managed"] else "nijika",
+        "configuration": "found" if dsbot["configured"] else "not_verified",
+        "software": "DS Bot",
+        "status": ("需核对" if issue else
+                   "MAGPIE 管理" if manager["managed"] else
+                   "发现虹夏配置" if dsbot["configured"] else
+                   "已发现入口" if dsbot["found"] else "未发现入口"),
+        "issue": issue,
+        "verification": "尚未验证宿主调用" if dsbot["configured"] else
+                        "需在 DS Bot 新任务中验证实际调用",
+    })
     # VS Code extensions are separate routes.  Keep the generic editor entry
     # for manual configuration, then add only manifests we can verify locally.
     try:

@@ -38,6 +38,48 @@ class DiscoveryTests(unittest.TestCase):
         return self.write(".config/magpie/library.json", {"mcp": [
             {"name": "nijika-pet", **self.service(), "agents": targets}]})
 
+    def write_dsbot(self, command=None, agent_name="Agent", host_name="DS Bot",
+                    dependency=True, bundle=True, skill=True, rules=True):
+        root = self.home / ".ds-bot"
+        profile = root / "profiles/ds-bot/package.json"
+        profile.parent.mkdir(parents=True, exist_ok=True)
+        target = root / "integrations/nijika-dsbot-mcp"
+        dependencies = {}
+        bundles = ["ds-bot"]
+        if dependency:
+            dependencies["@cy/nijika-dsbot-mcp"] = "link:" + target.as_posix()
+        if bundle:
+            bundles.append("@cy/nijika-dsbot-mcp")
+        profile.write_text(json.dumps({
+            "dependencies": dependencies,
+            "dsh": {"profile": {"bundles": bundles}},
+        }), encoding="utf-8")
+        config = target / "cordis.patch.yml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        selected = str(command or self.setup.mcp).replace("'", "''")
+        config.write_text(
+            "- insert:\n"
+            "    - id: nijika-dsbot-mcp\n"
+            '      name: "@deepseek-ai/dsh-mcp-client"\n'
+            "      config:\n"
+            '        serverName: "nijika-pet"\n'
+            f"        command: '{selected}'\n"
+            "        env:\n"
+            f'          NIJIKA_AGENT_NAME: "{agent_name}"\n'
+            f'          NIJIKA_HOST_NAME: "{host_name}"\n',
+            encoding="utf-8",
+        )
+        if skill:
+            path = root / "skills/nijika-dsbot-dialog/SKILL.md"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("# DS Bot Nijika skill\n", encoding="utf-8")
+        if rules:
+            (root / "AGENTS.md").write_text(
+                "# BEGIN NIJIKA-DSBOT-DIALOG\nrules\n# END NIJIKA-DSBOT-DIALOG\n",
+                encoding="utf-8",
+            )
+        return root, profile, config
+
     def test_scan_is_bounded_readonly_sanitized_and_does_not_claim_connection(self):
         path = self.write(".gemini/settings.json", {"mcpServers": {
             "nijika-pet": self.service(), "other": {"env": {"PRIVATE": "not-for-discovery-output"}}}})
@@ -70,6 +112,58 @@ class DiscoveryTests(unittest.TestCase):
             with self.subTest(client=client):
                 self.assertEqual(items[client]["configuration"], "found")
                 self.assertEqual(items[client]["verification"], "尚未验证宿主调用")
+
+    def test_scan_detects_complete_dsbot_bundle_without_reading_credentials(self):
+        root, _, config = self.write_dsbot()
+        (root / ".credentials.yaml").write_text(
+            "private-token: must-not-leak\n", encoding="utf-8")
+        before = {p: p.read_bytes() for p in self.home.rglob("*") if p.is_file()}
+
+        items = scan(self.home, self.setup.mcp, which=lambda _: None)
+        item = next(value for value in items if value["id"] == "dsbot")
+        encoded = json.dumps(items, ensure_ascii=False)
+
+        self.assertTrue(item["detected"])
+        self.assertEqual(item["configuration"], "found")
+        self.assertEqual(item["software"], "DS Bot")
+        self.assertEqual(item["config_path"], str(config))
+        self.assertEqual(item["status"], "发现虹夏配置")
+        self.assertIn("找到结束提醒规则", item["evidence"])
+        self.assertIn("尚未验证宿主调用", item["verification"])
+        self.assertNotIn("must-not-leak", encoded)
+        self.assertNotIn(".credentials", encoded)
+        self.assertEqual(before, {p: p.read_bytes() for p in self.home.rglob("*") if p.is_file()})
+
+    def test_scan_marks_dsbot_partial_or_wrong_path_as_needing_review(self):
+        _, _, config = self.write_dsbot(command=Path("C:/old/nijika.exe"),
+                                       host_name="DSH", skill=False)
+        item = next(value for value in scan(
+            self.home, self.setup.mcp, which=lambda _: None)
+                    if value["id"] == "dsbot")
+        self.assertTrue(item["detected"])
+        self.assertEqual(item["configuration"], "not_verified")
+        self.assertEqual(item["status"], "需核对")
+        self.assertIn("程序路径需核对", item["issue"])
+        self.assertIn("Agent · DS Bot", item["issue"])
+        self.assertIn("技能或结束规则不完整", item["issue"])
+        self.assertTrue(config.is_file())
+
+    def test_dsbot_entry_only_and_absent_states_do_not_claim_configuration(self):
+        absent = next(value for value in scan(
+            self.home, self.setup.mcp, which=lambda _: None)
+                      if value["id"] == "dsbot")
+        self.assertFalse(absent["detected"])
+        self.assertEqual(absent["configuration"], "not_verified")
+        self.assertEqual(absent["status"], "未发现入口")
+        self.assertFalse(absent["issue"])
+
+        (self.home / ".ds-bot").mkdir()
+        partial = next(value for value in scan(
+            self.home, self.setup.mcp, which=lambda _: None)
+                       if value["id"] == "dsbot")
+        self.assertTrue(partial["detected"])
+        self.assertEqual(partial["status"], "需核对")
+        self.assertEqual(partial["configuration"], "not_verified")
 
     def test_duplicate_json_invalid_manager_and_oversize_block_safe_writes(self):
         path = self.write(".gemini/settings.json", {})
@@ -209,6 +303,45 @@ class DiscoveryTests(unittest.TestCase):
         result = self.setup.apply(plan["plan_id"])
         repeated = self.setup.plan("custom", "WorkBuddy", software="WorkBuddy")
         self.assertEqual(self.setup.plans[repeated["plan_id"]]["id"], result["agent"]["id"])
+
+    def test_dsbot_guided_setup_uses_dedicated_installer_and_skill(self):
+        root = self.home / ".ds-bot"
+        root.mkdir()
+        agent = {
+            "id": "c" * 32, "client": "custom", "name": "DS Bot",
+            "source_name": "Agent", "agent_identity": "Agent",
+            "software": "DS Bot", "location": str(root),
+        }
+        info = self.setup.describe(agent)
+        prompt = info["guide"]["prompt"]
+        self.assertIn("integrations\\dsbot\\install.ps1", prompt)
+        self.assertIn("-DsBotRoot", prompt)
+        self.assertIn(str(self.setup.mcp), prompt)
+        self.assertIn("不要手工追加第二个 MCP", prompt)
+        self.assertEqual(info["guide"]["title"], "用 DS Bot 专用安装器完成接入")
+        self.assertEqual(info["export"]["mcpServers"]["nijika-pet"]["env"]["NIJIKA_AGENT_NAME"], "Agent")
+        self.assertEqual(info["export"]["mcpServers"]["nijika-pet"]["env"]["NIJIKA_HOST_NAME"], "DS Bot")
+
+        self.setup.prepare_files(agent)
+        bundle = self.setup.bundle_directory(agent["id"])
+        self.assertEqual(
+            (bundle / "SKILL.md").read_text(encoding="utf-8"),
+            (ROOT / "integrations/dsbot/nijika-mcp/skill/SKILL.md").read_text(encoding="utf-8"),
+        )
+        self.assertEqual(
+            (bundle / "nijika-agent-instructions.txt").read_text(encoding="utf-8"),
+            (ROOT / "integrations/dsbot/nijika-mcp/global-instructions.txt").read_text(encoding="utf-8"),
+        )
+
+    def test_dsbot_custom_wizard_recognizes_magpie_management(self):
+        root = self.home / ".ds-bot"
+        root.mkdir()
+        self.manager(["ds-bot"])
+        plan = self.setup.plan(
+            "custom", "DS Bot", str(root), "Agent", "DS Bot")
+        self.assertEqual(plan["manager"], "magpie")
+        self.assertFalse(plan["files"])
+        self.assertIn("本次不授权修改", plan["guide"]["prompt"])
 
     def test_simultaneous_managed_previews_cannot_register_duplicate_profiles(self):
         self.manager(["gemini"])

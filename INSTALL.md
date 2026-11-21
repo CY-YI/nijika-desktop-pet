@@ -1,5 +1,11 @@
 # 安装与运行
 
+双击桌面“虹夏桌宠”打开设置中心。开机自启只启动桌宠，设置也可以从角色右键菜单打开。桌宠和设置共用一个任务栏入口。验证文字回复需使用同一版本的桌宠、MCP 和通知生命周期组件，Agent 重连后可以发现新增工具。
+
+当前 Agent 接入统一使用 [MAGPIE 接入向导](AGENT_SETUP.md)。桌宠本体安装方式不变；旧版直连命令和自动写入流程仅作历史记录。
+
+当前 Windows 安装方式是双击 **Setup EXE**，按向导选择安装目录、桌面快捷方式和开机自启。默认位置为 `%LOCALAPPDATA%\NijikaDesktopPet\app`。便携 ZIP 的命令及选项见包内《解压后先看》。安装完成后从桌面快捷方式进入设置中心的“Agent 接入”页。维护者以 [本机收尾记录](PUBLISHING.md#2026-11-21-本机版本收尾) 核对验收范围。
+
 ## 2026-11-18 桌宠与审批程序打包候选
 
 新构建由 Setup 或完整 ZIP 提供，桌宠与审批提醒 EXE 的安装位置与旧版相同。维护便携副本时，需同时保留 `dist/_nijika_pet_runtime/`、`dist/_nijika_hook_runtime/` 和 `dist/虹夏MCP-v2/_internal/`。旧安装可沿用原目录进行后续升级测试，确认既有快捷方式与 Hook 命令仍能启动新版；实际宿主的信任和通知状态以升级验收为准。
@@ -146,7 +152,7 @@ VS Code 扩展只在明确条件成立时使用 `VS Code · Agent` 来源；共�
 
 维护者仅在可丢弃的 Windows Sandbox 或虚拟机内执行 `python tools\smoke_windows_installer.py <Setup EXE> --disposable-windows-session`，验证中文安装目录、升级、Work 路径、数据保留和卸载。测试默认拒绝执行；即使加参数，只要检测到已有虹夏安装、卸载登记或快捷方式，也会拒绝。测试不再改写 Windows 桌面、开始菜单或启动目录的注册表路径，不能在日常使用账户中运行。静默安装支持 `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER /DIR=<目录>`；卸载器同样支持这些静默参数。当前安装器未签名，Windows 可能显示 SmartScreen 发布者提示，应通过来源和 SHA-256 核对，不要求关闭安全防护。
 
-旧 `tools\package_release.py` ZIP 通道继续保留；脚本可选接入 Codex、Work、DSH 或 Claude Code（`-Codex -Work -CodexHooks -ClaudeHooks -Dsh -AutoStart`）。角色素材没有公开再分发许可证，不应将包含这些素材的试用包公开上架。
+便携 ZIP 仍可通过 `tools\package_release.py` 构建。脚本安装支持 `-AutoStart`，可选审批钩子参数见包内说明。Agent 的 MCP 和提醒技能由 MAGPIE 分发。对外分发范围见 [公开发布检查单](PUBLIC_RELEASE.md)。
 
 更新触发：2026-10-07 增加 Codex 本机 MCP 服务和带简介的选择题。
 
@@ -164,7 +170,7 @@ python -m venv .venv
 
 源码开发还可运行 `.\.venv\Scripts\python.exe control_panel.py` 打开独立窗口，或附加 `--browser` / `--serve-only` 进行浏览器验证。`requirements.txt` 固定直接依赖，`requirements-lock.txt` 保存本轮 Python 3.12 Windows 环境的完整版本，可用后者复现已测环境。没有前端 npm 或 CDN 依赖。
 
-生成三个单文件程序（更新前先退出对应的运行中程序）：
+构建三个 Windows 程序及各自配套的运行时：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build.ps1

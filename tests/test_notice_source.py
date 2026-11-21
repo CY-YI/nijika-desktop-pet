@@ -103,7 +103,7 @@ class NoticeSourceTests(unittest.TestCase):
         for heading in ("ChatGPT · Work", "ChatGPT · Codex", "Claude · VS Code", "Agent · WorkBuddy AI"):
             notice = BubbleNotice("修复设置界面", "任务已完成，等待查看。", actions=("知道了",),
                                   kind="agent", request_id="isolated", source=heading)
-            image, buttons, close = render_bubble(notice)
+            image, buttons, close, _ = render_bubble(notice)
             self.assertTrue(buttons)
             self.assertGreater(buttons[0][1], 96)
             self.assertLess(buttons[0][3], image.height)
