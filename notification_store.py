@@ -16,6 +16,21 @@ from pathlib import Path
 from typing import Iterator
 
 
+TEXT_REPLY_LIMIT = 500
+LEGACY_TEXT_REPLY_DESCRIPTION = "虹夏文字回复"
+_NOTICE_QUERY = (
+    "SELECT n.*, COALESCE(t.kind, 'agent') AS kind, COALESCE(s.software, '') AS software, "
+    "(t.kind = 'agent' AND t.event_key IS NULL AND s.notification_id IS NOT NULL) AS agent_notice, "
+    "r.notification_id AS text_request, r.reply_text, "
+    "CASE WHEN h.client_id='codex' AND h.session_hash IS NOT NULL THEN 'codex' "
+    "WHEN h.notification_id IS NOT NULL THEN 'reference' ELSE '' END AS reply_delivery FROM notifications n "
+    "LEFT JOIN notice_sources s ON s.notification_id=n.id "
+    "LEFT JOIN notice_tags t ON t.notification_id=n.id "
+    "LEFT JOIN notice_text_replies r ON r.notification_id=n.id "
+    "LEFT JOIN notice_host_reply_targets h ON h.notification_id=n.id "
+)
+
+
 def default_database_path() -> Path:
     override = os.environ.get("NIJIKA_PET_DB_PATH")
     if override:
@@ -38,6 +53,11 @@ def _choice_width(value: str) -> int:
     return sum(2 if unicodedata.east_asian_width(char) in "WF" else 1 for char in value)
 
 
+def _is_agent_prompt(labels: tuple[str, ...], descriptions: tuple[str, ...]) -> bool:
+    return ((labels == ("知道了",) and descriptions == ("",))
+            or (2 <= len(labels) <= 3 and all(descriptions)))
+
+
 @dataclass(frozen=True)
 class Notification:
     id: str
@@ -53,13 +73,19 @@ class Notification:
     updated_at: int
     kind: str = "agent"
     software: str = ""
+    accepts_text: bool = False
+    reply_text: str | None = None
+    reply_delivery: str = ""
 
     def result(self) -> dict[str, str | int | None]:
         choice = self.choices[self.selected_index] if self.selected_index is not None else None
         description = (self.choice_descriptions[self.selected_index]
                        if self.selected_index is not None else None)
-        return {"request_id": self.id, "status": self.status, "choice": choice,
-                "choice_description": description, "choice_index": self.selected_index}
+        result = {"request_id": self.id, "status": self.status, "choice": choice,
+                  "choice_description": description, "choice_index": self.selected_index}
+        if self.accepts_text:
+            result["reply_text"] = self.reply_text
+        return result
 
 
 class NotificationStore:
@@ -100,6 +126,25 @@ class NotificationStore:
                 )
             """)
             connection.execute("""
+                CREATE TABLE IF NOT EXISTS notice_text_replies (
+                    notification_id TEXT PRIMARY KEY,
+                    reply_text TEXT
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS notice_host_reply_targets (
+                    notification_id TEXT PRIMARY KEY,
+                    client_id TEXT NOT NULL,
+                    session_hash TEXT,
+                    origin_turn_hash TEXT,
+                    announced_at INTEGER
+                )
+            """)
+            connection.execute("""
+                CREATE INDEX IF NOT EXISTS notice_host_reply_session
+                ON notice_host_reply_targets(session_hash, announced_at)
+            """)
+            connection.execute("""
                 CREATE TABLE IF NOT EXISTS codex_turn_state (
                     session_hash TEXT NOT NULL,
                     turn_hash TEXT NOT NULL,
@@ -133,6 +178,11 @@ class NotificationStore:
                        for item in stored_choices)
         descriptions = tuple("" if isinstance(item, str) else item["description"]
                              for item in stored_choices)
+        # Old MCP writers tag completion and decision requests. Host fallback
+        # completions are untagged; approvals use a separate kind.
+        legacy_prompt = ("agent_notice" in row.keys() and row["agent_notice"]
+                         and _is_agent_prompt(labels, descriptions))
+        reply_text = row["reply_text"] if "reply_text" in row.keys() else None
         return Notification(
             id=row["id"], agent=row["agent"], title=row["title"],
             message=row["message"], choices=labels,
@@ -140,16 +190,20 @@ class NotificationStore:
             choice_recommended=tuple(False if isinstance(item, str) else
                                      item.get("recommended", False)
                                      for item in stored_choices),
-            status=row["status"], selected_index=row["selected_index"],
+            status=row["status"], selected_index=row["selected_index"] if reply_text is None else None,
             created_at=row["created_at"], updated_at=row["updated_at"],
             kind=row["kind"] if "kind" in row.keys() else "agent",
             software=row["software"] if "software" in row.keys() else "",
+            accepts_text=bool(legacy_prompt or ("text_request" in row.keys() and row["text_request"] is not None)),
+            reply_text=reply_text,
+            reply_delivery=row["reply_delivery"] if "reply_delivery" in row.keys() else "",
         )
 
     def create(self, agent: str, title: str, message: str,
                choices: tuple[str | dict[str, str], ...] | list[str | dict[str, str]],
                *, event_key: str | None = None, kind: str = "agent",
-               software: str = "") -> Notification:
+               software: str = "", accepts_text: bool = False,
+               approval_target: tuple[str, object, object] | None = None) -> Notification | None:
         agent = _required_text(agent, "agent", 20)
         title = _required_text(title, "title", 30)
         message = _required_text(message, "message", 120)
@@ -157,7 +211,7 @@ class NotificationStore:
             software = _required_text(software, "software", 40)
             if "\n" in software:
                 raise ValueError("software must be one line")
-        if not isinstance(choices, (tuple, list)) or not 1 <= len(choices) <= 3:
+        if not isinstance(choices, (tuple, list)) or len(choices) > 3 or (not choices and not accepts_text):
             raise ValueError("choices must contain 1–3 labels")
         normalized: list[dict[str, str]] = []
         for item in choices:
@@ -182,11 +236,33 @@ class NotificationStore:
             raise ValueError("choice labels must fit within 20 display columns")
         if len({item["label"] for item in normalized}) != len(normalized):
             raise ValueError("choice labels must be distinct")
+        if accepts_text:
+            agent_prompt = kind == "agent" and event_key is None
+            local_demo = kind == "text_demo" and event_key in ("text-reply-demo", "completion-demo", "decision-demo")
+            if not (agent_prompt or local_demo) or (normalized and not _is_agent_prompt(
+                tuple(item["label"] for item in normalized), tuple(item["description"] for item in normalized)
+            )):
+                raise ValueError("text replies require an agent question, decision, or completion")
+        if approval_target is not None and (kind != "approval" or not event_key):
+            raise ValueError("native approval replies require an approval event")
         now = int(time.time())
         notice_id = uuid.uuid4().hex
         with self._connect() as connection:
             # Serialize deduplication with insertion across hook processes.
             connection.execute("BEGIN IMMEDIATE")
+            if approval_target is not None:
+                client, session, turn = approval_target
+                try:
+                    session_hash, turn_hash = self._turn_identity(session, turn, client)
+                except ValueError:
+                    session_hash = turn_hash = None
+                if client == "codex" and connection.execute(
+                    "SELECT 1 FROM codex_turn_state WHERE session_hash=? AND turn_hash=? "
+                    "AND has_user_prompt=1 AND user_prompt_class!='internal' "
+                    "AND completion_notice_sent=0",
+                    (session_hash, turn_hash),
+                ).fetchone() is None:
+                    return None
             if event_key:
                 existing = connection.execute(
                     "SELECT t.notification_id, n.status FROM notice_tags t "
@@ -208,23 +284,27 @@ class NotificationStore:
                 (notice_id, event_key, kind, 100 if kind == "approval" else 0),
             )
             connection.execute("INSERT INTO notice_sources VALUES (?, ?)", (notice_id, software))
+            if accepts_text:
+                connection.execute("INSERT INTO notice_text_replies (notification_id) VALUES (?)", (notice_id,))
+            if approval_target is not None:
+                self._add_host_reply(connection, notice_id, client, session_hash, turn_hash)
         return self.get(notice_id)
+
+    def create_text_demo(self) -> Notification:
+        return self.create("虹夏", "体验文字回复", "写一句话试试。回复只保存在本机演示里。", (),
+                           kind="text_demo", event_key="text-reply-demo", software="本机演示", accepts_text=True)
 
     def get(self, notice_id: str) -> Notification | None:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT n.*, COALESCE(t.kind, 'agent') AS kind, COALESCE(s.software, '') AS software FROM notifications n "
-                "LEFT JOIN notice_sources s ON s.notification_id=n.id "
-                "LEFT JOIN notice_tags t ON t.notification_id=n.id WHERE n.id = ?", (notice_id,)
+                _NOTICE_QUERY + "WHERE n.id = ?", (notice_id,)
             ).fetchone()
         return self._decode(row)
 
     def next_pending(self) -> Notification | None:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT n.*, COALESCE(t.kind, 'agent') AS kind, COALESCE(s.software, '') AS software FROM notifications n "
-                "LEFT JOIN notice_sources s ON s.notification_id=n.id "
-                "LEFT JOIN notice_tags t ON t.notification_id=n.id WHERE n.status = 'pending' "
+                _NOTICE_QUERY + "WHERE n.status = 'pending' "
                 "ORDER BY COALESCE(t.priority, 0) DESC, n.created_at, n.rowid LIMIT 1"
             ).fetchone()
         return self._decode(row)
@@ -249,6 +329,35 @@ class NotificationStore:
                 )
         return self.get(notice_id)
 
+    def answer_text(self, notice_id: str, text: str) -> bool:
+        """Persist the first answer to this pending text request only."""
+        reply = _required_text(text, "reply", TEXT_REPLY_LIMIT)
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(_NOTICE_QUERY + "WHERE n.id = ?", (notice_id,)).fetchone()
+            notice = self._decode(row)
+            if notice is None or notice.status != "pending" or not notice.accepts_text:
+                return False
+            choices = row["choices"]
+            selected_index = None
+            if not row["text_request"] or notice.reply_delivery:
+                # A process that was already running may still read the old
+                # choice fields. Keep that reader on the original request ID.
+                entries = json.loads(choices)
+                selected_index = len(entries)
+                entries.append({"label": reply, "description": LEGACY_TEXT_REPLY_DESCRIPTION})
+                choices = json.dumps(entries, ensure_ascii=False)
+            connection.execute(
+                "UPDATE notifications SET status='answered', choices=?, selected_index=?, updated_at=? WHERE id=?",
+                (choices, selected_index, int(time.time()), notice_id),
+            )
+            connection.execute(
+                "INSERT INTO notice_text_replies VALUES (?, ?) "
+                "ON CONFLICT(notification_id) DO UPDATE SET reply_text=excluded.reply_text",
+                (notice_id, reply),
+            )
+        return True
+
     def resolve_approval(self, event_key: str) -> None:
         """Tool completion clears the reminder without fabricating a user click."""
         with self._connect() as connection:
@@ -258,6 +367,30 @@ class NotificationStore:
                 "(SELECT notification_id FROM notice_tags WHERE kind='approval' AND event_key=?)",
                 (int(time.time()), event_key),
             )
+
+    @staticmethod
+    def _add_host_reply(connection: sqlite3.Connection, notice_id: str, client_id: str,
+                        session_hash: str | None, turn_hash: str | None) -> None:
+        connection.execute("INSERT INTO notice_text_replies (notification_id) VALUES (?)", (notice_id,))
+        connection.execute("INSERT INTO notice_host_reply_targets VALUES (?, ?, ?, ?, NULL)",
+                           (notice_id, client_id, session_hash, turn_hash))
+
+    def take_host_reply_ids(self, session_id: object, turn_id: object, *, client_id: str) -> list[str]:
+        session_hash, turn_hash = self._turn_identity(session_id, turn_id, client_id)
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                "SELECT h.notification_id FROM notice_host_reply_targets h "
+                "JOIN notifications n ON n.id=h.notification_id "
+                "JOIN notice_text_replies r ON r.notification_id=h.notification_id "
+                "WHERE h.client_id=? AND h.session_hash=? AND h.origin_turn_hash!=? "
+                "AND h.announced_at IS NULL AND n.status='answered' AND r.reply_text IS NOT NULL "
+                "ORDER BY n.updated_at, n.rowid LIMIT 5", (client_id, session_hash, turn_hash),
+            ).fetchall()
+            ids = [row[0] for row in rows if re.fullmatch(r"[a-f0-9]{32}", row[0])]
+            connection.executemany("UPDATE notice_host_reply_targets SET announced_at=? WHERE notification_id=?",
+                                   [(int(time.time()), rid) for rid in ids])
+        return ids
 
     def dismiss(self, notice_id: str) -> Notification | None:
         with self._connect() as connection:
@@ -282,6 +415,12 @@ class NotificationStore:
             )
             connection.execute(
                 "DELETE FROM notice_tags WHERE notification_id NOT IN (SELECT id FROM notifications)"
+            )
+            connection.execute(
+                "DELETE FROM notice_text_replies WHERE notification_id NOT IN (SELECT id FROM notifications)"
+            )
+            connection.execute(
+                "DELETE FROM notice_host_reply_targets WHERE notification_id NOT IN (SELECT id FROM notifications)"
             )
             connection.execute(
                 "DELETE FROM codex_turn_state WHERE completion_notice_sent=0 "
@@ -398,17 +537,27 @@ class NotificationStore:
             ).fetchone()
             if row is None or not row["has_user_prompt"]:
                 return None
-            if (row["user_prompt_class"] == "internal"
-                    or result_class in {"empty", "internal"}):
-                # Record the terminal state for known background work so a
-                # repeated Stop cannot keep reconsidering the same turn.
+            if client_id == "codex":
                 connection.execute(
-                    "UPDATE codex_turn_state SET completion_notice_sent=1, updated_at=? "
-                    "WHERE session_hash=? AND turn_hash=?",
+                    "UPDATE notifications SET status='resolved', updated_at=? "
+                    "WHERE status='pending' AND id IN ("
+                    "SELECT h.notification_id FROM notice_host_reply_targets h "
+                    "JOIN notice_tags t ON t.notification_id=h.notification_id "
+                    "WHERE h.client_id='codex' AND h.session_hash=? AND h.origin_turn_hash=? "
+                    "AND t.kind='approval')",
                     (now, session_hash, turn_hash),
                 )
+            if row["completion_notice_sent"]:
                 return None
-            if row["nijika_notice_sent"] or row["completion_notice_sent"]:
+            # A Stop consumes the completion slot even when another notice
+            # already covered the turn or the output is internal.
+            connection.execute(
+                "UPDATE codex_turn_state SET completion_notice_sent=1, updated_at=? "
+                "WHERE session_hash=? AND turn_hash=?",
+                (now, session_hash, turn_hash),
+            )
+            if (row["nijika_notice_sent"] or row["user_prompt_class"] == "internal"
+                    or result_class in {"empty", "internal"}):
                 return None
             connection.execute(
                 "INSERT INTO notifications VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?)",
@@ -416,9 +565,5 @@ class NotificationStore:
                  choices, now, now),
             )
             connection.execute("INSERT INTO notice_sources VALUES (?, ?)", (notice_id, software))
-            connection.execute(
-                "UPDATE codex_turn_state SET completion_notice_sent=1, updated_at=? "
-                "WHERE session_hash=? AND turn_hash=?",
-                (now, session_hash, turn_hash),
-            )
+            self._add_host_reply(connection, notice_id, client_id, session_hash, turn_hash)
         return self.get(notice_id)

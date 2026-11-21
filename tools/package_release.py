@@ -13,6 +13,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from app_layout import APPROVAL_RUNTIME_DIRECTORY, PET_RUNTIME_DIRECTORY
 from support_bundle import read_bundle, read_public_bundle
 PREFIX = "虹夏桌宠-Windows私下试用"
 MCP_DIRECTORY = "dist/虹夏MCP-v2"
@@ -20,13 +21,16 @@ MCP_EXECUTABLE = f"{MCP_DIRECTORY}/虹夏MCP-v2.exe"
 FILES = (
     "00-解压后先看.txt",
     "dist/虹夏桌宠.exe",
+    f"dist/{PET_RUNTIME_DIRECTORY}",
     MCP_DIRECTORY,
     "dist/虹夏审批提醒.exe",
+    f"dist/{APPROVAL_RUNTIME_DIRECTORY}",
     "integrations/codex/hooks.example.json",
     "integrations/codex/install-hooks.ps1",
     "integrations/claude-code/install-hooks.ps1",
     "assets/icons/nijika-shortcut.ico",
-    "skills/nijika-desktop-dialog/SKILL.md",
+    "skills/nijika-agent-dialog/SKILL.md",
+    "skills/nijika-magpie-setup/SKILL.md",
     "plugins/nijika-work-local/plugin.json",
     "plugins/nijika-work-local/mcp.json",
     "plugins/nijika-work-local/scripts/run_mcp.py",
@@ -35,10 +39,7 @@ FILES = (
     "integrations/dsh/install.ps1",
     "integrations/dsh/README.md",
     "integrations/dsh/lifecycle-bridge.mjs",
-    "integrations/dsh/global-instructions.txt",
-    "integrations/dsh/nijika-dsh-dialog/SKILL.md",
     "distribution/install.ps1",
-    "distribution/codex-global-instructions.txt",
     "distribution/README.md",
     "AGENT_SETUP.md",
     "NOTIFICATION_PROTOCOL.md",
@@ -56,14 +57,27 @@ def _mcp_source(mcp_exe: Path | None) -> Path:
         raise FileNotFoundError(f"Missing onedir MCP directory or executable: {source}")
     if not executable.is_file():
         raise FileNotFoundError(f"Missing onedir MCP executable: {executable}")
+    runtime = source / "_internal"
+    if runtime.is_symlink() or not runtime.is_dir() or not any(p.is_file() for p in runtime.rglob("*")):
+        raise FileNotFoundError(f"Missing or empty onedir MCP runtime: {runtime}")
     return source
 
 
-def _release_sources(mcp_exe: Path | None = None) -> dict[str, Path]:
-    overrides: dict[str, Path | None] = {
-        "dist/虹夏桌宠.exe": None,
-        "dist/虹夏审批提醒.exe": None,
-    }
+def _release_sources(mcp_exe: Path | None = None, app_exe: Path | None = None,
+                     approval_exe: Path | None = None) -> dict[str, Path]:
+    overrides = {}
+    for name, executable, runtime in (
+        ("dist/虹夏桌宠.exe", app_exe, PET_RUNTIME_DIRECTORY),
+        ("dist/虹夏审批提醒.exe", approval_exe, APPROVAL_RUNTIME_DIRECTORY),
+    ):
+        if name in FILES:
+            source = executable or ROOT / name
+            support = source.parent / runtime
+            if (not source.is_file() or not (support / "base_library.zip").is_file()
+                    or not (support / "python312.dll").is_file()):
+                raise FileNotFoundError(f"Expected {source.name} and its onedir runtime: {support}")
+            overrides[name] = source
+            overrides[f"dist/{runtime}"] = support
     if MCP_DIRECTORY in FILES:
         overrides[MCP_DIRECTORY] = _mcp_source(mcp_exe)
     return {name: overrides.get(name) or ROOT / name for name in FILES}
@@ -94,7 +108,7 @@ def _collect_entries(sources: dict[str, Path]) -> list[tuple[str, Path]]:
 
 
 def release_file_names(mcp_directory: Path | None = None) -> list[str]:
-    """Return the exact allowlisted file set, including the MCP runtime tree."""
+    """Return the exact allowlisted file set, including the onedir runtime trees."""
     names = [name for name, _ in _collect_entries(_release_sources(mcp_directory))]
     names.extend(_public_support(None))
     return names
@@ -107,24 +121,29 @@ def _public_support(support_bundle: Path | None) -> dict[str, bytes]:
     return read_public_bundle(ROOT)
 
 
+def _release_content(name: str, source: Path) -> bytes:
+    if name == "plugins/nijika-work-local/mcp.json":
+        plugin = json.loads(source.read_bytes())
+        plugin["mcpServers"]["nijika-work-pet"]["args"][-1] = "AUTO_LOCAL_MCP"
+        return (json.dumps(plugin, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    if name == "plugins/nijika-work-local/skills/nijika-work-dialog/SKILL.md":
+        # Work requires its registered skill name. The behavior comes only from the shared skill.
+        _, header, _ = source.read_text(encoding="utf-8-sig").split("---\n", 2)
+        _, _, body = (ROOT / "skills/nijika-agent-dialog/SKILL.md").read_text(encoding="utf-8-sig").split("---\n", 2)
+        return ("---\n" + header + "---\n" + body).encode("utf-8")
+    return source.read_bytes()
+
+
 def build(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None,
           support_bundle: Path | None = None, approval_exe: Path | None = None) -> None:
-    sources = _release_sources(mcp_exe)
-    if app_exe:
-        sources["dist/虹夏桌宠.exe"] = app_exe
-    if approval_exe:
-        sources["dist/虹夏审批提醒.exe"] = approval_exe
+    sources = _release_sources(mcp_exe, app_exe, approval_exe)
     entries = _collect_entries(sources)
     public = _public_support(support_bundle)
     manifest: dict[str, str] = {}
     output.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=6) as archive:
         for name, source in entries:
-            data = source.read_bytes()
-            if name == "plugins/nijika-work-local/mcp.json":
-                plugin = json.loads(data)
-                plugin["mcpServers"]["nijika-work-pet"]["args"][-1] = "AUTO_LOCAL_MCP"
-                data = (json.dumps(plugin, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+            data = _release_content(name, source)
             manifest[name] = hashlib.sha256(data).hexdigest()
             archive.writestr(f"{PREFIX}/{name}", data)
         for name, data in public.items():
@@ -141,20 +160,12 @@ def stage(output: Path, app_exe: Path | None = None, mcp_exe: Path | None = None
     """Create a clean installer source tree from the same explicit allowlist."""
     if output.exists():
         raise FileExistsError(f"Installer staging directory already exists: {output}")
-    sources = _release_sources(mcp_exe)
-    if app_exe:
-        sources["dist/虹夏桌宠.exe"] = app_exe
-    if approval_exe:
-        sources["dist/虹夏审批提醒.exe"] = approval_exe
+    sources = _release_sources(mcp_exe, app_exe, approval_exe)
     entries = _collect_entries(sources)
     public = _public_support(support_bundle)
     manifest: dict[str, str] = {}
     for name, source in entries:
-        data = source.read_bytes()
-        if name == "plugins/nijika-work-local/mcp.json":
-            plugin = json.loads(data)
-            plugin["mcpServers"]["nijika-work-pet"]["args"][-1] = "AUTO_LOCAL_MCP"
-            data = (json.dumps(plugin, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+        data = _release_content(name, source)
         manifest[name] = hashlib.sha256(data).hexdigest()
         target = output / Path(name)
         target.parent.mkdir(parents=True, exist_ok=True)

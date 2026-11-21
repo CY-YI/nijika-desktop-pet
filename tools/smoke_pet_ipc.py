@@ -83,6 +83,9 @@ async def main(source: bool) -> None:
         path = Path(directory) / "notifications.sqlite3"
         environment = os.environ.copy()
         environment["NIJIKA_PET_DB_PATH"] = str(path)
+        temp = Path(directory) / "temp"
+        temp.mkdir()
+        environment["TEMP"] = environment["TMP"] = str(temp)
         process = subprocess.Popen(pet_command, env=environment)
         try:
             await until_window(WINDOW_CLASS)
@@ -100,7 +103,7 @@ async def main(source: bool) -> None:
                 assert not created.is_error and created.structured_content
                 request_id = created.structured_content["request_id"]
                 assert NotificationStore(path).get(request_id).status == "pending"
-                image, actions, _ = render_bubble(
+                image, actions, _, _ = render_bubble(
                     BubbleNotice(
                         "Codex · 文案审阅", question,
                         actions=("接受文案", "需要修改"),
@@ -108,7 +111,7 @@ async def main(source: bool) -> None:
                             "采用这段文案，无需回到聊天确认。",
                             "暂不定稿，后续再说明修改要求。",
                         ),
-                        kind="agent", duration=None, request_id=request_id,
+                        kind="agent", duration=None, request_id=request_id, accepts_text=True,
                     )
                 )
                 bubble = await until_window("NijikaDesktopPetBubbleWindow", image.size)

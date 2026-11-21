@@ -32,6 +32,7 @@ async def verify(executable: Path) -> None:
         ("DSH", "workbuddy", "Agent", "WorkBuddy", "auto"),
         ("DSH", "workbuddy-ai", "Agent", "WorkBuddy AI", "auto"),
         ("DSH", "claude-desktop", "Claude", "Claude Desktop", "auto"),
+        ("auto", "grok-shell-nijika-pet", "Grok", "Grok Build", "auto"),
         ("auto", "vscode", "Agent", "VS Code", "auto"),
         ("auto", "obsidian", "Agent", "Obsidian", "auto"),
         ("auto", "dsh-mcp-client", "Agent", "DSH", "auto"),
@@ -51,7 +52,7 @@ async def verify(executable: Path) -> None:
             async with Client(params, client_info=Implementation(name=caller, version="source-check"), mode=mode) as client:
                 tools = await client.list_tools()
                 assert {tool.name for tool in tools.tools} == {
-                    "show_completion", "request_decision", "get_reply", "wait_for_reply",
+                    "show_completion", "request_decision", "request_text_reply", "get_reply", "wait_for_reply",
                 }
                 completed = await client.call_tool("show_completion", {
                     "task": "source-check", "summary": "Isolated completion test.",
@@ -60,6 +61,11 @@ async def verify(executable: Path) -> None:
                 assert store.get(completed.structured_content["request_id"]).agent == expected
                 assert store.get(completed.structured_content["request_id"]).software == software
                 assert AgentActivity(database).snapshot(f"{index:032x}")["called"]
+                if index == 0:
+                    completion_id = completed.structured_content["request_id"]
+                    assert store.answer_text(completion_id, "请确认安装步骤。")
+                    receipt = (await client.call_tool("get_reply", {"request_id": completion_id})).structured_content
+                    assert receipt["reply_text"] == "请确认安装步骤。" and receipt["choice"] is None
                 decision = await client.call_tool("request_decision", {
                     "task": "source-choice", "question": "Which check?", "options": [
                         {"label": "Source", "description": "Check the caller source.", "recommended": True},

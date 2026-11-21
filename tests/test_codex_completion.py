@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
-from approval_hook import handle_event, main
+from approval_hook import codex_reply_context, handle_event, main
 from codex_completion import completion_preview, prompt_class, result_class, tool_flags
 from notification_store import NotificationStore
 
@@ -56,6 +56,64 @@ class CodexCompletionTests(unittest.TestCase):
         self.assertIsNone(self.stop())
         self.assertEqual(self.count(), 1)
 
+    def test_host_reply_is_announced_by_id_only_to_the_next_original_user_turn(self):
+        self.begin()
+        approval = handle_event(self.event("PermissionRequest", tool_name="Bash",
+                                            transcript_path="C:/codex/visible.jsonl"), self.store)
+        self.assertIsNotNone(approval)
+        self.assertTrue(self.store.answer_text(approval, "PRIVATE_REPLY_CONTENT"))
+        fallback = self.stop()
+        self.assertTrue(self.store.get(fallback).accepts_text)
+        self.assertTrue(self.store.answer_text(fallback, "PRIVATE_REPLY_CONTENT"))
+        followup = self.event("UserPromptSubmit", prompt="继续")
+        self.assertIsNone(codex_reply_context(followup, self.store))
+        retry = {**followup, "turn_id": "follow-up"}
+        self.assertIsNone(codex_reply_context({**retry, "session_id": "unrelated"}, self.store))
+        self.assertIsNone(codex_reply_context({**retry, "agent_id": "subagent"}, self.store))
+        result = codex_reply_context(retry, self.store)
+        payload = result["hookSpecificOutput"]
+        self.assertEqual(payload["hookEventName"], "UserPromptSubmit")
+        self.assertIn(fallback, payload["additionalContext"])
+        self.assertIn(approval, payload["additionalContext"])
+        self.assertNotIn("PRIVATE_REPLY_CONTENT", payload["additionalContext"])
+        self.assertIsNone(codex_reply_context(retry, self.store))
+
+    def test_approval_requires_locatable_active_user_turn(self):
+        request = self.event("PermissionRequest", tool_name="Bash",
+                             transcript_path="C:/codex/visible.jsonl", permission_mode="default")
+        self.assertIsNone(handle_event(request, self.store))
+        self.begin("Your job is to generate a short UI title based on the user prompt.")
+        self.assertIsNone(handle_event(request, self.store))
+        self.identity["turn_id"] = "active-user-turn"
+        self.begin()
+        request["turn_id"] = self.identity["turn_id"]
+        for overrides in ({"transcript_path": None}, {"permission_mode": "dontAsk"},
+                          {"permission_mode": "bypassPermissions"}, {"agent_id": "child"},
+                          {"session_id": "another-session"}, {"turn_id": "another-turn"}):
+            with self.subTest(overrides=overrides):
+                self.assertIsNone(handle_event({**request, **overrides}, self.store))
+        self.assertEqual(self.count(), 0)
+        self.assertIsNotNone(handle_event(request, self.store))
+
+    def test_stop_clears_only_unanswered_approvals_from_its_own_turn(self):
+        self.begin()
+        first = self.event("PermissionRequest", tool_name="Bash", transcript_path="C:/codex/visible.jsonl")
+        pending = handle_event(first, self.store)
+        second = {**first, "tool_input": {"command": "second"}}
+        answered = handle_event(second, self.store)
+        self.store.answer_text(answered, "保留这条回复")
+        other = {**first, "session_id": "other-session"}
+        handle_event({**other, "hook_event_name": "UserPromptSubmit", "prompt": "继续"}, self.store)
+        other_id = handle_event(other, self.store)
+        self.tool("mcp__nijika-pet__show_completion",
+                  {"structuredContent": {"request_id": "sent", "status": "pending"}})
+        self.assertIsNone(self.stop())
+        self.assertEqual(self.store.get(pending).status, "resolved")
+        self.assertEqual(self.store.get(answered).reply_text, "保留这条回复")
+        self.assertEqual(self.store.get(other_id).status, "pending")
+        self.begin()
+        self.assertIsNone(handle_event(first, self.store))
+
     def test_repeat_stop_after_click_close_and_prompt_replay_does_not_duplicate(self):
         for state in ("answered", "dismissed"):
             with self.subTest(state=state):
@@ -96,6 +154,7 @@ class CodexCompletionTests(unittest.TestCase):
         for index, name in enumerate((
             "mcp__nijika-pet__show_completion", "mcp__nijika_pet__request_decision",
             "mcp__NIJIKA_WORK_PET__show_completion", "nijika-work-pet.request_decision",
+            "mcp__nijika_pet__request_text_reply",
         )):
             with self.subTest(name=name):
                 self.identity["turn_id"] = str(index)

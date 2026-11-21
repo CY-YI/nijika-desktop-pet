@@ -8,7 +8,6 @@ import argparse
 import json
 import os
 import re
-import signal
 import subprocess
 import tempfile
 import time
@@ -25,13 +24,17 @@ def verify(executable: Path) -> dict:
         isolated = Path(temporary)
         database = isolated / "state/notifications.sqlite3"
         user = isolated / "user"
-        environment = {**os.environ, "NIJIKA_PET_DB_PATH": str(database)}
+        shutdown_file = isolated / "shutdown.signal"
+        temp = isolated / "temp"
+        temp.mkdir()
+        environment = {**os.environ, "NIJIKA_PET_DB_PATH": str(database),
+                       "TEMP": str(temp), "TMP": str(temp)}
         process = subprocess.Popen(
-            [str(executable), "--control-panel", "--serve-only", "--agent-home", str(user)],
+            [str(executable), "--control-panel", "--serve-only", "--agent-home", str(user),
+             "--test-shutdown-file", str(shutdown_file)],
             env=environment, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-        panel_pid = None
         try:
             status = database.parent / "panel-status.json"
             deadline = time.monotonic() + 25
@@ -42,7 +45,6 @@ def verify(executable: Path) -> dict:
                     raise TimeoutError("Frozen panel did not start within 25 seconds")
                 time.sleep(0.1)
             panel = json.loads(status.read_text(encoding="utf-8"))
-            panel_pid = panel["pid"]
             origin = panel["url"]
             assert origin.startswith("http://127.0.0.1:")
             with urlopen(origin, timeout=5) as response:
@@ -72,59 +74,57 @@ def verify(executable: Path) -> dict:
                 patch.parent.mkdir(parents=True)
                 patch.write_text("# keep existing profile\n", encoding="utf-8")
             checked = []
-            for client in ("codex", "dsh", "custom"):
+            for client in ("codex", "dsh", "custom", "work"):
                 payload = {"client": client, "name": "隔离验收"}
                 if client == "custom":
                     payload.update({"agent_identity": "Claude", "software": "Obsidian"})
                 plan = call("/api/agents/plan", payload)
-                assert "wait_for_reply" in plan["instructions"]
-                assert "# BEGIN NIJIKA-CODEX-DIALOG" not in plan["instructions"]
-                result = call("/api/agents/apply", {"plan_id": plan["plan_id"]})["agent"]
-                result = call("/api/agents/prepare", {"id": result["id"]})["agent"]
-                bundle = Path(result["bundle_directory"])
-                assert bundle.is_relative_to(isolated)
-                config = json.loads((bundle / "nijika-mcp.json").read_text(encoding="utf-8"))
-                capability = json.loads((bundle / "nijika-notification-capabilities.json").read_text(encoding="utf-8"))
-                assert capability["automatic_completion_verified"] is False
-                assert capability["mode"] == ("active_only" if client == "custom" else "event_available")
-                assert capability["lifecycle_executable"] == str(executable.parent / "虹夏审批提醒.exe")
-                assert config["mcpServers"]["nijika-pet"]["command"] == str(
-                    executable.parent / "虹夏MCP-v2" / "虹夏MCP-v2.exe")
-                prompt = (bundle / "nijika-setup-prompt.txt").read_text(encoding="utf-8")
-                assert prompt == result["guide"]["prompt"]
-                assert "status=invalid" in prompt and "20显示列" in prompt
-                for item in result["needed_files"]:
-                    assert Path(item["path"]).is_absolute() and item["path"] in prompt
-                if client == "codex":
-                    assert (codex / "config.toml").read_text(encoding="utf-8").startswith(original_config.rstrip())
-                    assert (codex / "hooks.json").read_bytes() == original_hooks
-                    assert "UserPromptSubmit、PermissionRequest、PostToolUse、Stop" in prompt
-                if client == "dsh":
-                    assert "尚未实现 DSH 宿主原生权限" in prompt
-                    for profile in ("desktop", "web"):
-                        saved = (user / ".dsh/profiles" / profile / "cordis.patch.yml").read_text(encoding="utf-8")
-                        assert saved.startswith("# keep existing profile") and saved.count("id: mcp-nijika-pet") == 1
-                        assert saved.count("id: nijika-lifecycle-bridge") == 1
-                        assert (executable.parent.parent / "integrations/dsh/lifecycle-bridge.mjs").as_uri() in saved
+                prompt = plan["guide"]["prompt"]
+                assert plan["handoff"] and not plan["files"] and "plan_id" not in plan
+                assert "export" not in plan and "nijika-agent-dialog" in prompt
+                assert str(executable.parent / "虹夏MCP-v2/虹夏MCP-v2.exe") in prompt
+                if client == "work":
+                    assert "保留已有 Work 本机插件" in prompt
                 checked.append(client)
-            assert len(call("/api/state")["agents"]) == len(checked)
-            return {"status": "passed", "clients_applied_in_isolation": checked,
+
+            library = user / ".config/magpie/library.json"
+            library.parent.mkdir(parents=True)
+            original_library = json.dumps({"mcp": [{"name": "nijika-pet", "agents": ["codex"],
+                "command": str(executable.parent / "虹夏MCP-v2/虹夏MCP-v2.exe")}]})
+            library.write_text(original_library, encoding="utf-8")
+            managed = call("/api/agents/plan", {"client": "codex", "name": "已纳管验收"})
+            assert managed["manager"] == "magpie" and not managed["files"]
+            result = call("/api/agents/apply", {"plan_id": managed["plan_id"]})["agent"]
+            assert result["status"] == "managed"
+            result = call("/api/agents/prepare", {"id": result["id"]})["agent"]
+            assert "本次不授权修改" in result["guide"]["prompt"]
+            assert (codex / "config.toml").read_text(encoding="utf-8") == original_config
+            assert (codex / "hooks.json").read_bytes() == original_hooks
+            assert library.read_text(encoding="utf-8") == original_library
+            for profile in ("desktop", "web"):
+                assert (user / ".dsh/profiles" / profile / "cordis.patch.yml").read_text(
+                    encoding="utf-8") == "# keep existing profile\n"
+            assert len(call("/api/state")["agents"]) == 1
+            assert not (database.parent / "integrations" / "agents").exists()
+            return {"status": "passed", "clients_previewed_in_isolation": checked,
+                    "managed_profiles_registered": 1,
                     "api_only": True, "external_client_calls_tested": False,
                     "interaction_preview_included": 'id="page-interaction"' in html}
         finally:
-            if panel_pid is not None and panel_pid != process.pid:
-                try:
-                    os.kill(panel_pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
             if process.poll() is None:
-                if panel_pid == process.pid:
-                    process.terminate()
+                shutdown_file.touch()
                 try:
                     process.wait(timeout=10)
                 except subprocess.TimeoutExpired:
-                    process.kill()
+                    if os.name == "nt":
+                        subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                                       capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                    else:
+                        process.kill()
                     process.wait(timeout=5)
+                    raise RuntimeError("Isolated panel did not shut down normally")
+            if list(temp.glob("_MEI*")):
+                raise RuntimeError("Isolated panel left PyInstaller runtime files after shutdown")
 
 
 if __name__ == "__main__":

@@ -26,6 +26,9 @@ def main() -> None:
         executable = root / "space ' 中文" / "虹夏审批提醒.exe"
         executable.parent.mkdir()
         shutil.copy2(source, executable)
+        support = source.parent / "_nijika_hook_runtime"
+        if support.is_dir():
+            shutil.copytree(support, executable.parent / support.name)
         home = root / "codex"
         home.mkdir()
         unrelated = {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo preserved"}]}
@@ -61,8 +64,10 @@ def main() -> None:
         store = NotificationStore(root / "queue.sqlite3")
         environment = os.environ.copy()
         environment["NIJIKA_PET_DB_PATH"] = str(store.path)
+        environment["TEMP"] = environment["TMP"] = str(root)
         event = {"hook_event_name": "PermissionRequest", "session_id": "smoke-session",
                  "turn_id": "smoke-turn", "tool_name": "Bash", "cwd": "C:/isolated-test",
+                 "transcript_path": "C:/isolated-test/conversation.jsonl", "permission_mode": "default",
                  "tool_input": {"command": "TEST_PRIVATE_COMMAND", "description": "reason"}}
 
         def run_hook(name: str) -> None:
@@ -81,6 +86,14 @@ def main() -> None:
             assert result.stderr == b"", result.stderr
 
         run_hook("PermissionRequest")
+        assert store.next_pending() is None
+        event["prompt"] = "检查需要审阅的操作"
+        run_hook("UserPromptSubmit")
+        transcript = event.pop("transcript_path")
+        run_hook("PermissionRequest")
+        assert store.next_pending() is None
+        event["transcript_path"] = transcript
+        run_hook("PermissionRequest")
         notice = store.next_pending()
         assert notice is not None and notice.kind == "approval"
         assert "不授予权限" in notice.message
@@ -93,6 +106,20 @@ def main() -> None:
         assert store.next_pending() is None
         assert b"TEST_PRIVATE_COMMAND" not in store.path.read_bytes()
         assert len(event_key(event)) == 64
+
+        event["turn_id"] = "approval-ended-turn"
+        run_hook("UserPromptSubmit")
+        run_hook("PermissionRequest")
+        waiting = store.next_pending()
+        assert waiting is not None and waiting.kind == "approval"
+        event["last_assistant_message"] = "审批请求已结束。"
+        run_hook("Stop")
+        assert store.get(waiting.id).status == "resolved"
+        completion = store.next_pending()
+        assert completion is not None and completion.kind == "agent"
+        store.dismiss(completion.id)
+        run_hook("PermissionRequest")
+        assert store.next_pending() is None
 
         event["turn_id"] = "completion-turn"
         event["prompt"] = "检查 TEST_PRIVATE_PROMPT 的功能并修复"

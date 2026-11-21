@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import os
 import sqlite3
+import stat
+import sys
 import time
 
 from mcp.server import MCPServer
@@ -67,6 +70,7 @@ class ReplyResult(BaseModel):
     choice: str | None = None
     choice_description: str | None = None
     choice_index: int | None = None
+    reply_text: str | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class DecisionOption(BaseModel):
@@ -86,16 +90,16 @@ def invalid_notice(error: ValueError) -> CreatedResult:
 @mcp.tool()
 def show_completion(task: str, summary: str, agent_name: str | None = None,
                     software: str | None = None, context: Context = None) -> CreatedResult:
-    """Send completion, not approval. Optional agent_name is your Agent identity; software is your host (Work/Codex/VS Code/Obsidian). Keep task free of source prefixes."""
+    """Send a completion with an acknowledgement and optional typed reply, never approval. Keep task free of source prefixes."""
     try:
         source = request_source(context, agent_name, software)
-        notice = store.create(source.agent, task, summary, ("知道了",), software=source.software)
+        notice = store.create(source.agent, task, summary, ("知道了",), software=source.software, accepts_text=True)
         record_call(notice.id)
     except ValueError as error:
         return invalid_notice(error)
     return CreatedResult(
         request_id=notice.id, status=notice.status,
-        instruction="Call get_reply or wait_for_reply to read the user's desktop response.",
+        instruction="Keep this request_id in the original conversation. Read any reply_text with get_reply when the user returns; the acknowledgement alone needs no follow-up.",
     )
 
 
@@ -103,7 +107,7 @@ def show_completion(task: str, summary: str, agent_name: str | None = None,
 def request_decision(task: str, question: str, options: list[DecisionOption],
                      agent_name: str | None = None, software: str | None = None,
                      context: Context = None) -> CreatedResult:
-    """Ask a choice; record the click in chat. Optional agent_name identifies the Agent; software identifies its host. Keep task free of source prefixes."""
+    """Ask a choice or let the user type their own answer in the same bubble. Keep task free of source prefixes."""
     if not 2 <= len(options) <= 3:
         return invalid_notice(ValueError("request_decision requires 2–3 explained choices"))
     if isinstance(question, str) and (len(question) > 80 or question.count("\n") > 2):
@@ -113,19 +117,40 @@ def request_decision(task: str, question: str, options: list[DecisionOption],
     try:
         source = request_source(context, agent_name, software)
         notice = store.create(source.agent, task, question,
-                              [option.model_dump() for option in options], software=source.software)
+                              [option.model_dump() for option in options], software=source.software,
+                              accepts_text=True)
         record_call(notice.id)
     except ValueError as error:
         return invalid_notice(error)
     return CreatedResult(
         request_id=notice.id, status=notice.status,
-        instruction="Queued locally, not confirmed visible on screen. Keep this request_id; do not send a duplicate while pending. Call wait_for_reply, then write the selected choice in the Codex chat before continuing. Pending is not a decision.",
+        instruction="Queued locally. Wait on this request_id; read reply_text for a typed answer or choice for a selected option. Acknowledge the response in the original conversation before continuing. Pending is not a decision.",
+    )
+
+
+@mcp.tool()
+def request_text_reply(task: str, question: str, agent_name: str | None = None,
+                       software: str | None = None, context: Context = None) -> CreatedResult:
+    """Ask the user to type a short reply on the desktop. Use a new request only for a new question, never for host approval."""
+    if isinstance(question, str) and (len(question) > 80 or question.count("\n") > 2):
+        return invalid_notice(ValueError("text reply questions must fit within 80 characters and 3 paragraphs"))
+    try:
+        source = request_source(context, agent_name, software)
+        notice = store.create(source.agent, task, question, (), software=source.software,
+                              accepts_text=True)
+        record_call(notice.id)
+    except ValueError as error:
+        return invalid_notice(error)
+    return CreatedResult(
+        request_id=notice.id, status=notice.status,
+        instruction="Queued locally. Call wait_for_reply on this request_id and read reply_text when answered. "
+                    "Keep the ID in this conversation if it pauses, then call get_reply on resume. Never resend while pending.",
     )
 
 
 @mcp.tool()
 def get_reply(request_id: str) -> ReplyResult:
-    """Read a desktop reply; when answered, state the selected choice in the Codex chat before continuing."""
+    """Read a desktop choice or typed reply by request ID. Acknowledge the decision in the original conversation before continuing."""
     notice = store.get(request_id)
     return ReplyResult(**(notice.result() if notice else
                           {"request_id": request_id, "status": "not_found"}))
@@ -133,7 +158,7 @@ def get_reply(request_id: str) -> ReplyResult:
 
 @mcp.tool()
 async def wait_for_reply(request_id: str, timeout_seconds: int = 20) -> ReplyResult:
-    """Wait up to 60 seconds for a click; when answered, state the choice in the Codex chat before continuing."""
+    """Wait up to 60 seconds for a desktop reply. Read choice or reply_text when answered, using the original conversation."""
     if not 1 <= timeout_seconds <= 60:
         raise ValueError("timeout_seconds must be 1–60")
     deadline = time.monotonic() + timeout_seconds
@@ -146,5 +171,34 @@ async def wait_for_reply(request_id: str, timeout_seconds: int = 20) -> ReplyRes
         await asyncio.sleep(0.25)
 
 
+def run_stdio() -> None:
+    try:
+        windows_pipe = os.name == "nt" and stat.S_ISFIFO(os.fstat(sys.stdout.fileno()).st_mode)
+    except (OSError, ValueError, AttributeError):
+        windows_pipe = False
+
+    def peer_closed_stdout(error: BaseException) -> bool:
+        if not isinstance(error, OSError):
+            return False
+        if error.errno != errno.EPIPE and not (windows_pipe and error.errno == errno.EINVAL):
+            return False
+        # Windows can report EINVAL when the SDK flushes its output after the
+        # peer has closed the pipe. Keep failures from other code visible.
+        frame = error.__traceback__
+        while frame is not None:
+            if (frame.tb_frame.f_globals.get("__name__") == "mcp.server.stdio"
+                    and frame.tb_frame.f_code.co_name == "stdout_writer"):
+                return True
+            frame = frame.tb_next
+        return False
+
+    try:
+        mcp.run()
+    except* OSError as errors:
+        _, unexpected = errors.split(peer_closed_stdout)
+        if unexpected is not None:
+            raise unexpected
+
+
 if __name__ == "__main__":
-    mcp.run()
+    run_stdio()

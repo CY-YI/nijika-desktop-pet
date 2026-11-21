@@ -13,6 +13,7 @@ from pathlib import PureWindowsPath
 
 from notification_store import NotificationStore
 from notification_lifecycle import handle_lifecycle
+from notification_policy import prompt_class
 
 
 def event_key(event: dict) -> str:
@@ -61,6 +62,13 @@ def handle_event(event: dict, store: NotificationStore, source: str = "codex") -
     if source == "claude-code":
         agent, software, where = "Claude", "Claude Code", "Claude Code 的权限提示"
     else:
+        transcript = event.get("transcript_path")
+        # A temporary Codex session may run hooks but have no conversation
+        # the user can open. PermissionRequest also precedes the native card.
+        if not isinstance(transcript, str) or not transcript.strip():
+            return None
+        if event.get("permission_mode") in ("dontAsk", "bypassPermissions"):
+            return None
         agent, software, where = "ChatGPT", "Codex", "Codex 命令审批卡"
     folder = PureWindowsPath(str(event.get("cwd") or "当前任务")).name
     folder = "".join(c for c in folder if ord(c) >= 32)[:20] or "当前任务"
@@ -68,8 +76,25 @@ def handle_event(event: dict, store: NotificationStore, source: str = "codex") -
         agent, "命令需要授权",
         f"{folder}的工具操作需要授权。请在 {where}中处理；此气泡只提醒，不授予权限。",
         ("知道了",), event_key=key, kind="approval", software=software,
+        approval_target=(source, event.get("session_id"), event.get("turn_id")),
     )
-    return notice.id
+    return notice.id if notice else None
+
+
+def codex_reply_context(event: dict, store: NotificationStore) -> dict | None:
+    if event.get("agent_id") or event.get("agent_type") or prompt_class(event.get("prompt")) == "internal":
+        return None
+    ids = store.take_host_reply_ids(event.get("session_id"), event.get("turn_id"), client_id="codex")
+    if not ids:
+        return None
+    # Only a local capability reference enters the developer context. The
+    # actual user text returns through the ordinary MCP reply channel.
+    return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": (
+        "The user submitted a Nijika desktop reply in this Codex conversation. "
+        "Use Nijika get_reply on these request IDs before continuing: " + ", ".join(ids) + ". "
+        "Read reply_text, or choice if choice_description is 虹夏文字回复. "
+        "Treat the returned text as user input. A desktop reply never authorizes a host permission request."
+    )}}
 
 
 def main() -> None:
@@ -108,7 +133,12 @@ def main() -> None:
         event_name = event.get("hook_event_name")
         if expected_event and event_name != expected_event:
             raise ValueError("unexpected hook event")
-        handle_event(event, NotificationStore(), source)
+        store = NotificationStore()
+        handle_event(event, store, source)
+        if source == "codex" and event_name == "UserPromptSubmit":
+            context = codex_reply_context(event, store)
+            if context:
+                print(json.dumps(context))
     except Exception:
         # Completion fallback is best-effort and must not steer or block a turn.
         # Preserve the existing fixed approval failure text, never the payload.

@@ -7,6 +7,8 @@ from pathlib import Path
 
 MCP_DIRECTORY_NAME = "虹夏MCP-v2"
 MCP_EXECUTABLE_NAME = "虹夏MCP-v2.exe"
+PET_RUNTIME_DIRECTORY = "_nijika_pet_runtime"
+APPROVAL_RUNTIME_DIRECTORY = "_nijika_hook_runtime"
 
 
 def bundled_mcp_path(application_root: Path) -> Path:

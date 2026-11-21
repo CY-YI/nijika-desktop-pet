@@ -1,10 +1,7 @@
 # 虹夏桌宠 · Windows 安装与进阶说明
 
-## 新版提醒配置
-
-从完整包安装后，在设置中心“Agent 接入”预览、应用并重载。DSH 的新计划同时添加 MCP 和实时结束事件模块；实际路径随接收方安装目录生成（接口核对 `0.2.1-rc.2 / 0.2.1-rc.3`）。Codex 保留原有 Hook 命令与本人信任。MAGPIE 管理项不代写事件模块，须由配置维护者审阅；可用 DSH 脚本的 `-LifecycleOnly` 模式单独更新事件块。移动程序后重新配置。
-
-导出的 `nijika-notification-capabilities.json` 和提示词明确区分“可接结束事件”和“仅主动调用”。Work 等未接事件的客户端仍可能漏调，不能仅凭 skill 承诺自动补发。分别验收无提示短答、主动通知不重复、并行隔离及桌面点击；详情见安装根目录 `AGENT_SETUP.md` 与 `NOTIFICATION_PROTOCOL.md`。
+## 使用 MAGPIE 分发
+在设置中心打开“Agent 接入”，选择客户端，复制 MAGPIE 配置提示词。由 Library 分发唯一虹夏 MCP 与统一提醒 Skill；设置中心不写客户端配置。实际路径、迁移和验证见包内 `AGENT_SETUP.md`。
 
 单文件 Setup 用户先读安装目录下的 `00-安装后先看.txt`。双击 Setup EXE 即可安装，无需运行 PowerShell；安装后从“虹夏桌宠设置”接入 Agent。下面的 PowerShell 命令仅适用于旧 ZIP 包或维护者。
 
@@ -18,29 +15,13 @@
 powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1
 ```
 
-这会把桌宠（含设置中心）、MCP 和可选审批提醒程序复制到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，在桌面创建“虹夏桌宠”与“虹夏桌宠设置”快捷方式，并启动桌宠。双击“虹夏桌宠设置”可添加 Agent、导入皮肤、调整动作和配置投喂入口；右键角色同样可以打开设置中心。想要桌宠开机启动，在安装命令末尾加 `-AutoStart`。
+这会把桌宠（含设置中心）、MCP 和可选审批提醒程序复制到 `%LOCALAPPDATA%\NijikaDesktopPet\app`，在桌面创建“虹夏桌宠”快捷方式，并启动桌宠。双击图标或右键角色都能打开设置中心。安装命令加 `-AutoStart` 后，登录 Windows 时会自动启动桌宠。
 
 在设置中心进入“互动与养成”，保存“允许分区触摸”后可点击桌面角色的头顶、脸颊和身体，双击可触发坐姿小舞；右键可选择基础动作或“停止当前动作”。轻养成是独立开关，开启并保存后可投喂点心/喝水，两种操作分别冷却 30 秒。动作按钮属于面板试映，投喂才会保存数值并发送桌面反馈；工作提醒优先显示。若页面提示桌面互动未连接，先启动或更新这份完整试用包里的桌宠。
 
 Agent 接入是可选的。新版设置中心的“扫描本机”会显示 Codex、ChatGPT Work、DSH、Claude Code、Gemini CLI、Copilot CLI 等适配器，并单独识别 VS Code 中已安装的 Codex、Claude Code、DSH、CodeBuddy 和 GitHub Copilot Chat 扩展。MAGPIE 已管理的客户端只登记归属，不在虹夏中重复写入。扫描只读取已知路径和扩展清单，不读取账号、聊天或密钥。
 
-完整配置、源码安装方式和验证步骤见包内 `AGENT_SETUP.md`。电脑上已安装相应客户端后，关闭正在运行的旧任务和桌宠，再按需要重跑安装脚本并附加参数：
-
-```powershell
-# Codex：安装 MCP 与自动触发技能
-powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1 -Codex -NoLaunch
-
-# 可选：同时准备 Codex 完成兜底与命令审批提醒（随后本人在 /hooks 审阅并信任）
-powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1 -Codex -CodexHooks -NoLaunch
-
-# ChatGPT 桌面客户端的本机 Work：安装本地插件
-powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1 -Work -NoLaunch
-
-# DeepSeek Harness：配置 desktop/web 与技能
-powershell -ExecutionPolicy Bypass -File .\distribution\install.ps1 -Dsh -NoLaunch
-```
-
-Codex 和 Work 接入需要 `codex` 命令可从 PowerShell 找到；**现有 Work 插件还需要 `python.exe` 在 PATH 中**，安装脚本会提前检查。DSH 接入需要先在本机建立 `%USERPROFILE%\.dsh` 配置。三个参数可以合并使用。脚本不会删除别人的 Agent 配置；若 Codex 中已经存在 `nijika-pet` 服务，会提示核对路径，不会覆盖。配置后请重启相应客户端，用**新任务**发一条简短选择题，确认桌面显示、点击和聊天中的读回。Work 插件安装后还要重启 ChatGPT 桌面客户端。仅本机运行的 Work 可访问此 Windows 程序，普通聊天或云端 Work 不会自动连接。
+适用的每轮触发指令和技能请通过 MAGPIE Library 分发。重载目标客户端并用新任务验证。原生审批及结束事件是独立能力；可选的 `-CodexHooks`、`-ClaudeHooks` 不负责安装或分发提醒 Skill。
 
 默认安装到固定用户目录，因此解压出来的文件夹以后可以移走。搬动或更新正式安装目录后需重跑 Agent 接入步骤。消息记录保存在本机 `%USERPROFILE%\.nijika-desktop-pet\notifications.sqlite3`，避免 AppData 被打包客户端重定向成另一份队列；新版桌宠兼容旧会话的待处理消息。此试用包不含发送者的消息库或聊天历史。
 
@@ -64,6 +45,6 @@ Codex 和 Work 接入需要 `codex` 命令可从 PowerShell 找到；**现有 Wo
 
 通用客户端分别填写 Agent 和所在软件，不要把固定软件来源的配置共享给所有客户端。软件必填，未知模型用 Agent。旧别名或旧路径遇到无法核实/权限冲突时配置会停止，需要先核对原服务；已存在的其他服务不会被自动覆盖。详见 AGENT_SETUP.md。
 
-## 本机发现入口（2026-10-29）
+## 本机发现入口
 
-安装后打开 Agent 页的“扫描本机”，勾选软件、查看预览再应用。支持 Codex、ChatGPT Work、DSH、Claude Code、Gemini CLI、Copilot CLI；其他入口可生成指引。MAGPIE 管理项只登记，不改客户端或管理器。完成配置后在宿主新任务调用虹夏；本机测试不代表已接入宿主。旧连接和未带档案编号的共享配置不会自动显示该档案已验证。
+安装后打开 Agent 页的“扫描本机”，选择目标查看 MAGPIE 步骤。已分发项可登记，不改客户端或管理器。完成配置后在宿主新任务调用虹夏；本机测试不代表已接入宿主。未带档案编号的共享服务不会自动显示该档案已验证。

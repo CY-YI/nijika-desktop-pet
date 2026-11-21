@@ -1,5 +1,29 @@
 # 本机候选与发布检查单
 
+## 2026-11-21 本机版本收尾
+
+- 桌宠与设置中心共用一个主程序。桌面快捷方式打开设置中心，登录 Windows 自动启动角色。Agent 统一通过 MAGPIE 接入，选择题和提醒可在气泡内回复。已验证多帧皮肤导入、播放和删除，以及投喂资料导出。
+- Python 回归 224 项，223 项在项目虚拟环境通过，跳过的可选 YAML 用例在系统 Python 的 8 项定向测试中通过。正式版桌宠、MCP 和审批组件的隔离冒烟通过，覆盖设置中心、衣橱、回复演示、审批气泡过滤、20 种来源和 4 路并发回传。
+- 内置浏览器从正式设置中心扫描到 22 个入口，核对 Codex 已分发和 Work 未分发两种向导状态、统一技能及提示词入口。扫描结果只表示发现了入口。当前快捷方式及可回退组件的路径见 [安装指南](INSTALL.md) 和 [回退记录](ROLLBACK.md)。
+- JavaScript 24 项通过，已安装 DSH 的真实 SessionStore 用例因未为该次测试指定模块目录而跳过。便携包在本机隔离目录解压和安装，353 项校验一致，Work MCP 路径随安装目录重写。ZIP 作为本机验收产物保存在 `diagnostics/closeout-20261121/`。
+- 本次范围为本机收尾与源码 Git 存档。干净 Windows 的 Setup 全流程、更新后的真实审批卡及各外部客户端的自然对话仍分别记录。GitHub Release 沿用既有发布版本。
+
+## 2026-11-18 0.1.11 本机升级收尾
+
+- 本机正式安装已更新并验收。桌宠和审批程序使用同级 onedir 依赖，原 EXE 路径保留。子代理实机核验桌宠窗口、原快捷方式、安装版审批程序及 MCP 退出，实际 Codex 命令结束 Hook 触发且在采样窗口内无新增 `_MEI`。
+- 回退备份 `backups/local-upgrade-0.1.11-20261118/` 包含升级前的 343 个文件、摘要及两条桌面链接备份。复核的 6 项接入配置摘要不变。备份仅供本机回退。
+- 0.1.11 候选产物在 `dist-next/runtime-20261118-exit-fix/`。Setup SHA-256 `c14883a5929caeffc7ccffc5cf128c2737ed5ead2da9ab240e392d27f7d77a1a`，便携 ZIP SHA-256 `00a109bdce8639d7096fd02605cd6fc889054a207ae8e2ae43a70ae410f366ff`。冻结产物来自验收时的开发工作树，该工作树另有 DS Bot 扫描改动，不能视为本轮范围提交的精确构建快照。
+- 本地收尾和正式发布分别记录。独立 Windows 的 Setup 新装、旧版升级和卸载，以及本轮原生权限申请实测仍待补验，详见 [独立 Windows 验收](CLEAN_WINDOWS_INSTALL_PLAN.md)。公开发布沿用 [公开分支审计](PUBLIC_RELEASE.md)。
+
+## 2026-11-18 Grok Build 来源修复
+
+- 根因是 Grok 1.0.88 的真实 MCP 握手名采用 `grok-shell-<服务器名>`，旧来源表只匹配固定名称。共享 `notice_source.py` 现在先保留全部精确匹配，再仅识别 `grok-shell-` 前缀为 `Grok · Grok Build`；其他未知来源继续降级。
+- 真实 Grok E2E 使用正式安装目录中的 onedir MCP、隔离 Grok 用户目录和隔离 SQLite。`GR-F05 Grok source check` 请求 `3443b276899342d1b260301cfd175862` 落库为 `Grok / Grok Build`、状态 `pending`；没有写入用户日常 Grok 配置。
+- 测试后已恢复隔离目录中的 Grok 配置备份，恢复文件 SHA-256 与测试前备份一致。`pending` 只表示已排队，不能作为桌面可见、用户已点击或已批准的发布证据。
+- 冻结候选与本机正式安装的 MCP EXE 大小和 SHA-256 一致：7,418,801 字节、`CCA1C807E71923C8F05CEDD3F33A747CCFF8E4C0F08EBF5E2F49473EE15703CE`。正式 onedir `_internal\` 已同步，活动旧连接未强制终止。
+- 发布说明必须要求 Grok 用户新建任务或重连 `nijika-pet`。共享来源修复不改变 MCP 工具 schema、队列协议、模型 API、MAGPIE 配置或其他客户端入口。
+- 最终回归：项目 Python 200 项（199 通过、1 项可选 PyYAML 跳过；系统 Python 补齐该组 8/8）、JavaScript 20/20、定向 38 项、Python 语法和 `git diff --check` 通过；正式安装版冻结 MCP 的 20 种来源、显式编辑器元数据和 4 个并发客户端冒烟通过。
+
 ## 2026-11-05 公开开源审计与整改
 
 - 只读审计报告：`diagnostics/public-open-source-audit-20261105/report.json`。当前源码、标准暂存区和 v0.1.10 源码包均未发现 SQLite 数据库、日志、私钥、令牌或用户 Agent 配置；Python 196 项通过、1 项可选 PyYAML 跳过，JavaScript 20 项通过。

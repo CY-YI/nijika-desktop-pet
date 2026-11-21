@@ -23,27 +23,30 @@ from setup_config import (
     remove_legacy_dsh_nijika_entry,
     repair_orphan_dsh_marker,
 )
-from agent_discovery import CLIENTS, CANONICAL_NAMES, JSON_CLIENTS, client_home, json_paths, bounded_bytes, parse_json, magpie_state, scan
+from agent_discovery import CLIENTS, CANONICAL_NAMES, JSON_CLIENTS, client_home, json_paths, bounded_bytes, parse_json, magpie_state, magpie_states, scan
 from vscode_agents import instructions as vscode_instructions, route_for
 
 CANONICAL_AGENT_NAMES = CANONICAL_NAMES
+UNIFIED_SKILL = "skills/nijika-agent-dialog/SKILL.md"
+MAGPIE_SKILL = "skills/nijika-magpie-setup/SKILL.md"
+MAGPIE_TRIGGER = "每个有效的用户可见轮次，在最终回复前加载 nijika-agent-dialog 并执行提醒检查。"
 CLIENT_CAPABILITIES = {
-    "codex": {"transport": "stdio MCP + 本机技能", "approval": "可选原生钩子，需本人信任",
+    "codex": {"transport": "通过 MAGPIE 分发 MCP 与统一 Skill", "approval": "可选原生钩子，需本人信任",
               "completion": "MCP 主动调用；可选 Stop 兜底", "reload": "重载连接或新建任务；钩子另行审阅",
               "note": "不改原生审批权限；桌宠点击不能批准命令。"},
-    "work": {"transport": "本机插件 + stdio MCP", "approval": "未接原生权限事件",
+    "work": {"transport": "在 MAGPIE 核对支持；现有本机插件使用统一 Skill 正文", "approval": "未接原生权限事件",
              "completion": "依靠 Agent 主动调用 MCP", "reload": "安装并启用插件后，新建本机 Work 任务",
              "note": "当前启动器需要 Codex CLI 与 python.exe；不适用于云端 Work。"},
-    "dsh": {"transport": "desktop/web 配置 + stdio MCP", "approval": "未接原生权限事件",
+    "dsh": {"transport": "通过 MAGPIE 分发 MCP 与统一 Skill", "approval": "未接原生权限事件",
             "completion": "MCP 主动调用 + 实时会话事件转接", "reload": "重启 DSH 并新建会话后验收事件",
             "note": "需检查两个 profile；晚到回复不会自动唤醒已结束的任务。"},
-    "custom": {"transport": "通用 stdio MCP 配置导出", "approval": "取决于宿主专属集成",
+    "custom": {"transport": "通过 MAGPIE 核对和分发", "approval": "取决于宿主专属集成",
                "completion": "依靠 Agent 主动调用 MCP", "reload": "由接收方 AI 核实客户端和配置作用域",
-               "note": "Claude Code 可参考接入手册；不能向普通网页聊天安装本机服务。"},
+               "note": "未出现在 MAGPIE 的目标需要单独核对；普通网页聊天不能运行本机服务。"},
 }
 for _client in JSON_CLIENTS:
     CLIENT_CAPABILITIES[_client] = {
-        "transport": "用户级 JSON + 持久提醒规则", "approval": "本向导不安装原生权限钩子",
+        "transport": "通过 MAGPIE 分发 MCP 与统一 Skill", "approval": "本向导不安装原生权限钩子",
         "completion": "依靠 Agent 主动调用 MCP", "reload": "重载客户端或新建任务后实际调用",
         "note": "项目配置可能覆盖用户配置；找到文件不等于客户端已加载。"}
 for _client, _capability in CLIENT_CAPABILITIES.items():
@@ -60,7 +63,18 @@ INSTALL_RULES = """虹夏桌面提醒规则：
 6. 在每轮最终回复前主动执行第1–2条检查，不能故意依赖 Codex Stop 兜底；兜底只会生成截断摘要。正常配置已提供 Agent/软件来源，默认省略可选 agent_name/software；DSH、WorkBuddy 等多模型宿主尤其不能把 Codex/宿主产品名当模型名。
 7. 以客户端实际暴露的工具名称为准（可能带 nijika_pet/nijika_work_pet 前缀），四个功能是 show_completion、request_decision、wait_for_reply、get_reply。气泡点击不代替客户端命令授权，不授予或绕过权限；注册 MCP 不等于已接通原生审批/完成事件钩子。
 8. 所有客户端共用通知核心和生命周期协议；单次 MCP 调用、读取 skill 或配置写入均不能证明每轮自动补发。必须分别报告主动调用验证与真实结束事件验证；不得让模型伪造 session_id/turn_id 或执行模拟事件冒充宿主验收。
+9. 需要我补充开放式回答且客户端可见 request_text_reply 时，用 task 和 question 发出文字回复气泡，用原 request_id 等待 reply_text。它计为本轮提醒，沿用前面的超时与续读规则。旧版客户端可在聊天中提问。
 """
+
+MAGPIE_SETUP = """【先核对 MAGPIE 与目标客户端】
+执行配置的 AI 可以和接收配置的客户端不同。目标以上述客户端、软件及用户指定的作用域为准；通用档案无法唯一识别时，先确认目标。
+先检查 MAGPIE Library 的现有分发和目标实际配置。已有虹夏配置时沿用原管理方式；归属不明、同一目标重复接入或路径冲突时先报告，未经授权不迁移。
+如果用户要求通过 MAGPIE，或新目标可由本机 MAGPIE 分发 stdio MCP，优先用已安装版本提供的 Library 界面或有据可查的管理命令。
+复用 Library 中唯一的 nijika-pet，只新增目标客户端的分发；核对其使用上述本机 onedir 程序和同级 _internal。确实缺少服务时才按所列命令创建一份本机 stdio 服务，使用 NIJIKA_AGENT_NAME=auto，不把单个目标的 NIJIKA_HOST_NAME 或 NIJIKA_PROFILE_ID 写入共享服务。保留其他客户端的分发和已有共享来源设置。
+在 Library 的 Skills 中将上方列出的统一提醒技能 nijika-agent-dialog 分发给目标。若目标需要持久触发，在 Instructions 中加入“每个有效的用户可见轮次，在最终回复前加载 nijika-agent-dialog 并执行提醒检查”。MAGPIE 无法写入的宿主使用它支持的入口，提醒正文沿用统一技能。已有有效规则时先核对，不叠加；配置提示词和配置 Skill 只交给负责接入的 AI。
+使用 MAGPIE 后跳过下方直连配置和规则写入，核对分发后只执行重载与验证。用目标客户端实际发现的工具核对气泡来源；共享服务无法自动区分宿主时，若工具支持则传入实际 agent_name/software。若无法操作 MAGPIE，只说明需在 Library 完成的动作；只有确认目标未由 MAGPIE 管理且用户允许直连时，才执行直连步骤。
+"""
+
 
 GUIDES = {
     "codex": {
@@ -119,6 +133,21 @@ def client_guide(client: str) -> dict:
     return GUIDES.get(client, GUIDES["custom"])
 
 
+def magpie_client(client: str, agent_identity: str, software: str) -> str:
+    if client != "custom":
+        return client
+    host = software.casefold()
+    if host in {"vs code", "vs code insiders"}:
+        route = route_for(agent_identity)
+        return route[1] if route else "vscode"
+    return {
+        "workbuddy": "workbuddy", "workbuddy ai": "workbuddy-ai", "obsidian": "obsidian",
+        "claude desktop": "claude-desktop", "grok build": "grok", "cursor": "cursor",
+        "antigravity": "antigravity", "codebuddy": "codebuddy", "openmausbot": "openmausbot",
+        "openclaw": "openclaw", "ds bot": "dsbot", "dsbot": "dsbot",
+    }.get(host, "custom")
+
+
 def client_files(client: str, mcp: Path, directory: Path, bundle: Path,
                  data_root: Path, application_root: Path | None = None) -> list[dict]:
     """List the concrete files each client needs, with absolute paths.
@@ -140,6 +169,10 @@ def client_files(client: str, mcp: Path, directory: Path, bundle: Path,
          "kind": "能力清单", "required": True},
         {"label": "可供客户端安装的交互技能", "path": str(bundle / "SKILL.md"),
          "kind": "技能副本", "required": False},
+        {"label": "统一提醒技能（在 MAGPIE 技能库中分发）",
+         "path": str(root / "skills/nijika-agent-dialog/SKILL.md"), "kind": "技能", "required": False},
+        {"label": "MAGPIE 接入技能（供配置执行者使用）", "path": str(root / "skills/nijika-magpie-setup/SKILL.md"),
+         "kind": "技能", "required": False},
         {"label": "接入手册（含手动接入说明）", "path": str(root / "AGENT_SETUP.md"),
          "kind": "文档", "required": False},
     ]
@@ -290,6 +323,19 @@ class AgentSetup:
                 "scope": "当前用户目录" if self.use_environment else "隔离测试目录（不是当前电脑的完整配置）",
                 "note": "仅解析已知接入配置并返回安全摘要，不收集密钥、聊天内容或登录状态。"}
 
+    def current_profiles(self) -> list[dict]:
+        agents = self.store.agents()
+        clients = [magpie_client(agent["client"], agent.get("agent_identity") or "", agent.get("software") or "")
+                   for agent in agents]
+        ownership = magpie_states(self.home, set(clients))
+        for agent, client in zip(agents, clients):
+            current = ownership[client]
+            if current["error"] or (agent.get("manager") == "magpie" and not current["managed"]):
+                agent["ownership_unconfirmed"] = True
+            elif current["managed"]:
+                agent.update(manager="magpie", status="managed")
+        return agents
+
     def batch_plan(self, selected: list[str]) -> dict:
         if (not isinstance(selected, list) or not 1 <= len(selected) <= len(CLIENTS) - 1 or
                 any(not isinstance(item, str) or item not in CLIENTS or item == "custom" for item in selected) or
@@ -368,6 +414,86 @@ class AgentSetup:
             server.update(type="local", tools=["*"])
         return result
 
+    def magpie_guide(self, agent: dict) -> dict:
+        """One public handoff. Never emit a client-specific MCP file or rule copy."""
+        client = agent["client"]
+        identity = self.export_agent(agent)["mcpServers"]["nijika-pet"]["env"]
+        software = identity.get("NIJIKA_HOST_NAME", CLIENTS[client])
+        source = resolve_source("auto", software, agent_name=identity["NIJIKA_AGENT_NAME"]).heading
+        target = magpie_client(client, identity["NIJIKA_AGENT_NAME"], software)
+        entries = (
+            ("虹夏 MCP 程序（MAGPIE 的 stdio 命令）", self.mcp, "程序"),
+            ("统一提醒技能 nijika-agent-dialog", self.root / UNIFIED_SKILL, "技能"),
+            ("MAGPIE 接入技能（供配置执行者使用）", self.root / MAGPIE_SKILL, "技能"),
+            ("本机接入手册", self.root / "AGENT_SETUP.md", "文档"),
+        )
+        files = [{"label": label, "path": str(path), "kind": kind, "exists": path.is_file(),
+                  "required": kind == "程序" or path == self.root / UNIFIED_SKILL}
+                 for label, path, kind in entries]
+        paths = "\n".join(f"{item['label']}：{item['path']}" for item in files)
+        precautions = (
+            "现有直连、稳定 bundle 或插件还在用时，先备份并确认作用域。"
+            "逐个迁移，只处理已确认属于虹夏的旧入口，切换后核对只剩一份连接和一份生效规则。"
+            "发现来源不明、同名冲突或目标不支持时保留原入口并报告，禁止直接新增客户端配置。"
+            "保留原生权限 Hook、结束事件桥接和其他服务；桌面点击不会批准宿主权限。"
+        )
+        if client == "work":
+            precautions += (
+                "\nChatGPT Work 与 Codex 是两个使用场景。MAGPIE 只有 Codex 目标时，"
+                "不能把它算作 Work 接入；保留已有 Work 本机插件，避免添加第二条 Work 连接。"
+            )
+        if software.casefold() in {"ds bot", "dsbot"}:
+            precautions += (
+                "\nDS Bot 迁移前核对现有稳定 bundle；先确认 MAGPIE 的 MCP 页面可分发给 DS Bot，"
+                "仅有 Skills 分发不代表 MCP 已接。"
+            )
+        verify = (
+            f"预期气泡来源：{source}。在目标的新任务里发现 show_completion、request_decision、"
+            "wait_for_reply、get_reply；用实际工具名。只调用一次 show_completion 验证结果和来源；"
+            "能核实实际身份时才使用来源参数。消息入队、气泡显示和回执分别记录。"
+        )
+        managed = agent.get("manager") == "magpie" and not agent.get("ownership_unconfirmed")
+        if managed:
+            title = "核对已分发的 MAGPIE 连接"
+            steps = ["在 MAGPIE 核对 MCP、Skills 和适用的每轮触发指令。",
+                     "重载目标客户端，把验证提示词发到它的新任务。",
+                     "核对气泡来源和回执；共享服务没有档案编号时，面板不会把它记为该档案的宿主调用。"]
+            prompt = ("当前发现 MAGPIE 分发。本次不授权修改客户端配置。"
+                      "核对已有工具和规则，缺少时报告要同步的项目。\n" + verify)
+        else:
+            title = "通过 MAGPIE 接入 " + software
+            steps = ["复制提示词，发给能操作本机 MAGPIE 的 AI。",
+                     "在 MAGPIE 的 MCP、Skills、Instructions 分发给同一个目标。",
+                     "让目标重载，实测气泡；分发后返回本页登记。"]
+            prompt = (
+                f"本次请通过本机 MAGPIE 接入虹夏。目标：{source}；"
+                + (f"在 Library 中核对目标 {target}。" if target != "custom" else "在 Library 中核对实际宿主，无法唯一识别时先确认。")
+                + f"\n{paths}\n"
+                + "① 复用 Library → MCP 中唯一的 nijika-pet（stdio）；仅缺少时创建。"
+                "使用上方程序及同级 _internal，设 NIJIKA_AGENT_NAME=auto。"
+                "共享条目不填写固定 NIJIKA_HOST_NAME 或 NIJIKA_PROFILE_ID。不需要 API 密钥。\n"
+                "② 在 Skills 中分发上方的统一提醒技能 nijika-agent-dialog。"
+                f"需要每轮触发时在 Instructions 中加入：{MAGPIE_TRIGGER} 避免叠加旧规则。\n"
+                "③ " + precautions + "\n④ " + verify
+            )
+        if software.casefold() in {"vs code", "vs code insiders"}:
+            prompt += "\n" + vscode_instructions(identity["NIJIKA_AGENT_NAME"], software)
+        return {"guide": {"title": title, "steps": steps, "prompt": prompt,
+                          "tip": "MAGPIE 分发、工具调用和实际气泡须分别核对。"},
+                "needed_files": files, "source_heading": source,
+                "notification_capability": notification_capability(client)}
+
+    def prepare_magpie_guide(self, agent: dict) -> dict:
+        client = magpie_client(agent["client"], agent.get("agent_identity") or "", agent.get("software") or "")
+        current = magpie_state(self.home, client)
+        if current["error"]:
+            raise ValueError("无法确认 MAGPIE 配置归属，请先在 Library 核对该目标。")
+        if current["managed"]:
+            agent = {**agent, "manager": "magpie", "status": "managed"}
+        elif agent.get("manager") == "magpie":
+            agent = {**agent, "manager": "migration", "status": "needs_review"}
+        return {**agent, **self.magpie_guide(agent)}
+
     def bundle_directory(self, agent_id: str) -> Path:
         if not isinstance(agent_id, str) or not IDENTIFIER.fullmatch(agent_id):
             raise ValueError("Agent 档案编号无效。")
@@ -390,6 +516,18 @@ class AgentSetup:
                     path = directory / relative
                     files.append({"label": label, "path": str(path), "kind": "配置参考",
                                   "required": False, "exists": path.is_file()})
+        guide_software = str(agent.get("software") or "")
+        is_dsbot = client == "custom" and guide_software.casefold() in {"ds bot", "dsbot"}
+        if is_dsbot:
+            for label, path, kind in (
+                ("DS Bot profile", directory / "profiles/ds-bot/package.json", "客户端配置"),
+                ("DS Bot 虹夏稳定 bundle", directory / "integrations/nijika-dsbot-mcp/cordis.patch.yml", "客户端配置"),
+                ("DS Bot 主动提醒技能", directory / "skills/nijika-dsbot-dialog/SKILL.md", "技能"),
+                ("DS Bot 结束提醒规则", directory / "AGENTS.md", "规则"),
+                ("DS Bot 专用安装器", self.root / "integrations/dsbot/install.ps1", "安装脚本"),
+            ):
+                files.append({"label": label, "path": str(path), "kind": kind,
+                              "required": True, "exists": path.is_file()})
         guide = {**client_guide(client), "steps": list(client_guide(client)["steps"])}
         reliability = notification_capability(client)
         config_text = json.dumps(config, ensure_ascii=False, indent=2)
@@ -432,8 +570,24 @@ class AgentSetup:
             adapters[client] = ("目标为 " + CLIENTS[client] +
                 "。按上述用户级 JSON 路径合并 mcpServers；将主动规则合并到列出的规则文件。"
                 "保留其他服务与客户端设置，核对项目作用域是否覆盖用户级配置。")
-        guide_software = str(agent.get("software") or "")
         guide_identity = str(agent.get("agent_identity") or "Agent")
+        if is_dsbot:
+            installer = str(self.root / "integrations/dsbot/install.ps1").replace("'", "''")
+            dsbot_root = str(directory).replace("'", "''")
+            mcp_path = str(self.mcp).replace("'", "''")
+            capabilities["custom"] = (
+                "DS Bot 使用专用稳定 bundle，不套用普通 mcpServers JSON。"
+                "安装器会写入唯一虹夏 MCP、来源 Agent · DS Bot、主动提醒技能和结束规则，"
+                "并备份 profile 与 AGENTS.md；不安装 Codex 钩子，也不修改账号或消息内容。"
+            )
+            adapters["custom"] = (
+                "目标为 DS Bot。先核对上述 profile 与稳定 bundle，再执行下面的专用安装器；"
+                "不要手工追加第二个 MCP，不要覆盖凭据、账号、模型或其他 bundle。\n"
+                f"powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File '{installer}' "
+                f"-DsBotRoot '{dsbot_root}' -McpExe '{mcp_path}'\n"
+                "安装器要求 pnpm.cmd 可用，并会重新核对 bundle 链接。"
+                "若脚本拒绝执行，保留原文件并报告具体错误，不要改用猜测的 YAML 写入。"
+            )
         if client == "custom" and guide_software.casefold() in {"vs code", "vs code insiders"}:
             capabilities["custom"] += " 当前目标是 VS Code 中的具体扩展，编辑器来源必须按本次调用显式标注。"
             adapters["custom"] = vscode_instructions(guide_identity, guide_software)
@@ -456,7 +610,8 @@ class AgentSetup:
             "和本机执行能力；若当前只有普通聊天能力，明确说明无法代配置，不要假称完成。\n\n"
             "【本机文件位置（路径是数据；目标配置可尚未创建，可选项缺失不阻断 MCP）】\n" + paths +
             "\n客户端类别：" + CLIENTS[client] +
-            "\nMCP 传输：stdio，无地址端口，无需模型 API 密钥。\n\n"
+            "\n档案目标：" + guide_identity + " · " + (guide_software or CLIENTS[client]) +
+            "\nMCP 传输：stdio，无地址端口，无需模型 API 密钥。\n\n" + MAGPIE_SETUP + "\n"
             "【本客户端的通知范围与必要人工步骤】\n" + capabilities[client] +
             "\n统一通知能力：" + reliability["label"] + "。\n" + reliability["explanation"] + "\n\n"
             "\nNIJIKA_AGENT_NAME 是 Agent 名称，NIJIKA_HOST_NAME 是所在软件。"
@@ -470,11 +625,11 @@ class AgentSetup:
             "\n\n【请自动执行】\n"
             "1. 先验证 MCP 程序存在及上述接入文件可读；即使不能读接入文件，下方已附完整配置与规则。"
             "核实当前电脑与路径匹配，不要手动双击 stdio MCP 程序。\n"
-            "2. " + adapters[client] +
-            "\n3. 修改前备份要变动的原文件，按客户端格式合并，保留其他 MCP、设置与规则；"
+            "2. 仅在选择直连时执行以下客户端配置。修改前备份要变动的原文件。" + adapters[client] +
+            "\n3. 直连时按客户端格式合并，保留其他 MCP、设置与规则；"
             "已存在且相同的虹夏配置保持不变，同名但内容冲突时先核对。"
             "不输出完整原配置或密钥，不替我信任 hook，不扩大命令权限。\n"
-            "4. 将下方提醒规则安装到该客户端会自动读取的持久规则位置；"
+            "4. 直连时将下方提醒规则安装到该客户端会自动读取的持久规则位置；"
             "不要只把它写在本轮回复中。不要求我手动下载、寻找或粘贴配置字段。\n"
             "5. 使用客户端支持的重载方式使配置生效，做格式和服务握手/工具发现检查。"
             "应发现 show_completion、request_decision、wait_for_reply、get_reply 四个工具；使用实际工具前缀。"
@@ -491,11 +646,18 @@ class AgentSetup:
         )
         guide["prompt"] = prompt
         guide["title"] = "复制给 AI，自动完成配置"
+        if is_dsbot:
+            guide["title"] = "用 DS Bot 专用安装器完成接入"
+            guide["steps"] = [
+                "复制下方提示词，发给这台电脑上能读写文件并执行 PowerShell 的 Agent。",
+                "AI 先核对已有管理方式；DS Bot 直连时使用专用安装器。",
+                "重启 DS Bot 后新建任务，确认气泡来源为 Agent · DS Bot。",
+            ]
         if client != "custom":
             guide["steps"] = [
                 "软件已准备接入文件，准确保存位置见下方清单。",
                 "复制下方自动配置提示词，发给这台电脑上能读写文件的 AI 客户端。",
-                "AI 会按真实路径核对、补齐和验证；需要重载或本人确认时会明确告知。",
+                "AI 会核对 MAGPIE 分发与直连状态，再配置和验证；需要重载或本人确认时会明确告知。",
             ]
         if agent.get("manager") == "magpie":
             guide.update(title="由 MAGPIE 管理，核对现有连接",
@@ -514,6 +676,7 @@ class AgentSetup:
                 guide["prompt"] += "\n" + vscode_instructions(guide_identity, guide_software)
                 guide["prompt"] += "\n本次只验证来源参数；不安装或修改持久规则。"
         if agent.get("manager") == "magpie":
+            files = [item for item in files if item["path"] != str(bundle / "nijika-mcp.json")]
             reliability["explanation"] = (
                 "当前由 MAGPIE 管理，本向导没有安装或更新结束事件模块；"
                 "请由配置所有者核对独立事件接入。只有真实新轮次验证后才能确认启用。"
@@ -522,7 +685,23 @@ class AgentSetup:
                                 reliability["explanation"] +
                                 "本次只验证主动调用，不伪造事件标识或宣称自动补发通过。")
         guide["tip"] += " " + reliability["explanation"]
+        verification = None
+        if agent.get("status") == "configured" and agent.get("manager") != "magpie":
+            expected = config["mcpServers"]["nijika-pet"]["env"]
+            verification = {
+                "title": "在目标客户端验证连接",
+                "steps": ["按客户端要求重载 MCP 服务或新开任务。",
+                          "把下方验证提示词发到目标的新任务中。",
+                          "核对桌面气泡的来源和正文，再到伙伴卡片查看是否记录了宿主调用。"],
+                "prompt": ("本次只验证虹夏连接，不修改配置。请核对当前客户端是否已发现虹夏的 show_completion。"
+                           "若可用，只调用一次，task 写“虹夏接入验证”，summary 写“目标客户端已发现虹夏工具”。"
+                           "预期气泡来源为 " + expected["NIJIKA_AGENT_NAME"] + " · " +
+                           expected.get("NIJIKA_HOST_NAME", "未识别软件") + "。若工具不可见，请报告当前状态。"
+                           "消息排队不能证明桌面已显示。原生权限和结束补发须在实际事件中另外验证。"),
+                "tip": "伙伴卡片的本机测试检查桌面显示和点击，宿主调用则由目标客户端发出。",
+            }
         return {"guide": guide, "needed_files": files, "export": config,
+                "verification_guide": verification,
                 "notification_capability": reliability,
                 "bundle_directory": str(bundle),
                 "bundle_ready": all((bundle / name).is_file() for name in
@@ -551,8 +730,16 @@ class AgentSetup:
         skill_path = {"dsh": "integrations/dsh/nijika-dsh-dialog/SKILL.md",
                       "work": "plugins/nijika-work-local/skills/nijika-work-dialog/SKILL.md"}.get(
                           agent["client"], "skills/nijika-desktop-dialog/SKILL.md")
+        if (agent["client"] == "custom" and
+                str(agent.get("software") or "").casefold() in {"ds bot", "dsbot"}):
+            skill_path = "integrations/dsbot/nijika-mcp/skill/SKILL.md"
         skill = (self.root / skill_path).read_text(encoding="utf-8-sig")
         contents["SKILL.md"] = skill
+        if (agent["client"] == "custom" and
+                str(agent.get("software") or "").casefold() in {"ds bot", "dsbot"}):
+            contents["nijika-agent-instructions.txt"] = (
+                self.root / "integrations/dsbot/nijika-mcp/global-instructions.txt"
+            ).read_text(encoding="utf-8")
         for name, content in contents.items():
             destination = bundle / name
             if destination.is_file() and destination.read_text(encoding="utf-8") == content:
@@ -565,6 +752,18 @@ class AgentSetup:
                 temporary.unlink(missing_ok=True)
         return self.describe(agent)
 
+    def prepare_guide(self, agent: dict) -> dict:
+        """Look up current ownership before regenerating instructions for an old profile."""
+        client = magpie_client(agent["client"], agent.get("agent_identity") or "", agent.get("software") or "")
+        current = magpie_state(self.home, client)
+        if current["error"]:
+            raise ValueError("无法确认 MAGPIE 配置归属，请先在 Library 核对该目标。")
+        if current["managed"]:
+            agent = {**agent, "manager": "magpie", "status": "managed"}
+        elif agent.get("manager") == "magpie":
+            raise ValueError("本次未检测到该目标的 MAGPIE 分发。请先核对 Library，再重新扫描。")
+        return {**agent, **self.prepare_files(agent)}
+
     def _add_file(self, files: list, path: Path, content: str, purpose: str,
                   expected_digest: str | None = None) -> None:
         previous = path.read_bytes() if path.exists() else None
@@ -575,7 +774,7 @@ class AgentSetup:
             files.append({"path": path, "before": previous, "after": data, "purpose": purpose})
 
     def plan(self, client: str, name: str, location: str = "",
-             agent_identity: str | None = None, software: str = "") -> dict:
+             agent_identity: str | None = None, software: str = "", *, via_magpie: bool = False) -> dict:
         if client not in CLIENTS or not isinstance(name, str) or not 1 <= len(name.strip()) <= 30 or any(ord(c) < 32 for c in name):
             raise ValueError("请选择客户端，并填写 1–30 字的 Agent 名称。")
         validate_bundled_mcp(self.root)
@@ -600,21 +799,18 @@ class AgentSetup:
                          (client != "custom" or (item.get("software") == software and
                                                 item.get("agent_identity") == agent_identity))), None)
         agent_id = existing["id"] if existing else uuid.uuid4().hex
-        manager_client = client
-        if client == "custom":
-            manager_client = {"workbuddy": "workbuddy", "workbuddy ai": "workbuddy-ai",
-                "vs code": "vscode", "obsidian": "obsidian", "claude desktop": "claude-desktop"}.get(
-                    software.casefold(), "custom")
-            if software.casefold() in {"vs code", "vs code insiders"}:
-                route = route_for(agent_identity)
-                if route:
-                    manager_client = route[1]
+        manager_client = magpie_client(client, agent_identity, software)
         manager = magpie_state(self.home, manager_client)
         if manager["error"]:
             raise ValueError("MAGPIE 配置无法安全读取，管理归属不明确；没有写入。")
         managed = manager["managed"]
+        if via_magpie and not managed:
+            info = self.magpie_guide({"client": client, "source_name": source_name, "id": agent_id,
+                                     "agent_identity": agent_identity, "software": software})
+            return {**info, "handoff": True, "files": [], "external_action": False,
+                    "notes": ["预期气泡头部：" + source.heading, "分发由 MAGPIE 完成，此处仅生成指引。"]}
         dsh_profiles: dict[str, tuple[Path, bytes, str]] = {}
-        if client == "dsh":
+        if client == "dsh" and not (managed and via_magpie):
             for profile in ("desktop", "web"):
                 path = directory / "profiles" / profile / "cordis.patch.yml"
                 if not path.is_file():
@@ -772,6 +968,10 @@ class AgentSetup:
         self.plans[plan_id]["manager"] = "magpie" if managed else "nijika"
         self.plans[plan_id]["manager_digest"] = manager["digest"]
         self.plans[plan_id]["manager_client"] = manager_client
+        if via_magpie:
+            self.plans[plan_id]["magpie_only"] = True
+            return {"plan_id": plan_id, "manager": "magpie", "files": [], "notes": notes,
+                    **self.magpie_guide(self.plans[plan_id])}
         return {"plan_id": plan_id, "client": client, "name": name, "notes": notes,
                 "manager": "magpie" if managed else "nijika",
                 "files": [{"path": str(item["path"]), "purpose": item["purpose"],
@@ -780,11 +980,14 @@ class AgentSetup:
                 "instructions": INSTALL_RULES,
                 **self.describe(self.plans[plan_id])}
 
-    def apply(self, plan_id: str) -> dict:
+    def apply(self, plan_id: str, *, magpie_only: bool = False) -> dict:
         with self.lock:
             plan = self.plans.get(plan_id)
             if not plan or time.monotonic() - plan["created"] > 600:
                 raise ValueError("配置预览已过期，请重新检测。")
+            if magpie_only and (not plan.get("magpie_only") or plan["manager"] != "magpie" or
+                                plan["files"] or plan["commands"]):
+                raise ValueError("设置中心只登记通过 MAGPIE 分发的 Agent。")
             if any(item["id"] != plan["id"] and item["client"] == plan["client"] and
                    item["location"] == plan["location"] and
                    (plan["client"] != "custom" or
@@ -838,7 +1041,13 @@ class AgentSetup:
                     "status": "managed" if plan["manager"] == "magpie" else "exported" if plan["client"] == "custom" else "configured",
                     "manager": plan["manager"],
                     "test_request_id": None, "updated_at": int(time.time()), "backups": backups}
-            info = self.prepare_files(item)
+            if plan.get("magpie_only"):
+                prior = self.store.agent(item["id"])
+                if prior:
+                    item["test_request_id"] = prior.get("test_request_id")
+                info = self.magpie_guide(item)
+            else:
+                info = self.prepare_files(item)
             self.store.save_agent(item)
             self.plans.pop(plan_id, None)
             return {"agent": {**item, **info},

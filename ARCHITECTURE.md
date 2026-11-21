@@ -1,9 +1,22 @@
 # 架构
 
+## 单进程桌面应用与文字回复（2026-11-21）
+
+- `desktop_app.py` 以规范化的本地数据库路径区分应用实例。设置快捷方式用 Windows 命名事件唤醒现有实例。桌宠的 Win32 消息循环在独立线程运行，主线程按需启动设置中心的 WebView2，避免窗口切换阻塞气泡。
+- 设置中心继续使用现有的回环服务及鉴权。退出桌宠时关闭设置视图和服务。WebView2 自身的渲染进程以及供各 Agent 使用的 MCP 进程各自管理。
+- `notification_store.py` 用 `notice_text_replies` 关联原通知 ID，首次发送在同一 SQLite 事务中保存回复与状态。审批回执和文字回复复用队列，分别按请求类型处理。详见 [接口说明](INTERFACES.md)。
+
+## Grok 来源握手（2026-11-18）
+
+- Grok 1.0.88 的 MCP `initialize` 请求会以 `grok-shell-<配置服务名>` 作为 `clientInfo.name`，而不是稳定的 `grok` 或 `grok-build`。`notice_source._caller_defaults()` 先匹配全部精确来源，再仅对 `grok-shell-` 前缀映射为 Agent `Grok`、软件 `Grok Build`。
+- 该规则只解决已由真实协议观察确认的 Grok 动态名称；未知客户端仍显示 `Agent · 未识别软件`，不从任务正文、提示词或当前活动窗口猜测来源。显式 `agent_name/software` 与既有内置客户端的优先顺序不变。
+- 来源解析位于共享 MCP 服务端，因此同一配置分发到 Codex、DSH、DS Bot、Grok 或其他客户端时仍按连接隔离，不引入全局“最近来源”。`pending` 仍只表示 SQLite 排队，不是桌面显示回执或权限批准。
+- 真实客户端在 stdio 进程中缓存已加载代码；磁盘替换只影响新进程。Grok 用户须新建任务或重新连接 `nijika-pet`，无需重装其他客户端或重新授予权限。
+
 ## MCP onedir 运行时（2026-11-03）
 
 - 当前 MCP 入口固定为 `dist/虹夏MCP-v2/虹夏MCP-v2.exe`，其 `_internal/` 必须与 EXE 一同分发。设置中心、Work 启动包装器、自动接入和安装器均通过 `app_layout.bundled_mcp_path()` 或等价的同一路径读取；自动接入在规划前调用 `validate_bundled_mcp()` 同时检查 EXE 与运行时目录。批量扫描还会阻止 Codex 与 Work 同时提交，避免同一本机 Codex 环境建立两套 MCP。
-- MCP 改为 onedir 后直接从安装目录加载运行时，不再由 onefile bootloader 在每次启动时展开到 `%TEMP%\_MEI*`。桌宠和审批提醒仍各自使用 onefile，不影响现有快捷方式或 Hook 命令。
+- MCP 改为 onedir 后直接从安装目录加载运行时。2026-11-18 候选构建将桌宠和审批提醒也改为 onedir，分别从 `dist/_nijika_pet_runtime` 与 `dist/_nijika_hook_runtime` 加载，消除了这两个入口的 PyInstaller 临时解包步骤。两个 EXE 仍在 `dist` 根目录，现有快捷方式与 Hook 命令可继续指向原位置；目标宿主的信任状态须在实际升级后验证。
 - `tools/cleanup_mcp_temp.py` 是迁移维护工具，不在正常启动路径运行。默认 dry-run；apply 只处理 `%TEMP%` 直属 `_MEI*`，同时核验旧 MCP 的通用运行时文件和 `httpx2-2.13.1`、`opentelemetry_api-1.45.1`、`pydantic_core` 目录签名、解析路径、重解析点、年龄和 Windows Toolhelp 活动模块引用。
 - 旧安装升级时，Inno Setup 只删除精确的 `{app}\dist\虹夏MCP-v2.exe`，安装 onedir 目录；不会删除同目录其他文件。正在运行的旧 MCP 进程继续使用其已加载映像，客户端重启或 MCP 重连后切换到新路径。
 
@@ -45,6 +58,10 @@ DSH 模块仅接受 `firstLiveSeq` 后的根会话，真实 `source.kind=user` �
 - 具体扩展入口复用自定义向导，预填扩展名、编辑器名和已知后端路径。已核实后端可备份合并带条件的持久来源规则；共享 MCP 的环境变量/权限不改。MAGPIE 管理的后端仍只登记并验证，不写规则。
 - `host_process.py` 在 MCP 启动时读取一次 Windows 进程名/父进程快照，沿最多 16 层识别 Code.exe；遇 shell 即停止，避免把集成终端 CLI 当作扩展。只对独立 Codex/Claude Code 来源提供编辑器提示，DSH 共用后端不采用此推断。
 - 本次调用的 software 参数优先于进程提示；共享后端由条件规则传 agent_name/software。显示标签是呈现元数据，不是身份鉴权。VS Code 专用头部顺序改为软件在前，其他宿主顺序不变。
+
+## MAGPIE 单一接入（2026-11-21）
+
+设置中心只读取磁盘上的客户端归属摘要，生成统一 Library 配置或验证提示词。仅对检测到分发的客户端写入虹夏自己的档案；不复制每客户端提醒正文，也不写入客户端或 Library。原生事件与通知 MCP 分开。打包时 Work 插件保留已注册名称，正文由同一份 `nijika-agent-dialog` 生成。
 
 ## 自动发现与接入（2026-10-29，候选实现）
 

@@ -101,6 +101,13 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             ("DSH", "workbuddy", "Agent", "WorkBuddy"),
             ("DSH", "workbuddy-ai", "Agent", "WorkBuddy AI"),
             ("DSH", "claude-desktop", "Claude", "Claude Desktop"),
+            ("auto", "grok-cli", "Grok", "Grok Build"),
+            ("auto", "grok-shell-nijika-pet", "Grok", "Grok Build"),
+            ("auto", "cursor-agent", "Agent", "Cursor"),
+            ("auto", "antigravity", "Agent", "Antigravity"),
+            ("auto", "codebuddy", "Agent", "CodeBuddy"),
+            ("auto", "openmausbot", "Agent", "OpenMausBot"),
+            ("auto", "openclaw", "Agent", "OpenClaw"),
             ("auto", "vscode", "Agent", "VS Code"),
             ("auto", "obsidian", "Agent", "Obsidian"),
             ("auto", "dsh-mcp-client", "Agent", "DSH"),
@@ -207,12 +214,42 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(reply.structured_content["choice"], "增强动作")
                     self.assertIn("弹跳", reply.structured_content["choice_description"])
                     self.assertEqual(reply.structured_content["status"], "answered")
+                    self.assertNotIn("reply_text", reply.structured_content)
                     completed = await client.call_tool(
                         "show_completion", {"task": "任务完成", "summary": "请查看成果"}
                     )
                     finished_id = completed.structured_content["request_id"]
                     self.assertEqual(mcp_server.store.get(finished_id).choices,
                                      ("知道了",))
+                    self.assertTrue(mcp_server.store.get(finished_id).accepts_text)
+                    self.assertTrue(mcp_server.store.answer_text(finished_id, "请再确认安装包。"))
+                    completed_reply = await client.call_tool("get_reply", {"request_id": finished_id})
+                    self.assertEqual(completed_reply.structured_content["reply_text"], "请再确认安装包。")
+                    self.assertIsNone(completed_reply.structured_content["choice"])
+                    self.assertIsNone(mcp_server.store.answer(finished_id, 0).selected_index)
+            finally:
+                mcp_server.store = previous
+
+    async def test_text_reply_survives_timeout_and_returns_to_same_id(self):
+        with tempfile.TemporaryDirectory() as directory:
+            previous = mcp_server.store
+            mcp_server.store = NotificationStore(Path(directory) / "notifications.sqlite3")
+            try:
+                async with Client(mcp_server.mcp) as client:
+                    created = await client.call_tool("request_text_reply", {
+                        "task": "补充需求", "question": "请描述你需要的调整。",
+                        "agent_name": "ChatGPT", "software": "Codex",
+                    })
+                    request_id = created.structured_content["request_id"]
+                    waiting = await client.call_tool("wait_for_reply", {"request_id": request_id, "timeout_seconds": 1})
+                    self.assertEqual(waiting.structured_content["status"], "pending")
+                    self.assertTrue(mcp_server.store.answer_text(request_id, "先调整首页。\n保留现有导航。"))
+                async with Client(mcp_server.mcp) as resumed:
+                    for tool in ("get_reply", "wait_for_reply"):
+                        reply = (await resumed.call_tool(tool, {"request_id": request_id})).structured_content
+                        self.assertEqual(reply["request_id"], request_id)
+                        self.assertEqual(reply["status"], "answered")
+                        self.assertEqual(reply["reply_text"], "先调整首页。\n保留现有导航。")
             finally:
                 mcp_server.store = previous
 

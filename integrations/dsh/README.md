@@ -1,8 +1,10 @@
 # DSH 本机接入
 
+普通提醒通过 [MAGPIE Library](../../AGENT_SETUP.md) 分发共享 MCP 与统一提醒 Skill。若已有旧直连，先核对归属并迁移，避免两条连接同时生效。
+
 ## 实时结束事件（2026-10-31）
 
-完整新版包的安装脚本及设置中心自动计划会在每个 profile 添加独立 `NIJIKA-DSH-LIFECYCLE` 块，通过 `lifecycle-bridge.mjs` 把宿主实时事件交给 `虹夏审批提醒.exe --lifecycle`。Codex 与 DSH 共用安全摘要和去重，无需靠模型记住调用来触发该补发入口。核对宿主接口版本为 `0.2.1-rc.2`（本机桌面）和 `0.2.1-rc.3`（CLI），其他版本需独立验收。
+可选的 `-LifecycleOnly` 模式会在每个 profile 添加独立 `NIJIKA-DSH-LIFECYCLE` 块，通过 `lifecycle-bridge.mjs` 把宿主实时事件交给 `虹夏审批提醒.exe --lifecycle`。Codex 与 DSH 共用安全摘要和去重，无需靠模型记住调用来触发该补发入口。核对宿主接口版本为 `0.2.1-rc.2`（本机桌面）和 `0.2.1-rc.3`（CLI），其他版本需独立验收。
 
 转接只处理本进程实时根会话的真实用户轮次正常结束，不扫描历史，不处理注入上下文或子任务。同轮收到成功的虹夏通知工具回执后不重复。DSH 重启、新会话后再验证；可用模块不等于用户当前配置已启用。MAGPIE 管理项由其维护者审阅，虹夏向导不擅自安装第二套服务或模块。
 
@@ -16,19 +18,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\integrations\dsh\install.p
 
 维护者测试：`node --test tests/dsh_lifecycle.test.mjs`（可通过 `NIJIKA_DSH_TEST_MODULES` 指向 DSH 内部模块目录验证真实 SessionStore）；`node tools/smoke_dsh_lifecycle.mjs <DSH内部模块目录> <审批程序.exe> <Python.exe>` 检查真实事件组件到冻结程序链路，仍不代替用户运行中的模型会话和气泡观察。
 
-本目录把现有完整目录 `dist/虹夏MCP-v2/` 中的 `虹夏MCP-v2.exe` 注册为 DeepSeek Harness（DSH）的 stdio MCP 工具，并安装 `nijika-dsh-dialog` 技能。该 EXE 必须与同级 `_internal/` 一起保留。DSH Agent 需要用户做短决策或审阅成果时，可调用 `mcp__nijika_pet__request_decision`；长成果用 `mcp__nijika_pet__show_completion` 提醒。选择由桌宠气泡回传给发起请求的 DSH 会话。桌宠与 DSH 必须在同一台 Windows 用户会话中运行；无需新服务或网络端口。
+## 验证与来源
 
 DSH 默认来源固定为 `Agent · DSH`，因为同一宿主可以切换多家模型。标准连接应省略 MCP 的单次 `agent_name` 和 `software` 参数；服务端也会把误传的 `Codex · DSH`、`DSH · DSH`、`WorkBuddy · DSH` 纠正为 `Agent · DSH`。明确知道真实模型时才使用具体名称，例如 `DeepSeek · DSH`。
 
-在本机完成构建后运行：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\integrations\dsh\install.ps1
-```
-
-默认写入 `%USERPROFILE%\.dsh\profiles\desktop\cordis.patch.yml` 和 `web\cordis.patch.yml`，同时复制技能到 `%USERPROFILE%\.dsh\skills\nijika-dsh-dialog\SKILL.md`，并在 `%USERPROFILE%\.dsh\AGENTS.md` 中加入触发规则。已有配置保留；修改过的配置会先生成 `.bak-nijika-时间戳` 备份。重复运行不会复制同一配置块。若只需一个配置，可用 `-Profiles desktop` 或 `-Profiles web`。项目路径改变或 MCP EXE 重建后，请重跑安装脚本。
-
-若旧版自动配置留下孤立的 `# BEGIN NIJIKA-DSH-MCP` 而没有结束标记，新脚本只会在该文件没有实际 `mcp-nijika-pet` 条目时移除这一行；同文件其他服务保持不变。由 MAGPIE 管理时应优先在 MAGPIE 同步，不要让虹夏向导再次写入同一服务。
+项目移动后，在 MAGPIE Library 修改共享命令路径并同步。出现旧的 `NIJIKA-DSH-MCP` 标记或重复服务时，备份后核对实际加载项；不要重新运行旧直连接入流程。
 
 安装后重启 DSH 桌面客户端或重开 DSH web 服务，并在**新 DSH 会话**中测试；已运行的会话未必热加载 MCP 工具和全局说明。保持 `dist/虹夏桌宠.exe` 运行，测试时让 DSH 发出一个真正需要选择的简短问题，检查桌面气泡、点击和 DSH 聊天中的读回。`pending` 只表示消息入队，不代表已显示或已确认。
 

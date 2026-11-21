@@ -26,6 +26,22 @@ class NoticeSourceTests(unittest.TestCase):
         self.assertEqual(resolve_source("ChatGPT", "Obsidian", "dsh-mcp-client").heading,
                          "ChatGPT · Obsidian")
 
+    def test_shared_magpie_auto_config_identifies_additional_mcp_hosts(self):
+        for caller, heading in (
+            ("grok-cli", "Grok · Grok Build"),
+            ("grok-build", "Grok · Grok Build"),
+            ("grok-shell-nijika-pet", "Grok · Grok Build"),
+            ("grok-shell-other-server", "Grok · Grok Build"),
+            ("cursor-agent", "Agent · Cursor"),
+            ("antigravity", "Agent · Antigravity"),
+            ("codebuddy", "Agent · CodeBuddy"),
+            ("openmausbot", "Agent · OpenMausBot"),
+            ("openclaw", "Agent · OpenClaw"),
+            ("claude-desktop", "Claude · Claude Desktop"),
+        ):
+            with self.subTest(caller=caller):
+                self.assertEqual(resolve_source("auto", "", caller).heading, heading)
+
     def test_multimodel_host_never_uses_host_product_as_agent_name(self):
         for caller, software, agent_name in (
             ("dsh-mcp-client", "", "Codex"),
@@ -33,6 +49,11 @@ class NoticeSourceTests(unittest.TestCase):
             ("dsh-mcp-client", "DSH", "DSH"),
             ("workbuddy", "WorkBuddy", "Work"),
             ("workbuddy", "WorkBuddy AI", "ChatGPT"),
+            ("cursor-agent", "Cursor", "Cursor"),
+            ("antigravity", "Antigravity", "Antigravity"),
+            ("codebuddy", "CodeBuddy", "CodeBuddy"),
+            ("openmausbot", "OpenMausBot", "OpenMausBot"),
+            ("openclaw", "OpenClaw", "OpenClaw"),
         ):
             with self.subTest(caller=caller, software=software, agent_name=agent_name):
                 self.assertEqual(
@@ -82,7 +103,7 @@ class NoticeSourceTests(unittest.TestCase):
         for heading in ("ChatGPT · Work", "ChatGPT · Codex", "Claude · VS Code", "Agent · WorkBuddy AI"):
             notice = BubbleNotice("修复设置界面", "任务已完成，等待查看。", actions=("知道了",),
                                   kind="agent", request_id="isolated", source=heading)
-            image, buttons, close = render_bubble(notice)
+            image, buttons, close, _ = render_bubble(notice)
             self.assertTrue(buttons)
             self.assertGreater(buttons[0][1], 96)
             self.assertLess(buttons[0][3], image.height)

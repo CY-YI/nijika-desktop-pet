@@ -36,6 +36,12 @@ class NotificationLifecycleTests(unittest.TestCase):
             ("codex", "ChatGPT", "Codex"), ("dsh", "Agent", "DSH"),
             ("work", "ChatGPT", "Work"), ("claude-code", "Claude", "Claude Code"),
             ("gemini", "Gemini", "Gemini CLI"), ("copilot-cli", "Copilot", "Copilot CLI"),
+            ("grok-cli", "Grok", "Grok Build"),
+            ("cursor-agent", "Agent", "Cursor"),
+            ("antigravity", "Agent", "Antigravity"),
+            ("codebuddy", "Agent", "CodeBuddy"),
+            ("openmausbot", "Agent", "OpenMausBot"),
+            ("openclaw", "Agent", "OpenClaw"),
             ("vscode", "Agent", "VS Code"),
         ):
             with self.subTest(client=client):
@@ -46,7 +52,7 @@ class NotificationLifecycleTests(unittest.TestCase):
                 self.assertEqual((notice.agent, notice.software), (identity, software))
                 self.assertEqual(notice.message, "已验证当前任务。")
                 self.assertIsNone(handle_lifecycle(event, self.store))
-        self.assertEqual(self.count(), 7)
+        self.assertEqual(self.count(), 13)
 
     def test_adversarial_codex_raw_session_cannot_collide_with_other_client_namespace(self):
         for event in (

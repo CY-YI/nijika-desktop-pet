@@ -36,7 +36,7 @@
 
 程序默认使用你自己 Windows 用户目录中的数据。如果你已装过虹夏，希望开发时与日常版分开，请使用下面的隔离设置。
 
-`虹夏MCP-v2/虹夏MCP-v2.exe` 和 `虹夏审批提醒.exe` 由客户端或事件模块调用，不是需要手动打开的桌宠窗口。MCP 自 `0.1.9` 起为 onedir，必须保留同级 `_internal/`。
+`虹夏MCP-v2/虹夏MCP-v2.exe` 和 `虹夏审批提醒.exe` 由客户端或事件模块调用。当前构建的三个程序均为 onedir。桌宠和审批程序的两个 EXE 均在输出目录根部，分别依赖旁边的 `_nijika_pet_runtime/` 和 `_nijika_hook_runtime/`。MCP 依赖其同级 `_internal/`。制作发布候选时请将 `build.ps1 -OutputDirectory` 指向新目录，确保运行时来自同一次构建。
 
 ## 运行源码
 

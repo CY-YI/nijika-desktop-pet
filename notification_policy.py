@@ -221,7 +221,7 @@ def tool_flags(name: object, response: object) -> tuple[bool, bool]:
         return False, False
     normalized = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
     notice_tool = re.search(
-        r"(?:^|_)nijika_(?:work_)?pet_(?:show_completion|request_decision)$", normalized,
+        r"(?:^|_)nijika_(?:work_)?pet_(?:show_completion|request_decision|request_text_reply)$", normalized,
     ) is not None
     work_tool = normalized in {
         "bash", "apply_patch", "edit", "write", "exec_command", "functions_exec_command",

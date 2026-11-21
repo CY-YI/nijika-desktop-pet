@@ -8,6 +8,7 @@ import sqlite3
 import time
 import uuid
 import tempfile
+from contextlib import closing
 from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
@@ -63,21 +64,29 @@ class ControlStore:
             raise ValueError("请选择有效的表情。")
         if "chat_enabled" in patch and type(patch["chat_enabled"]) is not bool:
             raise ValueError("闲聊设置必须为开或关。")
-        if "skin" in patch:
-            self.skin_directory(patch["skin"])
         connection = self.connect()
         try:
             with connection:
                 connection.execute("BEGIN IMMEDIATE")
-                row = connection.execute("SELECT value FROM panel_preferences WHERE name='settings'").fetchone()
-                current = json.loads(row[0]) if row else {**DEFAULTS, "revision": 0}
-                current.update(patch)
-                current["revision"] += 1
-                connection.execute("INSERT OR REPLACE INTO panel_preferences VALUES ('settings', ?)",
-                                   (json.dumps(current, ensure_ascii=False),))
+                if "skin" in patch:
+                    self.skin_directory(patch["skin"])
+                current = self._current_settings(connection)
+                self._save_settings(connection, current, patch)
             return current
         finally:
             connection.close()
+
+    @staticmethod
+    def _current_settings(connection) -> dict:
+        row = connection.execute("SELECT value FROM panel_preferences WHERE name='settings'").fetchone()
+        return json.loads(row[0]) if row else {**DEFAULTS, "revision": 0}
+
+    @staticmethod
+    def _save_settings(connection, current: dict, patch: dict) -> None:
+        current.update(patch)
+        current["revision"] += 1
+        connection.execute("INSERT OR REPLACE INTO panel_preferences VALUES ('settings', ?)",
+                           (json.dumps(current, ensure_ascii=False),))
 
     def agents(self) -> list[dict]:
         connection = self.connect()
@@ -229,6 +238,39 @@ class ControlStore:
             (temporary / "manifest.json").write_text(json.dumps(item, ensure_ascii=False), encoding="utf-8")
             temporary.replace(folder)
         return item
+
+    def remove_skin(self, skin: str) -> dict:
+        if skin == "default":
+            raise ValueError("默认外观不可删除。")
+        if not isinstance(skin, str) or not IDENTIFIER.fullmatch(skin):
+            raise ValueError("皮肤编号无效。")
+        root = self.root.resolve()
+        source = root / "skins" / skin
+        archive = root / "removed-skins"
+        removed = archive / skin
+        moved = False
+        with closing(self.connect()) as connection:
+            try:
+                with connection:
+                    connection.execute("BEGIN IMMEDIATE")
+                    if source.resolve() != source or removed.resolve() != removed:
+                        raise ValueError("只能删除衣橱中导入的本机皮肤。")
+                    current = self._current_settings(connection)
+                    reset_to_default = current["skin"] == skin
+                    if not removed.is_dir():
+                        self.skin_directory(skin)
+                        archive.mkdir(exist_ok=True)
+                        source.rename(removed)
+                        moved = True
+                    elif source.exists():
+                        raise ValueError("此皮肤的备份已存在，请先检查本机皮肤目录。")
+                    if reset_to_default:
+                        self._save_settings(connection, current, {"skin": "default"})
+            except Exception:
+                if moved:
+                    removed.rename(source)
+                raise
+        return {"removed": True, "reset_to_default": reset_to_default}
 
     def support(self) -> dict:
         config = self.document("support", load_public_support(self.public_root))
